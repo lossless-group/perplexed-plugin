@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-plugin-starter",
-	"version": "0.0.1.0",
-	"description": "This is starter code for Obsidian plugins (https://obsidian.md)",
+	"name": "perplexed",
+	"version": "0.0.0.1",
+	"description": "A plugin for Obsidian that allows you to generate source-cited content using AI using Perplexity and Perplexica.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
@@ -11,6 +11,11 @@
 	"keywords": [
 		"Obsidian",
 		"Plugin",
+		"LLM Research",
+		"AI-Powered Content Generation",
+		"Content Generation",
+		"Perplexity",
+		"Perplexica",
 		"Footnotes",
 		"Citations"
 	],

@@ -1,6 +1,14 @@
-# Obsidian Plugin Starter
+# Perplexed: AI Content Generation for Perplexity and Perplexica for Obsidian
 
-This is barebones starter code to build an Obsidian plugin using the `pnpm` package manager.  It is a clone of the official Obsidian plugin starter code, but with updated libraries, packages, dependencies. 
+Generating content with AI is a skill unto itself, a new literacy even. To stay rigorous, we should use LLMs that _use quality sources_, and _cite sources_ as we would expect any research oriented authors and academics to do.
+
+ Perplexed is a plugin for Obsidian that allows you to generate content with [Perplexity](https://www.perplexity.ai/) and [Perplexica](https://perplexica.io/).
+ 
+[Perplexity](https://www.perplexity.ai/) is a commercial AI model vendor that charges for its API services and has a fancy AI Workspace. 
+
+[Perplexica](https://perplexica.io/) is an open source alternative to Perplexity. It's free to use but requires that you host it yourself (and involves some fun setup steps that many would rather avoid).
+ 
+ As of now (July 2025), these are the only widely used AI Model APIs that seem to cite sources. 
 
 ## Getting Started
 
@@ -39,3 +47,11 @@ If you're like us, you have a directory housing all your code projects. To use y
 ```bash
 ln -s /Users/mpstaton/code/lossless-monorepo/obsidian-plugin-starter /Users/mpstaton/content-md/lossless/.obsidian/plugins/
 ```
+
+# On The Lossless Group
+[The Lossless Group](https://lossless.group) is a loose collection of individuals and organizations that are interested in creating winning formulae for using AI and Collaborative Tooling. 
+
+We consult at times, invest in startups, run Venture Capital Funds, host Hackathons, build products, write or create content, and contribute to or sponsor open source projects.
+
+First and foremost, we are friends that stay curious and engaged. We are committed to playing on the frontiers of technology, and we eat too many tacos. 
+
