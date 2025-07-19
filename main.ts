@@ -115,12 +115,34 @@ export default class PerplexedPlugin extends Plugin {
         }
     }
 
-    public async queryPerplexity(query: string, model: string, stream: boolean, editor: Editor): Promise<void> {
+    public async queryPerplexity(query: string, model: string, stream: boolean, editor: Editor, options?: {
+        return_citations?: boolean;
+        return_images?: boolean;
+        return_related_questions?: boolean;
+        search_recency_filter?: string;
+    }): Promise<void> {
         const timestamp = new Date().toISOString();
+        
+        // Force non-streaming for sonar-deep-research
+        const isDeepResearch = model === 'sonar-deep-research';
+        const useStreaming = stream && !isDeepResearch;
         
         // Insert query header
         const cursor = editor.getCursor();
-        editor.replaceRange(`\n## Perplexity Query (${timestamp})\n**Question:** ${query}\n**Model:** ${model}\n\n`, cursor);
+        const headerText = isDeepResearch 
+            ? `\n\n***\n## Perplexity Deep Research Query (${timestamp})\n**Question:** ${query}\n**Model:** ${model}\n\n🔍 **Conducting exhaustive research across hundreds of sources...**\n*This may take 30-60 seconds for comprehensive analysis.*\n\n### **Deep Research Analysis**:\n\n`
+            : `\n\n***\n## Perplexity Query (${timestamp})\n**Question:** ${query}\n**Model:** ${model}\n\n### **Response from ${model}**:\n\n`;
+        
+        editor.replaceRange(headerText, cursor);
+        
+        // Get cursor position after header for response content
+        const responseCursor = editor.getCursor();
+        
+        // Show loading notice for deep research
+        let loadingNotice: Notice | null = null;
+        if (isDeepResearch) {
+            loadingNotice = new Notice('🔍 Deep research in progress... This may take up to 60 seconds.', 0); // 0 = persistent
+        }
         
         try {
             const payload = {
@@ -128,7 +150,11 @@ export default class PerplexedPlugin extends Plugin {
                 messages: [
                     { role: 'user', content: query }
                 ],
-                stream
+                stream: useStreaming,
+                return_citations: options?.return_citations ?? true,
+                return_images: options?.return_images ?? true,
+                return_related_questions: options?.return_related_questions ?? false,
+                search_recency_filter: options?.search_recency_filter ?? "month"
             };
 
             const response = await fetch(this.settings.perplexityEndpoint, {
@@ -143,15 +169,15 @@ export default class PerplexedPlugin extends Plugin {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-
-            const newCursor = editor.getCursor();
             
-            if (stream) {
+            let finalCursor = responseCursor;
+            
+            if (useStreaming) {
                 const reader = response.body?.getReader();
                 if (!reader) throw new Error('No response body');
                 
                 let buffer = '';
-                let currentPos = newCursor;
+                let currentPos = responseCursor;
                 
                 while (true) {
                     const { done, value } = await reader.read();
@@ -184,6 +210,7 @@ export default class PerplexedPlugin extends Plugin {
                                             ch: lines[lines.length - 1].length 
                                         };
                                     }
+                                    finalCursor = currentPos; // Track final position
                                 }
                             } catch (e) {
                                 // Ignore JSON parse errors for partial chunks
@@ -194,16 +221,63 @@ export default class PerplexedPlugin extends Plugin {
             } else {
                 const data = await response.json();
                 const content = data.choices?.[0]?.message?.content || 'No response received';
-                editor.replaceRange(content, newCursor);
+                
+                // Extract citations/sources if available
+                let fullResponse = content;
+                
+                // Add images if available
+                if (data.images && data.images.length > 0) {
+                    fullResponse += '\n\n## Images\n\n';
+                    data.images.forEach((image: any, index: number) => {
+                        if (image.url) {
+                            fullResponse += `![Image ${index + 1}](${image.url})\n`;
+                            if (image.description || image.title || image.alt) {
+                                fullResponse += `*${image.description || image.title || image.alt}*\n\n`;
+                            } else {
+                                fullResponse += '\n';
+                            }
+                        }
+                    });
+                }
+                
+                // Add citations/sources
+                if (data.citations && data.citations.length > 0) {
+                    fullResponse += '\n\n## Sources\n\n';
+                    data.citations.forEach((citation: any, index: number) => {
+                        fullResponse += `[${index + 1}] ${citation.url || citation.title || citation}\n`;
+                    });
+                }
+                
+                editor.replaceRange(fullResponse, responseCursor);
+                // Calculate final cursor position for non-streaming
+                const lines = fullResponse.split('\n');
+                if (lines.length === 1) {
+                    finalCursor = { line: responseCursor.line, ch: responseCursor.ch + fullResponse.length };
+                } else {
+                    finalCursor = { 
+                        line: responseCursor.line + lines.length - 1, 
+                        ch: lines[lines.length - 1].length 
+                    };
+                }
             }
             
-            // Add separator
-            editor.replaceRange('\n\n---\n', editor.getCursor());
+            // Add separator at the final cursor position
+            editor.replaceRange('\n\n***\n', finalCursor);
+            
+            // Close loading notice if it exists
+            if (loadingNotice) {
+                loadingNotice.hide();
+            }
             
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             new Notice(`Perplexity Error: ${errorMsg}`);
-            editor.replaceRange(`\n**Error:** ${errorMsg}\n\n---\n`, editor.getCursor());
+            editor.replaceRange(`\n**Error:** ${errorMsg}\n\n***\n`, editor.getCursor());
+            
+            // Close loading notice if it exists
+            if (loadingNotice) {
+                loadingNotice.hide();
+            }
         }
     }
 
@@ -212,7 +286,10 @@ export default class PerplexedPlugin extends Plugin {
         
         // Insert query header
         const cursor = editor.getCursor();
-        editor.replaceRange(`\n## Perplexica Query (${timestamp})\n**Question:** ${query}\n**Focus:** ${focusMode}\n**Optimization:** ${optimizationMode}\n\n`, cursor);
+        editor.replaceRange(`\n\n***\n## Perplexica Query (${timestamp})\n**Question:** ${query}\n**Focus:** ${focusMode}\n**Optimization:** ${optimizationMode}\n\n### **Response from Perplexica**:\n\n`, cursor);
+        
+        // Get cursor position after header for response content
+        const responseCursor = editor.getCursor();
         
         try {
             // Try primary endpoint first, then fallback
@@ -256,13 +333,12 @@ export default class PerplexedPlugin extends Plugin {
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
-
-                    const newCursor = editor.getCursor();
                     
                     if (stream) {
                         const reader = response.body?.getReader();
                         if (!reader) throw new Error('No response body');
                         
+                        let currentPos = responseCursor;
                         while (true) {
                             const { done, value } = await reader.read();
                             if (done) break;
@@ -274,7 +350,17 @@ export default class PerplexedPlugin extends Plugin {
                                 try {
                                     const parsed = JSON.parse(line);
                                     if (parsed.type === 'response' && parsed.data) {
-                                        editor.replaceRange(parsed.data, newCursor);
+                                        editor.replaceRange(parsed.data, currentPos);
+                                        // Update cursor position
+                                        const lines = parsed.data.split('\n');
+                                        if (lines.length === 1) {
+                                            currentPos = { line: currentPos.line, ch: currentPos.ch + parsed.data.length };
+                                        } else {
+                                            currentPos = { 
+                                                line: currentPos.line + lines.length - 1, 
+                                                ch: lines[lines.length - 1].length 
+                                            };
+                                        }
                                     }
                                 } catch (e) {
                                     // Ignore JSON parse errors
@@ -283,11 +369,11 @@ export default class PerplexedPlugin extends Plugin {
                         }
                     } else {
                         const text = await response.text();
-                        editor.replaceRange(text, newCursor);
+                        editor.replaceRange(text, responseCursor);
                     }
                     
                     // Add separator
-                    editor.replaceRange('\n\n---\n', editor.getCursor());
+                    editor.replaceRange('\n\n***\n', editor.getCursor());
                     return; // Success, exit the loop
                     
                 } catch (error) {
@@ -302,7 +388,7 @@ export default class PerplexedPlugin extends Plugin {
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             new Notice(`Perplexica Error: ${errorMsg}`);
-            editor.replaceRange(`\n**Error:** ${errorMsg}\n\n---\n`, editor.getCursor());
+            editor.replaceRange(`\n**Error:** ${errorMsg}\n\n***\n`, editor.getCursor());
         }
     }
 
@@ -564,6 +650,10 @@ export default class PerplexedPlugin extends Plugin {
                     private queryInput!: HTMLTextAreaElement;
                     private modelSelect!: HTMLSelectElement;
                     private streamToggle!: HTMLInputElement;
+                    private citationsToggle!: HTMLInputElement;
+                    private imagesToggle!: HTMLInputElement;
+                    private relatedQuestionsToggle!: HTMLInputElement;
+                    private recencyFilterSelect!: HTMLSelectElement;
 
                     constructor(app: App, private plugin: PerplexedPlugin, private editor: Editor) {
                         super(app);
@@ -592,9 +682,63 @@ export default class PerplexedPlugin extends Plugin {
                         const modelDiv = form.createDiv({cls: 'setting-item'});
                         modelDiv.createEl('label', {text: 'Model'});
                         this.modelSelect = modelDiv.createEl('select', {cls: 'dropdown'});
-                        ['sonar-pro', 'sonar-small', 'llama-3.1-sonar-small-128k-online', 'llama-3.1-sonar-large-128k-online'].forEach(model => {
+                        ['sonar-deep-research', 'sonar-pro', 'sonar-small', 'llama-3.1-sonar-small-128k-online', 'llama-3.1-sonar-large-128k-online'].forEach(model => {
                             const option = this.modelSelect.createEl('option', {value: model, text: model});
                             if (model === 'sonar-pro') option.selected = true;
+                        });
+                        
+                        // Add description for deep research model
+                        const modelDesc = modelDiv.createDiv({cls: 'setting-item-description'});
+                        modelDesc.style.fontSize = '12px';
+                        modelDesc.style.color = 'var(--text-muted)';
+                        modelDesc.style.marginTop = '5px';
+                        
+                        this.modelSelect.onchange = () => {
+                            if (this.modelSelect.value === 'sonar-deep-research') {
+                                modelDesc.textContent = '⚡ Deep Research: Exhaustive research across hundreds of sources with expert-level analysis. Higher cost but comprehensive results. Note: Streaming is disabled for this model.';
+                                this.streamToggle.checked = false;
+                                this.streamToggle.disabled = true;
+                            } else {
+                                modelDesc.textContent = '';
+                                this.streamToggle.disabled = false;
+                            }
+                        };
+
+                        // Citations toggle
+                        const citationsDiv = form.createDiv({cls: 'setting-item'});
+                        const citationsLabel = citationsDiv.createEl('label');
+                        this.citationsToggle = citationsLabel.createEl('input', {type: 'checkbox'});
+                        this.citationsToggle.checked = true;
+                        citationsLabel.createSpan({text: ' Include Citations'});
+                        
+                        // Images toggle
+                        const imagesDiv = form.createDiv({cls: 'setting-item'});
+                        const imagesLabel = imagesDiv.createEl('label');
+                        this.imagesToggle = imagesLabel.createEl('input', {type: 'checkbox'});
+                        this.imagesToggle.checked = true;
+                        imagesLabel.createSpan({text: ' Include Images'});
+                        
+                        // Add description for images toggle
+                        const imagesDesc = imagesDiv.createDiv({cls: 'setting-item-description'});
+                        imagesDesc.style.fontSize = '11px';
+                        imagesDesc.style.color = 'var(--text-muted)';
+                        imagesDesc.style.marginTop = '3px';
+                        imagesDesc.textContent = 'Note: This influences search behavior but Perplexity API does not return images in responses';
+
+                        // Related questions toggle
+                        const relatedQuestionsDiv = form.createDiv({cls: 'setting-item'});
+                        const relatedQuestionsLabel = relatedQuestionsDiv.createEl('label');
+                        this.relatedQuestionsToggle = relatedQuestionsLabel.createEl('input', {type: 'checkbox'});
+                        this.relatedQuestionsToggle.checked = false;
+                        relatedQuestionsLabel.createSpan({text: ' Include Related Questions'});
+
+                        // Recency filter selection
+                        const recencyDiv = form.createDiv({cls: 'setting-item'});
+                        recencyDiv.createEl('label', {text: 'Recency Filter'});
+                        this.recencyFilterSelect = recencyDiv.createEl('select', {cls: 'dropdown'});
+                        ['day', 'week', 'month', 'year'].forEach(recency => {
+                            const option = this.recencyFilterSelect.createEl('option', {value: recency, text: recency});
+                            if (recency === 'month') option.selected = true;
                         });
 
                         // Stream toggle
@@ -633,8 +777,15 @@ export default class PerplexedPlugin extends Plugin {
                             return;
                         }
 
+                        const options = {
+                            return_citations: this.citationsToggle.checked,
+                            return_images: this.imagesToggle.checked,
+                            return_related_questions: this.relatedQuestionsToggle.checked,
+                            search_recency_filter: this.recencyFilterSelect.value
+                        };
+
                         this.close();
-                        await this.plugin.queryPerplexity(query, this.modelSelect.value, this.streamToggle.checked, this.editor);
+                        await this.plugin.queryPerplexity(query, this.modelSelect.value, this.streamToggle.checked, this.editor, options);
                     }
                     
                     onClose() {
