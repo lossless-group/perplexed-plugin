@@ -12,9 +12,12 @@ interface PerplexedPluginSettings {
     perplexityApiKey: string;
     perplexicaEndpoint: string;
     perplexityEndpoint: string;
+    lmStudioEndpoint: string;
+    lmStudioRequestTemplate: string;
     defaultModel: string;
     defaultOptimizationMode: string;
     defaultFocusMode: string;
+    defaultLMStudioModel: string;
 }
 
 const DEFAULT_SETTINGS: PerplexedPluginSettings = {
@@ -23,6 +26,7 @@ const DEFAULT_SETTINGS: PerplexedPluginSettings = {
     localLLMPath: 'http://host.docker.internal:3030/api/search',
     perplexicaEndpoint: 'http://localhost:3030/api/search',
     perplexityEndpoint: 'https://api.perplexity.ai/chat/completions',
+    lmStudioEndpoint: 'http://localhost:1234/v1/chat/completions',
     requestBodyTemplate: `{
   "chatModel": {
     "provider": "ollama",
@@ -72,9 +76,22 @@ const DEFAULT_SETTINGS: PerplexedPluginSettings = {
   "presence_penalty": 0,
   "frequency_penalty": 1
 }`,
+    lmStudioRequestTemplate: `{
+  "model": "ibm/granite-3.2-8b",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello, can you help me with this question?"
+    }
+  ],
+  "max_tokens": 2048,
+  "temperature": 0.7,
+  "stream": false
+}`,
     defaultModel: 'llama3.2:latest',
     defaultOptimizationMode: 'speed',
-    defaultFocusMode: 'webSearch'
+    defaultFocusMode: 'webSearch',
+    defaultLMStudioModel: 'ibm/granite-3.2-8b'
 };
 
 export default class PerplexedPlugin extends Plugin {
@@ -95,6 +112,7 @@ export default class PerplexedPlugin extends Plugin {
         // Register commands
         this.registerPerplexicaCommands();
         this.registerPerplexityCommands();
+        this.registerLMStudioCommands();
     }
 
     onunload(): void {
@@ -846,6 +864,358 @@ export default class PerplexedPlugin extends Plugin {
             }
         });
     }
+
+    public async queryLMStudio(query: string, model: string, stream: boolean, editor: Editor, options?: {
+        max_tokens?: number;
+        temperature?: number;
+        top_p?: number;
+        system_prompt?: string;
+    }): Promise<void> {
+        const timestamp = new Date().toISOString();
+        
+        // Insert query header at the current cursor position
+        const cursor = editor.getCursor();
+        console.log('Initial cursor position:', cursor);
+        
+        const headerText = `\n\n***\n## LM Studio Query (${timestamp})\n**Question:** ${query}\n**Model:** ${model}\n\n### **Response from ${model}**:\n\n`;
+        
+        // Insert the header at the cursor position
+        editor.replaceRange(headerText, cursor, cursor);
+        
+        // Calculate where the response content should start
+        const headerLines = headerText.split('\n');
+        const lastLine = headerLines[headerLines.length - 1] || '';
+        const responseCursor = {
+            line: cursor.line + headerLines.length - 1,
+            ch: lastLine.length
+        };
+        
+        console.log('Response cursor position:', responseCursor);
+        
+        try {
+            const messages: any[] = [];
+            
+            // Add system message if provided
+            if (options?.system_prompt) {
+                messages.push({ role: 'system', content: options.system_prompt });
+            }
+            
+            // Add user query
+            messages.push({ role: 'user', content: query });
+            
+            const payload: any = {
+                model,
+                messages,
+                stream,
+                max_tokens: options?.max_tokens ?? 2048,
+                temperature: options?.temperature ?? 0.7,
+                top_p: options?.top_p ?? 0.9
+            };
+            
+            const response = await fetch(this.settings.lmStudioEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                    // LM Studio doesn't require API key for local access
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            let finalCursor = responseCursor;
+            
+            if (stream) {
+                const reader = response.body?.getReader();
+                if (!reader) throw new Error('No response body');
+                
+                let buffer = '';
+                let currentPos = responseCursor;
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = new TextDecoder().decode(value);
+                    buffer += chunk;
+                    
+                    // Process complete lines from buffer
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || ''; // Keep incomplete line in buffer
+                    
+                    for (const line of lines) {
+                        if (line.trim().startsWith('data: ')) {
+                            const data = line.replace('data: ', '').trim();
+                            if (data === '[DONE]') continue;
+                            
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (parsed.choices?.[0]?.delta?.content) {
+                                    const content = parsed.choices[0].delta.content;
+                                    editor.replaceRange(content, currentPos);
+                                    // Update cursor position after insertion
+                                    const lines = content.split('\n');
+                                    if (lines.length === 1) {
+                                        currentPos = { line: currentPos.line, ch: currentPos.ch + content.length };
+                                    } else {
+                                        currentPos = { 
+                                            line: currentPos.line + lines.length - 1, 
+                                            ch: lines[lines.length - 1].length 
+                                        };
+                                    }
+                                    finalCursor = currentPos; // Track final position
+                                }
+                            } catch (e) {
+                                // Ignore JSON parse errors for partial chunks
+                            }
+                        }
+                    }
+                }
+            } else {
+                const data = await response.json();
+                const content = data.choices?.[0]?.message?.content || 'No response received';
+                
+                editor.replaceRange(content, responseCursor);
+                // Calculate final cursor position for non-streaming
+                const lines = content.split('\n');
+                if (lines.length === 1) {
+                    finalCursor = { line: responseCursor.line, ch: responseCursor.ch + content.length };
+                } else {
+                    finalCursor = { 
+                        line: responseCursor.line + lines.length - 1, 
+                        ch: lines[lines.length - 1].length 
+                    };
+                }
+            }
+            
+            // Add separator at the final cursor position
+            editor.replaceRange('\n\n***\n', finalCursor);
+            
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            new Notice(`LM Studio Error: ${errorMsg}`);
+            editor.replaceRange(`\n**Error:** ${errorMsg}\n\n***\n`, editor.getCursor());
+        }
+    }
+
+    private registerLMStudioCommands(): void {
+        // Command to update LM Studio URL
+        this.addCommand({
+            id: 'update-lmstudio-url',
+            name: 'Update LM Studio URL',
+            callback: () => {
+                const modal = new (class extends Modal {
+                    private urlInput!: HTMLInputElement;
+
+                    constructor(app: App, private plugin: PerplexedPlugin) {
+                        super(app);
+                    }
+
+                    onOpen() {
+                        const {contentEl} = this;
+                        contentEl.createEl('h2', {text: 'Update LM Studio API URL'});
+                        const form = contentEl.createEl('form');
+                        const div = form.createDiv({cls: 'setting-item'});
+
+                        div.createEl('label', {
+                            text: 'LM Studio API URL',
+                            attr: {for: 'lmstudio-url-input'}
+                        });
+
+                        this.urlInput = div.createEl('input', {
+                            type: 'text',
+                            value: this.plugin.settings.lmStudioEndpoint,
+                            cls: 'text-input',
+                            attr: {id: 'lmstudio-url-input'}
+                        });
+
+                        const buttonDiv = contentEl.createDiv({cls: 'setting-item'});
+                        const saveButton = buttonDiv.createEl('button', {
+                            text: 'Save',
+                            cls: 'mod-cta'
+                        });
+
+                        form.onsubmit = (e) => {
+                            e.preventDefault();
+                            this.onSubmit();
+                        };
+
+                        saveButton.onclick = () => this.onSubmit();
+                    }
+
+                    onSubmit() {
+                        const newUrl = this.urlInput.value.trim();
+                        if (newUrl) {
+                            this.plugin.settings.lmStudioEndpoint = newUrl;
+                            this.plugin.saveSettings();
+                            new Notice(`LM Studio URL updated to: ${newUrl}`);
+                            this.close();
+                        }
+                    }
+
+                    onClose() {
+                        const {contentEl} = this;
+                        contentEl.empty();
+                    }
+                })(this.app, this);
+
+                modal.open();
+            }
+        });
+
+        // Command to show current LM Studio settings
+        this.addCommand({
+            id: 'show-lmstudio-settings',
+            name: 'Show LM Studio Settings',
+            callback: () => {
+                new Notice(`Current LM Studio URL: ${this.settings.lmStudioEndpoint}`);
+                console.log('LM Studio Settings:', this.settings);
+            }
+        });
+
+        // Command to ask LM Studio
+        this.addCommand({
+            id: 'ask-lmstudio',
+            name: 'Ask LM Studio',
+            editorCallback: (editor: Editor) => {
+                const modal = new (class extends Modal {
+                    private queryInput!: HTMLTextAreaElement;
+                    private modelSelect!: HTMLSelectElement;
+                    private streamToggle!: HTMLInputElement;
+                    private maxTokensInput!: HTMLInputElement;
+                    private temperatureInput!: HTMLInputElement;
+                    private systemPromptInput!: HTMLTextAreaElement;
+
+                    constructor(app: App, private plugin: PerplexedPlugin, private editor: Editor) {
+                        super(app);
+                    }
+                    
+                    onOpen() {
+                        const {contentEl} = this;
+                        contentEl.createEl('h2', {text: 'Ask LM Studio'});
+                        
+                        const form = contentEl.createEl('form');
+                        
+                        // Query input
+                        const queryDiv = form.createDiv({cls: 'setting-item'});
+                        queryDiv.createEl('label', {text: 'Your Question'});
+                        this.queryInput = queryDiv.createEl('textarea', {
+                            cls: 'text-input',
+                            attr: {
+                                rows: '4',
+                                placeholder: 'What would you like to ask?'
+                            }
+                        });
+                        this.queryInput.style.width = '100%';
+                        this.queryInput.style.minHeight = '100px';
+
+                        // Model selection
+                        const modelDiv = form.createDiv({cls: 'setting-item'});
+                        modelDiv.createEl('label', {text: 'Model'});
+                        this.modelSelect = modelDiv.createEl('select', {cls: 'dropdown'});
+                        // Use common LM Studio models - these would be dynamically loaded ideally
+                        ['ibm/granite-3.2-8b', 'microsoft/phi-4-reasoning-plus', 'google/gemma-3-12b', 'meta-llama/llama-3.2-3b-instruct', 'custom-model'].forEach(model => {
+                            const option = this.modelSelect.createEl('option', {value: model, text: model});
+                            if (model === this.plugin.settings.defaultLMStudioModel) option.selected = true;
+                        });
+
+                        // System prompt
+                        const systemDiv = form.createDiv({cls: 'setting-item'});
+                        systemDiv.createEl('label', {text: 'System Prompt (Optional)'});
+                        this.systemPromptInput = systemDiv.createEl('textarea', {
+                            cls: 'text-input',
+                            attr: {
+                                rows: '2',
+                                placeholder: 'You are a helpful AI assistant...'
+                            }
+                        });
+                        this.systemPromptInput.style.width = '100%';
+                        this.systemPromptInput.style.minHeight = '60px';
+
+                        // Max tokens
+                        const maxTokensDiv = form.createDiv({cls: 'setting-item'});
+                        maxTokensDiv.createEl('label', {text: 'Max Tokens'});
+                        this.maxTokensInput = maxTokensDiv.createEl('input', {
+                            type: 'number',
+                            value: '2048',
+                            cls: 'text-input'
+                        });
+
+                        // Temperature
+                        const tempDiv = form.createDiv({cls: 'setting-item'});
+                        tempDiv.createEl('label', {text: 'Temperature (0.0 - 2.0)'});
+                        this.temperatureInput = tempDiv.createEl('input', {
+                            type: 'number',
+                            value: '0.7',
+                            attr: {
+                                step: '0.1',
+                                min: '0',
+                                max: '2'
+                            },
+                            cls: 'text-input'
+                        });
+
+                        // Stream toggle
+                        const streamDiv = form.createDiv({cls: 'setting-item'});
+                        const streamLabel = streamDiv.createEl('label');
+                        this.streamToggle = streamLabel.createEl('input', {type: 'checkbox'});
+                        this.streamToggle.checked = true;
+                        streamLabel.createSpan({text: ' Stream response'});
+                        
+                        const buttonDiv = contentEl.createDiv({cls: 'setting-item'});
+                        const askButton = buttonDiv.createEl('button', {
+                            text: 'Ask LM Studio',
+                            cls: 'mod-cta'
+                        });
+                        
+                        form.onsubmit = (e) => {
+                            e.preventDefault();
+                            this.onSubmit();
+                        };
+                        
+                        askButton.onclick = () => this.onSubmit();
+                        
+                        // Focus on the query input
+                        setTimeout(() => this.queryInput.focus(), 100);
+                    }
+                    
+                    async onSubmit() {
+                        const query = this.queryInput.value.trim();
+                        if (!query) {
+                            new Notice('Please enter a question');
+                            return;
+                        }
+
+                        const options: {
+                            max_tokens: number;
+                            temperature: number;
+                            system_prompt?: string;
+                        } = {
+                            max_tokens: parseInt(this.maxTokensInput.value) || 2048,
+                            temperature: parseFloat(this.temperatureInput.value) || 0.7
+                        };
+                        
+                        const systemPrompt = this.systemPromptInput.value.trim();
+                        if (systemPrompt) {
+                            options.system_prompt = systemPrompt;
+                        }
+
+                        this.close();
+                        await this.plugin.queryLMStudio(query, this.modelSelect.value, this.streamToggle.checked, this.editor, options);
+                    }
+                    
+                    onClose() {
+                        const {contentEl} = this;
+                        contentEl.empty();
+                    }
+                })(this.app, this, editor);
+                
+                modal.open();
+            }
+        });
+    }
 }
 
 class PerplexedSettingTab extends PluginSettingTab {
@@ -1005,6 +1375,72 @@ class PerplexedSettingTab extends PluginSettingTab {
         
         // Add the textarea to the setting
         perplexicaJsonSetting.settingEl.appendChild(perplexicaTextArea);
+
+        // LM Studio Section
+        const lmStudioHeader = containerEl.createEl('h3', { text: 'LM Studio (Local Models)' });
+        lmStudioHeader.style.color = 'var(--text-accent)';
+        containerEl.createEl('p', {
+            text: 'Configure settings for your local LM Studio installation with loaded models',
+            cls: 'setting-item-description'
+        });
+
+        new Setting(containerEl)
+            .setName('Endpoint')
+            .setDesc('API endpoint for your local LM Studio instance')
+            .addText(text => text
+                .setPlaceholder('http://localhost:1234/v1/chat/completions')
+                .setValue(this.plugin.settings.lmStudioEndpoint)
+                .onChange(async (value: string) => {
+                    this.plugin.settings.lmStudioEndpoint = value;
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName('Default Model')
+            .setDesc('Default model name for LM Studio to use')
+            .addText(text => text
+                .setPlaceholder('ibm/granite-3.2-8b')
+                .setValue(this.plugin.settings.defaultLMStudioModel)
+                .onChange(async (value: string) => {
+                    this.plugin.settings.defaultLMStudioModel = value;
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        // LM Studio Request Template
+        const lmStudioJsonSetting = new Setting(containerEl)
+            .setName('Request Body Template')
+            .setDesc('JSON template for LM Studio API requests');
+            
+        // Create a textarea element for LM Studio
+        const lmStudioTextArea = document.createElement('textarea');
+        lmStudioTextArea.rows = 10;
+        lmStudioTextArea.cols = 50;
+        lmStudioTextArea.style.width = '100%';
+        lmStudioTextArea.style.minHeight = '300px';
+        lmStudioTextArea.style.fontFamily = 'monospace';
+        lmStudioTextArea.placeholder = 'Enter LM Studio JSON request template...';
+        
+        // Set initial value if it exists
+        if (this.plugin.settings.lmStudioRequestTemplate) {
+            try {
+                const config = JSON.parse(this.plugin.settings.lmStudioRequestTemplate);
+                lmStudioTextArea.value = JSON.stringify(config, null, 2);
+            } catch (e) {
+                // If not valid JSON, use as is
+                lmStudioTextArea.value = this.plugin.settings.lmStudioRequestTemplate;
+            }
+        }
+        
+        // Add input event listener for LM Studio
+        lmStudioTextArea.addEventListener('input', async () => {
+            this.plugin.settings.lmStudioRequestTemplate = lmStudioTextArea.value;
+            await this.plugin.saveSettings();
+        });
+        
+        // Add the textarea to the setting
+        lmStudioJsonSetting.settingEl.appendChild(lmStudioTextArea);
 
     }
 }

@@ -26,6 +26,24 @@ Perplexed Plugin Settings
 
 ## Getting Started
 
+If you want to use Perplexica, you will need to host it yourself. You can find the instructions for doing so [here](https://perplexica.io/).
+
+Troubleshooting the config file can be annoying.  You have to duplicate the example.config.toml and put in your own values.  
+
+These were for my mac, if it helps.
+
+```toml
+
+[MODELS.OLLAMA]
+API_URL = "http://host.docker.internal:11434"
+
+[MODELS.LM_STUDIO]
+API_URL = "http://192.168.0.23:1234"
+
+[API_ENDPOINTS]
+SEARXNG = "http://localhost:4000"
+```
+
 ```
 pnpm install
 pnpm add -D esbuild @types/node builtin-modules
