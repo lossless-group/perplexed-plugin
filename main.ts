@@ -312,7 +312,8 @@ class PerplexedSettingTab extends PluginSettingTab {
         containerEl.createEl('h2', { text: 'Perplexed Plugin Settings' });
 
         // Perplexity Section
-        containerEl.createEl('h3', { text: 'Perplexity (Remote Service)' });
+        const perplexityHeader = containerEl.createEl('h3', { text: 'Perplexity (Remote Service)' });
+        perplexityHeader.style.color = 'var(--text-accent)';
         containerEl.createEl('p', {
             text: 'Configure settings for the hosted Perplexity AI service',
             cls: 'setting-item-description'
@@ -342,8 +343,43 @@ class PerplexedSettingTab extends PluginSettingTab {
                 })
             );
 
+        // Perplexity Request Template
+        const perplexityJsonSetting = new Setting(containerEl)
+            .setName('Request Body Template')
+            .setDesc('JSON template for Perplexity API requests');
+            
+        // Create a textarea element for Perplexity
+        const perplexityTextArea = document.createElement('textarea');
+        perplexityTextArea.rows = 10;
+        perplexityTextArea.cols = 50;
+        perplexityTextArea.style.width = '100%';
+        perplexityTextArea.style.minHeight = '300px';
+        perplexityTextArea.style.fontFamily = 'monospace';
+        perplexityTextArea.placeholder = 'Enter Perplexity JSON request template...';
+        
+        // Set initial value if it exists
+        if (this.plugin.settings.perplexityRequestTemplate) {
+            try {
+                const config = JSON.parse(this.plugin.settings.perplexityRequestTemplate);
+                perplexityTextArea.value = JSON.stringify(config, null, 2);
+            } catch (e) {
+                // If not valid JSON, use as is
+                perplexityTextArea.value = this.plugin.settings.perplexityRequestTemplate;
+            }
+        }
+        
+        // Add input event listener for Perplexity
+        perplexityTextArea.addEventListener('input', async () => {
+            this.plugin.settings.perplexityRequestTemplate = perplexityTextArea.value;
+            await this.plugin.saveSettings();
+        });
+        
+        // Add the textarea to the setting
+        perplexityJsonSetting.settingEl.appendChild(perplexityTextArea);
+
         // Perplexica Section
-        containerEl.createEl('h3', { text: 'Perplexica (Self-Hosted)' });
+        const perplexicaHeader = containerEl.createEl('h3', { text: 'Perplexica (Self-Hosted)' });
+        perplexicaHeader.style.color = 'var(--text-accent)';
         containerEl.createEl('p', {
             text: 'Configure settings for your local Perplexica installation',
             cls: 'setting-item-description'
@@ -385,40 +421,6 @@ class PerplexedSettingTab extends PluginSettingTab {
                 })
             );
 
-        // Perplexity Request Template
-        const perplexityJsonSetting = new Setting(containerEl)
-            .setName('Request Body Template')
-            .setDesc('JSON template for Perplexity API requests');
-            
-        // Create a textarea element for Perplexity
-        const perplexityTextArea = document.createElement('textarea');
-        perplexityTextArea.rows = 10;
-        perplexityTextArea.cols = 50;
-        perplexityTextArea.style.width = '100%';
-        perplexityTextArea.style.minHeight = '300px';
-        perplexityTextArea.style.fontFamily = 'monospace';
-        perplexityTextArea.placeholder = 'Enter Perplexity JSON request template...';
-        
-        // Set initial value if it exists
-        if (this.plugin.settings.perplexityRequestTemplate) {
-            try {
-                const config = JSON.parse(this.plugin.settings.perplexityRequestTemplate);
-                perplexityTextArea.value = JSON.stringify(config, null, 2);
-            } catch (e) {
-                // If not valid JSON, use as is
-                perplexityTextArea.value = this.plugin.settings.perplexityRequestTemplate;
-            }
-        }
-        
-        // Add input event listener for Perplexity
-        perplexityTextArea.addEventListener('input', async () => {
-            this.plugin.settings.perplexityRequestTemplate = perplexityTextArea.value;
-            await this.plugin.saveSettings();
-        });
-        
-        // Add the textarea to the setting
-        perplexityJsonSetting.settingEl.appendChild(perplexityTextArea);
-
         // Perplexica Request Template
         const perplexicaJsonSetting = new Setting(containerEl)
             .setName('Request Body Template')
@@ -452,5 +454,6 @@ class PerplexedSettingTab extends PluginSettingTab {
         
         // Add the textarea to the setting
         perplexicaJsonSetting.settingEl.appendChild(perplexicaTextArea);
+
     }
 }

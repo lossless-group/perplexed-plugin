@@ -10,6 +10,20 @@ Generating content with AI is a skill unto itself, a new literacy even. To stay 
  
  As of now (July 2025), these are the only widely used AI Model APIs that seem to cite sources. 
 
+
+## Settings
+
+Perplexed Plugin Settings
+├── Perplexity (Remote Service) [PURPLE HEADER]
+│   ├── Endpoint
+│   ├── API Key
+│   └── Request Body Template [PERPLEXITY JSON]
+└── Perplexica (Self-Hosted) [PURPLE HEADER]
+    ├── Endpoint
+    ├── Fallback Container Path
+    ├── Default Model
+    └── Request Body Template [PERPLEXICA JSON]
+
 ## Getting Started
 
 ```
