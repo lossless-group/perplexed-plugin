@@ -115,6 +115,197 @@ export default class PerplexedPlugin extends Plugin {
         }
     }
 
+    public async queryPerplexity(query: string, model: string, stream: boolean, editor: Editor): Promise<void> {
+        const timestamp = new Date().toISOString();
+        
+        // Insert query header
+        const cursor = editor.getCursor();
+        editor.replaceRange(`\n## Perplexity Query (${timestamp})\n**Question:** ${query}\n**Model:** ${model}\n\n`, cursor);
+        
+        try {
+            const payload = {
+                model,
+                messages: [
+                    { role: 'user', content: query }
+                ],
+                stream
+            };
+
+            const response = await fetch(this.settings.perplexityEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.settings.perplexityApiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const newCursor = editor.getCursor();
+            
+            if (stream) {
+                const reader = response.body?.getReader();
+                if (!reader) throw new Error('No response body');
+                
+                let buffer = '';
+                let currentPos = newCursor;
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = new TextDecoder().decode(value);
+                    buffer += chunk;
+                    
+                    // Process complete lines from buffer
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || ''; // Keep incomplete line in buffer
+                    
+                    for (const line of lines) {
+                        if (line.trim().startsWith('data: ')) {
+                            const data = line.replace('data: ', '').trim();
+                            if (data === '[DONE]') continue;
+                            
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (parsed.choices?.[0]?.delta?.content) {
+                                    const content = parsed.choices[0].delta.content;
+                                    editor.replaceRange(content, currentPos);
+                                    // Update cursor position after insertion
+                                    const lines = content.split('\n');
+                                    if (lines.length === 1) {
+                                        currentPos = { line: currentPos.line, ch: currentPos.ch + content.length };
+                                    } else {
+                                        currentPos = { 
+                                            line: currentPos.line + lines.length - 1, 
+                                            ch: lines[lines.length - 1].length 
+                                        };
+                                    }
+                                }
+                            } catch (e) {
+                                // Ignore JSON parse errors for partial chunks
+                            }
+                        }
+                    }
+                }
+            } else {
+                const data = await response.json();
+                const content = data.choices?.[0]?.message?.content || 'No response received';
+                editor.replaceRange(content, newCursor);
+            }
+            
+            // Add separator
+            editor.replaceRange('\n\n---\n', editor.getCursor());
+            
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            new Notice(`Perplexity Error: ${errorMsg}`);
+            editor.replaceRange(`\n**Error:** ${errorMsg}\n\n---\n`, editor.getCursor());
+        }
+    }
+
+    public async queryPerplexica(query: string, focusMode: string, optimizationMode: string, stream: boolean, editor: Editor): Promise<void> {
+        const timestamp = new Date().toISOString();
+        
+        // Insert query header
+        const cursor = editor.getCursor();
+        editor.replaceRange(`\n## Perplexica Query (${timestamp})\n**Question:** ${query}\n**Focus:** ${focusMode}\n**Optimization:** ${optimizationMode}\n\n`, cursor);
+        
+        try {
+            // Try primary endpoint first, then fallback
+            const endpoints = [this.settings.perplexicaEndpoint, this.settings.localLLMPath];
+            let lastError;
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const payload = {
+                        chatModel: {
+                            provider: "ollama",
+                            name: this.settings.defaultModel
+                        },
+                        embeddingModel: {
+                            provider: "ollama",
+                            name: this.settings.defaultModel
+                        },
+                        optimizationMode,
+                        focusMode,
+                        query,
+                        history: [
+                            {
+                                role: "user",
+                                content: query
+                            }
+                        ],
+                        systemInstructions: "You are a helpful AI assistant. Provide clear, concise, and accurate information.",
+                        stream,
+                        maxTokens: 2048,
+                        temperature: 0.7
+                    };
+
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const newCursor = editor.getCursor();
+                    
+                    if (stream) {
+                        const reader = response.body?.getReader();
+                        if (!reader) throw new Error('No response body');
+                        
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            
+                            const chunk = new TextDecoder().decode(value);
+                            const lines = chunk.split('\n').filter(line => line.trim());
+                            
+                            for (const line of lines) {
+                                try {
+                                    const parsed = JSON.parse(line);
+                                    if (parsed.type === 'response' && parsed.data) {
+                                        editor.replaceRange(parsed.data, newCursor);
+                                    }
+                                } catch (e) {
+                                    // Ignore JSON parse errors
+                                }
+                            }
+                        }
+                    } else {
+                        const text = await response.text();
+                        editor.replaceRange(text, newCursor);
+                    }
+                    
+                    // Add separator
+                    editor.replaceRange('\n\n---\n', editor.getCursor());
+                    return; // Success, exit the loop
+                    
+                } catch (error) {
+                    lastError = error;
+                    console.warn(`Failed to connect to ${endpoint}:`, error);
+                }
+            }
+            
+            // If we get here, all endpoints failed
+            throw lastError || new Error('All endpoints failed');
+            
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            new Notice(`Perplexica Error: ${errorMsg}`);
+            editor.replaceRange(`\n**Error:** ${errorMsg}\n\n---\n`, editor.getCursor());
+        }
+    }
+
     private registerPerplexicaCommands(): void {
         // Command to update Perplexica URL
         this.addCommand({
@@ -191,17 +382,100 @@ export default class PerplexedPlugin extends Plugin {
             }
         });
 
-        // Command to insert Perplexica request template
+        // Command to ask Perplexica
         this.addCommand({
-            id: 'insert-perplexica-template',
-            name: 'Insert Perplexica Request Template',
+            id: 'ask-perplexica',
+            name: 'Ask Perplexica',
             editorCallback: (editor: Editor) => {
-                const template = this.settings.requestBodyTemplate;
-                editor.replaceSelection(
-                    '```json\n' + 
-                    template + '\n' +
-                    '```'
-                );
+                const modal = new (class extends Modal {
+                    private queryInput!: HTMLTextAreaElement;
+                    private focusModeSelect!: HTMLSelectElement;
+                    private optimizationSelect!: HTMLSelectElement;
+                    private streamToggle!: HTMLInputElement;
+
+                    constructor(app: App, private plugin: PerplexedPlugin, private editor: Editor) {
+                        super(app);
+                    }
+                    
+                    onOpen() {
+                        const {contentEl} = this;
+                        contentEl.createEl('h2', {text: 'Ask Perplexica'});
+                        
+                        const form = contentEl.createEl('form');
+                        
+                        // Query input
+                        const queryDiv = form.createDiv({cls: 'setting-item'});
+                        queryDiv.createEl('label', {text: 'Your Question'});
+                        this.queryInput = queryDiv.createEl('textarea', {
+                            cls: 'text-input',
+                            attr: {
+                                rows: '4',
+                                placeholder: 'What would you like to ask Perplexica?'
+                            }
+                        });
+                        this.queryInput.style.width = '100%';
+                        this.queryInput.style.minHeight = '100px';
+
+                        // Focus mode selection
+                        const focusDiv = form.createDiv({cls: 'setting-item'});
+                        focusDiv.createEl('label', {text: 'Focus Mode'});
+                        this.focusModeSelect = focusDiv.createEl('select', {cls: 'dropdown'});
+                        ['webSearch', 'academicSearch', 'writingAssistant', 'wolframAlpha', 'youtubeSearch', 'redditSearch'].forEach(mode => {
+                            const option = this.focusModeSelect.createEl('option', {value: mode, text: mode});
+                            if (mode === this.plugin.settings.defaultFocusMode) option.selected = true;
+                        });
+
+                        // Optimization mode selection
+                        const optimizationDiv = form.createDiv({cls: 'setting-item'});
+                        optimizationDiv.createEl('label', {text: 'Optimization'});
+                        this.optimizationSelect = optimizationDiv.createEl('select', {cls: 'dropdown'});
+                        ['speed', 'balanced', 'quality'].forEach(mode => {
+                            const option = this.optimizationSelect.createEl('option', {value: mode, text: mode});
+                            if (mode === this.plugin.settings.defaultOptimizationMode) option.selected = true;
+                        });
+
+                        // Stream toggle
+                        const streamDiv = form.createDiv({cls: 'setting-item'});
+                        const streamLabel = streamDiv.createEl('label');
+                        this.streamToggle = streamLabel.createEl('input', {type: 'checkbox'});
+                        this.streamToggle.checked = false;
+                        streamLabel.createSpan({text: ' Stream response'});
+                        
+                        const buttonDiv = contentEl.createDiv({cls: 'setting-item'});
+                        const askButton = buttonDiv.createEl('button', {
+                            text: 'Ask Perplexica',
+                            cls: 'mod-cta'
+                        });
+                        
+                        form.onsubmit = (e) => {
+                            e.preventDefault();
+                            this.onSubmit();
+                        };
+                        
+                        askButton.onclick = () => this.onSubmit();
+                        
+                        // Focus on the query input
+                        setTimeout(() => this.queryInput.focus(), 100);
+                    }
+                    
+                    async onSubmit() {
+                        const query = this.queryInput.value.trim();
+                        if (!query) {
+                            new Notice('Please enter a question');
+                            return;
+                        }
+
+                        this.close();
+                        await this.plugin.queryPerplexica(query, this.focusModeSelect.value, this.optimizationSelect.value, this.streamToggle.checked, this.editor);
+                    }
+                    
+                    onClose() {
+                        const {contentEl} = this;
+                        contentEl.empty();
+                    }
+                })(this.app, this, editor);
+                
+                modal.open();
             }
         });
     }
@@ -281,17 +555,95 @@ export default class PerplexedPlugin extends Plugin {
             }
         });
 
-        // Command to insert Perplexity request template
+        // Command to ask Perplexity
         this.addCommand({
-            id: 'insert-perplexity-template',
-            name: 'Insert Perplexity Request Template',
+            id: 'ask-perplexity',
+            name: 'Ask Perplexity',
             editorCallback: (editor: Editor) => {
-                const template = this.settings.perplexityRequestTemplate;
-                editor.replaceSelection(
-                    '```json\n' +
-                    template + '\n' +
-                    '```'
-                );
+                const modal = new (class extends Modal {
+                    private queryInput!: HTMLTextAreaElement;
+                    private modelSelect!: HTMLSelectElement;
+                    private streamToggle!: HTMLInputElement;
+
+                    constructor(app: App, private plugin: PerplexedPlugin, private editor: Editor) {
+                        super(app);
+                    }
+                    
+                    onOpen() {
+                        const {contentEl} = this;
+                        contentEl.createEl('h2', {text: 'Ask Perplexity'});
+                        
+                        const form = contentEl.createEl('form');
+                        
+                        // Query input
+                        const queryDiv = form.createDiv({cls: 'setting-item'});
+                        queryDiv.createEl('label', {text: 'Your Question'});
+                        this.queryInput = queryDiv.createEl('textarea', {
+                            cls: 'text-input',
+                            attr: {
+                                rows: '4',
+                                placeholder: 'What would you like to ask Perplexity?'
+                            }
+                        });
+                        this.queryInput.style.width = '100%';
+                        this.queryInput.style.minHeight = '100px';
+
+                        // Model selection
+                        const modelDiv = form.createDiv({cls: 'setting-item'});
+                        modelDiv.createEl('label', {text: 'Model'});
+                        this.modelSelect = modelDiv.createEl('select', {cls: 'dropdown'});
+                        ['sonar-pro', 'sonar-small', 'llama-3.1-sonar-small-128k-online', 'llama-3.1-sonar-large-128k-online'].forEach(model => {
+                            const option = this.modelSelect.createEl('option', {value: model, text: model});
+                            if (model === 'sonar-pro') option.selected = true;
+                        });
+
+                        // Stream toggle
+                        const streamDiv = form.createDiv({cls: 'setting-item'});
+                        const streamLabel = streamDiv.createEl('label');
+                        this.streamToggle = streamLabel.createEl('input', {type: 'checkbox'});
+                        this.streamToggle.checked = true;
+                        streamLabel.createSpan({text: ' Stream response'});
+                        
+                        const buttonDiv = contentEl.createDiv({cls: 'setting-item'});
+                        const askButton = buttonDiv.createEl('button', {
+                            text: 'Ask Perplexity',
+                            cls: 'mod-cta'
+                        });
+                        
+                        form.onsubmit = (e) => {
+                            e.preventDefault();
+                            this.onSubmit();
+                        };
+                        
+                        askButton.onclick = () => this.onSubmit();
+                        
+                        // Focus on the query input
+                        setTimeout(() => this.queryInput.focus(), 100);
+                    }
+                    
+                    async onSubmit() {
+                        const query = this.queryInput.value.trim();
+                        if (!query) {
+                            new Notice('Please enter a question');
+                            return;
+                        }
+
+                        if (!this.plugin.settings.perplexityApiKey) {
+                            new Notice('Please set your Perplexity API key in settings');
+                            return;
+                        }
+
+                        this.close();
+                        await this.plugin.queryPerplexity(query, this.modelSelect.value, this.streamToggle.checked, this.editor);
+                    }
+                    
+                    onClose() {
+                        const {contentEl} = this;
+                        contentEl.empty();
+                    }
+                })(this.app, this, editor);
+                
+                modal.open();
             }
         });
     }
