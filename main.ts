@@ -115,6 +115,29 @@ export default class PerplexedPlugin extends Plugin {
         }
     }
 
+    private convertRecencyFilter(filter: string): string | undefined {
+        // Handle empty string (no filter)
+        if (!filter || filter === '') {
+            return undefined; // Don't include the parameter at all for no filter
+        }
+        
+        // API only supports: day, week, month, year
+        // Custom multi-year options should fall back to "year" as the closest valid option
+        const validFilters = ['day', 'week', 'month', 'year'];
+        
+        if (validFilters.includes(filter)) {
+            return filter;
+        }
+        
+        // For any custom multi-year options, fallback to 'year' since API doesn't support them
+        if (filter.includes('year')) {
+            return 'year';
+        }
+        
+        // Default fallback
+        return 'month';
+    }
+
     public async queryPerplexity(query: string, model: string, stream: boolean, editor: Editor, options?: {
         return_citations?: boolean;
         return_images?: boolean;
@@ -127,16 +150,26 @@ export default class PerplexedPlugin extends Plugin {
         const isDeepResearch = model === 'sonar-deep-research';
         const useStreaming = stream && !isDeepResearch;
         
-        // Insert query header
+        // Insert query header at the current cursor position
         const cursor = editor.getCursor();
+        console.log('Initial cursor position:', cursor);
+        
         const headerText = isDeepResearch 
             ? `\n\n***\n## Perplexity Deep Research Query (${timestamp})\n**Question:** ${query}\n**Model:** ${model}\n\n🔍 **Conducting exhaustive research across hundreds of sources...**\n*This may take 30-60 seconds for comprehensive analysis.*\n\n### **Deep Research Analysis**:\n\n`
             : `\n\n***\n## Perplexity Query (${timestamp})\n**Question:** ${query}\n**Model:** ${model}\n\n### **Response from ${model}**:\n\n`;
         
-        editor.replaceRange(headerText, cursor);
+        // Insert the header at the cursor position
+        editor.replaceRange(headerText, cursor, cursor);
         
-        // Get cursor position after header for response content
-        const responseCursor = editor.getCursor();
+        // Calculate where the response content should start
+        const headerLines = headerText.split('\n');
+        const lastLine = headerLines[headerLines.length - 1] || '';
+        const responseCursor = {
+            line: cursor.line + headerLines.length - 1,
+            ch: lastLine.length
+        };
+        
+        console.log('Response cursor position:', responseCursor);
         
         // Show loading notice for deep research
         let loadingNotice: Notice | null = null;
@@ -145,7 +178,9 @@ export default class PerplexedPlugin extends Plugin {
         }
         
         try {
-            const payload = {
+            const convertedFilter = this.convertRecencyFilter(options?.search_recency_filter ?? "month");
+            
+            const payload: any = {
                 model,
                 messages: [
                     { role: 'user', content: query }
@@ -153,9 +188,13 @@ export default class PerplexedPlugin extends Plugin {
                 stream: useStreaming,
                 return_citations: options?.return_citations ?? true,
                 return_images: options?.return_images ?? true,
-                return_related_questions: options?.return_related_questions ?? false,
-                search_recency_filter: options?.search_recency_filter ?? "month"
+                return_related_questions: options?.return_related_questions ?? false
             };
+            
+            // Only include search_recency_filter if we have a filter value
+            if (convertedFilter !== undefined) {
+                payload.search_recency_filter = convertedFilter;
+            }
 
             const response = await fetch(this.settings.perplexityEndpoint, {
                 method: 'POST',
@@ -723,7 +762,7 @@ export default class PerplexedPlugin extends Plugin {
                         imagesDesc.style.fontSize = '11px';
                         imagesDesc.style.color = 'var(--text-muted)';
                         imagesDesc.style.marginTop = '3px';
-                        imagesDesc.textContent = 'Note: This influences search behavior but Perplexity API does not return images in responses';
+                        imagesDesc.textContent = 'Include image results from search - images will appear in an Images section';
 
                         // Related questions toggle
                         const relatedQuestionsDiv = form.createDiv({cls: 'setting-item'});
@@ -736,9 +775,18 @@ export default class PerplexedPlugin extends Plugin {
                         const recencyDiv = form.createDiv({cls: 'setting-item'});
                         recencyDiv.createEl('label', {text: 'Recency Filter'});
                         this.recencyFilterSelect = recencyDiv.createEl('select', {cls: 'dropdown'});
-                        ['day', 'week', 'month', 'year'].forEach(recency => {
-                            const option = this.recencyFilterSelect.createEl('option', {value: recency, text: recency});
-                            if (recency === 'month') option.selected = true;
+                        [
+                            {value: '', text: 'No filter (all time) - Search all content'}, 
+                            {value: 'day', text: 'Past day'}, 
+                            {value: 'week', text: 'Past week'}, 
+                            {value: 'month', text: 'Past month'}, 
+                            {value: 'year', text: 'Past year'},
+                            {value: '2years', text: 'Past 2+ years (falls back to "year")'},
+                            {value: '3years', text: 'Past 3+ years (falls back to "year")'},
+                            {value: '5years', text: 'Past 5+ years (falls back to "year")'}
+                        ].forEach(option => {
+                            const optionEl = this.recencyFilterSelect.createEl('option', {value: option.value, text: option.text});
+                            if (option.value === '') optionEl.selected = true; // Default to no filter
                         });
 
                         // Stream toggle
