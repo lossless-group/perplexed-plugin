@@ -1,0 +1,8 @@
+/* Main CSS entry point for Perplexed Plugin */
+
+/* Import all modal styles */
+@import './perplexity-modal.css';
+@import './article-generator-modal.css';
+@import './perplexica-modal.css';
+@import './lmstudio-modal.css';
+@import './url-update-modal.css'; 

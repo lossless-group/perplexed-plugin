@@ -1,0 +1,12 @@
+/* LMStudioModal Styles */
+
+.lmstudio-modal .text-input {
+    width: 100%;
+    margin: 8px 0;
+    padding: 12px;
+}
+
+.lmstudio-modal .system-prompt-input {
+    width: 100%;
+    min-height: 60px;
+} 
