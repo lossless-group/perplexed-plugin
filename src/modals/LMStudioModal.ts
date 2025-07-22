@@ -10,6 +10,7 @@ export class LMStudioModal extends Modal {
     private maxTokensInput!: HTMLInputElement;
     private temperatureInput!: HTMLInputElement;
     private systemPromptInput!: HTMLTextAreaElement;
+    private imagesToggle!: HTMLInputElement;
 
     constructor(app: App, editor: Editor, lmStudioService: LMStudioService) {
         super(app);
@@ -79,6 +80,17 @@ export class LMStudioModal extends Modal {
             cls: 'text-input'
         });
 
+        // Images toggle
+        const imagesDiv = form.createDiv({cls: 'setting-item'});
+        const imagesLabel = imagesDiv.createEl('label');
+        this.imagesToggle = imagesLabel.createEl('input', {type: 'checkbox'});
+        this.imagesToggle.checked = false;
+        imagesLabel.createSpan({text: ' Include Images'});
+        
+        // Add description for images toggle
+        const imagesDesc = imagesDiv.createDiv({cls: 'setting-item-description images-description'});
+        imagesDesc.textContent = 'Include image references throughout the response where appropriate';
+
         // Stream toggle
         const streamDiv = form.createDiv({cls: 'setting-item'});
         const streamLabel = streamDiv.createEl('label');
@@ -110,9 +122,22 @@ export class LMStudioModal extends Modal {
             return;
         }
 
+        // If images are enabled, add image markers to the query
+        let processedQuery = query;
+        if (this.imagesToggle.checked) {
+            processedQuery = `${query}
+
+**Image References:**
+Please include the following image references throughout your response where appropriate:
+- [IMAGE 1: Relevant diagram or illustration related to the topic]
+- [IMAGE 2: Practical example or use case visualization]
+- [IMAGE 3: Additional supporting visual content]`;
+        }
+
         const options: LMStudioOptions = {
             max_tokens: parseInt(this.maxTokensInput.value) || 2048,
-            temperature: parseFloat(this.temperatureInput.value) || 0.7
+            temperature: parseFloat(this.temperatureInput.value) || 0.7,
+            return_images: this.imagesToggle.checked
         };
         
         const systemPrompt = this.systemPromptInput.value.trim();
@@ -122,7 +147,7 @@ export class LMStudioModal extends Modal {
 
         this.close();
         await this.lmStudioService.queryLMStudio(
-            query, 
+            processedQuery, 
             this.modelSelect.value, 
             this.streamToggle.checked, 
             this.editor, 

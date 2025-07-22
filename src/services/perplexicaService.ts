@@ -6,6 +6,10 @@ export interface PerplexicaSettings {
     defaultModel: string;
 }
 
+export interface PerplexicaOptions {
+    return_images?: boolean;
+}
+
 export class PerplexicaService {
     private settings: PerplexicaSettings;
 
@@ -13,12 +17,37 @@ export class PerplexicaService {
         this.settings = settings;
     }
 
+    private processContentWithImages(content: string): string {
+        // Find image markers like [IMAGE 1: description] or [IMAGE 1: description]
+        const imageRegex = /\[IMAGE\s+(\d+):\s*(.*?)\]/gi;
+        let match;
+        let imageIndex = 0;
+        
+        while ((match = imageRegex.exec(content)) !== null) {
+            const description = match[2]?.trim() || '';
+            
+            // Create a placeholder image markdown with description
+            const imageMarkdown = `\n\n![${description}](https://via.placeholder.com/600x400/cccccc/666666?text=${encodeURIComponent(description)})\n*${description}*\n`;
+            
+            // Replace the marker with the placeholder image
+            content = content.replace(match[0], imageMarkdown);
+            imageIndex++;
+        }
+        
+        if (imageIndex > 0) {
+            console.log(`🔄 Processed ${imageIndex} image markers in Perplexica content`);
+        }
+        
+        return content;
+    }
+
     public async queryPerplexica(
         query: string, 
         focusMode: string, 
         optimizationMode: string, 
         stream: boolean, 
-        editor: Editor
+        editor: Editor,
+        options?: PerplexicaOptions
     ): Promise<void> {
         const timestamp = new Date().toISOString();
         
@@ -77,9 +106,9 @@ export class PerplexicaService {
                     }
                     
                     if (stream) {
-                        await this.handleStreamingResponse(response, editor, responseCursor);
+                        await this.handleStreamingResponse(response, editor, responseCursor, options);
                     } else {
-                        await this.handleNonStreamingResponse(response, editor, responseCursor);
+                        await this.handleNonStreamingResponse(response, editor, responseCursor, options);
                     }
                     
                     // Add separator
@@ -102,7 +131,7 @@ export class PerplexicaService {
         }
     }
 
-    private async handleStreamingResponse(response: Response, editor: Editor, responseCursor: { line: number; ch: number }): Promise<void> {
+    private async handleStreamingResponse(response: Response, editor: Editor, responseCursor: { line: number; ch: number }, options?: PerplexicaOptions): Promise<void> {
         const reader = response.body?.getReader();
         if (!reader) throw new Error('No response body');
         
@@ -117,23 +146,30 @@ export class PerplexicaService {
             for (const line of lines) {
                 try {
                     const parsed = JSON.parse(line);
-                    if (parsed.type === 'response' && parsed.data) {
-                        editor.replaceRange(parsed.data, currentPos);
-                        // Update cursor position
-                        const lines = parsed.data.split('\n');
-                        if (lines.length === 1) {
-                            currentPos = { line: currentPos.line, ch: currentPos.ch + parsed.data.length };
-                        } else {
-                            currentPos = { 
-                                line: currentPos.line + lines.length - 1, 
-                                ch: lines[lines.length - 1]?.length || 0
-                            };
+                                            if (parsed.type === 'response' && parsed.data) {
+                            let content = parsed.data;
+                            
+                            // Process images if enabled
+                            if (options?.return_images) {
+                                content = this.processContentWithImages(content);
+                            }
+                            
+                            editor.replaceRange(content, currentPos);
+                            // Update cursor position
+                            const lines = content.split('\n');
+                            if (lines.length === 1) {
+                                currentPos = { line: currentPos.line, ch: currentPos.ch + content.length };
+                            } else {
+                                currentPos = { 
+                                    line: currentPos.line + lines.length - 1, 
+                                    ch: lines[lines.length - 1]?.length || 0
+                                };
+                            }
+                            // Scroll to follow the new content
+                            editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
+                            // Small delay to make scrolling smoother
+                            await new Promise(resolve => setTimeout(resolve, 10));
                         }
-                        // Scroll to follow the new content
-                        editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
-                        // Small delay to make scrolling smoother
-                        await new Promise(resolve => setTimeout(resolve, 10));
-                    }
                 } catch (e) {
                     // Ignore JSON parse errors
                 }
@@ -141,8 +177,15 @@ export class PerplexicaService {
         }
     }
 
-    private async handleNonStreamingResponse(response: Response, editor: Editor, responseCursor: { line: number; ch: number }): Promise<void> {
+    private async handleNonStreamingResponse(response: Response, editor: Editor, responseCursor: { line: number; ch: number }, options?: PerplexicaOptions): Promise<void> {
         const text = await response.text();
-        editor.replaceRange(text, responseCursor);
+        
+        // Process images if enabled
+        let processedText = text;
+        if (options?.return_images) {
+            processedText = this.processContentWithImages(text);
+        }
+        
+        editor.replaceRange(processedText, responseCursor);
     }
 } 

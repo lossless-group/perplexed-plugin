@@ -179,8 +179,10 @@ export default class PerplexedPlugin extends Plugin {
         await this.perplexityService.queryPerplexity(query, model, stream, editor, options);
     }
 
-    public async queryPerplexica(query: string, focusMode: string, optimizationMode: string, stream: boolean, editor: Editor): Promise<void> {
-        await this.perplexicaService.queryPerplexica(query, focusMode, optimizationMode, stream, editor);
+    public async queryPerplexica(query: string, focusMode: string, optimizationMode: string, stream: boolean, editor: Editor, options?: {
+        return_images?: boolean;
+    }): Promise<void> {
+        await this.perplexicaService.queryPerplexica(query, focusMode, optimizationMode, stream, editor, options);
     }
 
     public async queryLMStudio(query: string, model: string, stream: boolean, editor: Editor, options?: {
@@ -188,6 +190,7 @@ export default class PerplexedPlugin extends Plugin {
         temperature?: number;
         top_p?: number;
         system_prompt?: string;
+        return_images?: boolean;
     }): Promise<void> {
         await this.lmStudioService.queryLMStudio(query, model, stream, editor, options);
     }

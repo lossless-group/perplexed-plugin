@@ -75,7 +75,7 @@ export class PerplexityModal extends Modal {
         
         // Add description for images toggle
         const imagesDesc = imagesDiv.createDiv({cls: 'setting-item-description images-description'});
-        imagesDesc.textContent = 'Include image results from search - images will appear in an Images section';
+        imagesDesc.textContent = 'Include image results from search - images will be integrated throughout the response where appropriate';
 
         // Related questions toggle
         const relatedQuestionsDiv = form.createDiv({cls: 'setting-item'});
@@ -133,6 +133,18 @@ export class PerplexityModal extends Modal {
             return;
         }
 
+        // If images are enabled, add image markers to the query
+        let processedQuery = query;
+        if (this.imagesToggle.checked) {
+            processedQuery = `${query}
+
+**Image References:**
+Please include the following image references throughout your response where appropriate:
+- [IMAGE 1: Relevant diagram or illustration related to the topic]
+- [IMAGE 2: Practical example or use case visualization]
+- [IMAGE 3: Additional supporting visual content]`;
+        }
+
         const options: PerplexityOptions = {
             return_citations: this.citationsToggle.checked,
             return_images: this.imagesToggle.checked,
@@ -142,7 +154,7 @@ export class PerplexityModal extends Modal {
 
         this.close();
         await this.perplexityService.queryPerplexity(
-            query, 
+            processedQuery, 
             this.modelSelect.value, 
             this.streamToggle.checked, 
             this.editor, 

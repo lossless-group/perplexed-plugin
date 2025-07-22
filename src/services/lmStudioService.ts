@@ -5,6 +5,7 @@ export interface LMStudioOptions {
     temperature?: number;
     top_p?: number;
     system_prompt?: string;
+    return_images?: boolean;
 }
 
 export interface LMStudioSettings {
@@ -16,6 +17,30 @@ export class LMStudioService {
 
     constructor(settings: LMStudioSettings) {
         this.settings = settings;
+    }
+
+    private processContentWithImages(content: string): string {
+        // Find image markers like [IMAGE 1: description] or [IMAGE 1: description]
+        const imageRegex = /\[IMAGE\s+(\d+):\s*(.*?)\]/gi;
+        let match;
+        let imageIndex = 0;
+        
+        while ((match = imageRegex.exec(content)) !== null) {
+            const description = match[2]?.trim() || '';
+            
+            // Create a placeholder image markdown with description
+            const imageMarkdown = `\n\n![${description}](https://via.placeholder.com/600x400/cccccc/666666?text=${encodeURIComponent(description)})\n*${description}*\n`;
+            
+            // Replace the marker with the placeholder image
+            content = content.replace(match[0], imageMarkdown);
+            imageIndex++;
+        }
+        
+        if (imageIndex > 0) {
+            console.log(`🔄 Processed ${imageIndex} image markers in LM Studio content`);
+        }
+        
+        return content;
     }
 
     public async queryLMStudio(
@@ -85,9 +110,9 @@ export class LMStudioService {
             let finalCursor = responseCursor;
             
             if (stream) {
-                await this.handleStreamingResponse(response, editor, responseCursor);
+                await this.handleStreamingResponse(response, editor, responseCursor, options);
             } else {
-                await this.handleNonStreamingResponse(response, editor, responseCursor);
+                await this.handleNonStreamingResponse(response, editor, responseCursor, options);
             }
             
             // Add separator at the final cursor position
@@ -103,7 +128,8 @@ export class LMStudioService {
     private async handleStreamingResponse(
         response: Response, 
         editor: Editor, 
-        responseCursor: { line: number; ch: number }
+        responseCursor: { line: number; ch: number },
+        options?: LMStudioOptions
     ): Promise<void> {
         const reader = response.body?.getReader();
         if (!reader) throw new Error('No response body');
@@ -130,7 +156,13 @@ export class LMStudioService {
                     try {
                         const parsed = JSON.parse(data);
                         if (parsed.choices?.[0]?.delta?.content) {
-                            const content = parsed.choices[0].delta.content;
+                            let content = parsed.choices[0].delta.content;
+                            
+                            // Process images if enabled
+                            if (options?.return_images) {
+                                content = this.processContentWithImages(content);
+                            }
+                            
                             editor.replaceRange(content, currentPos);
                             // Update cursor position after insertion
                             const lines = content.split('\n');
@@ -158,11 +190,18 @@ export class LMStudioService {
     private async handleNonStreamingResponse(
         response: Response, 
         editor: Editor, 
-        responseCursor: { line: number; ch: number }
+        responseCursor: { line: number; ch: number },
+        options?: LMStudioOptions
     ): Promise<void> {
         const data = await response.json();
         const content = data.choices?.[0]?.message?.content || 'No response received';
         
-        editor.replaceRange(content, responseCursor);
+        // Process images if enabled
+        let processedContent = content;
+        if (options?.return_images) {
+            processedContent = this.processContentWithImages(content);
+        }
+        
+        editor.replaceRange(processedContent, responseCursor);
     }
 } 
