@@ -10,13 +10,17 @@ export interface LMStudioOptions {
 
 export interface LMStudioSettings {
     lmStudioEndpoint: string;
+    promptsService?: any; // Will be PromptsService type
+    requestTemplate?: string;
 }
 
 export class LMStudioService {
     private settings: LMStudioSettings;
+    private promptsService: any;
 
     constructor(settings: LMStudioSettings) {
         this.settings = settings;
+        this.promptsService = settings.promptsService;
     }
 
     private processContentWithImages(content: string): string {
@@ -85,14 +89,40 @@ export class LMStudioService {
             // Add user query
             messages.push({ role: 'user', content: query });
             
-            const payload: any = {
-                model,
-                messages,
-                stream,
-                max_tokens: options?.max_tokens ?? 2048,
-                temperature: options?.temperature ?? 0.7,
-                top_p: options?.top_p ?? 0.9
-            };
+            // Use template if available, otherwise construct payload manually
+            let payload: any;
+            if (this.settings.requestTemplate) {
+                try {
+                    const processedTemplate = this.promptsService?.processTemplate(this.settings.requestTemplate) || this.settings.requestTemplate;
+                    payload = JSON.parse(processedTemplate);
+                    // Override with current parameters
+                    payload.model = model;
+                    payload.messages = messages;
+                    payload.stream = stream;
+                    payload.max_tokens = options?.max_tokens ?? 2048;
+                    payload.temperature = options?.temperature ?? 0.7;
+                    payload.top_p = options?.top_p ?? 0.9;
+                } catch (error) {
+                    console.warn('Failed to parse request template, using default payload:', error);
+                    payload = {
+                        model,
+                        messages,
+                        stream,
+                        max_tokens: options?.max_tokens ?? 2048,
+                        temperature: options?.temperature ?? 0.7,
+                        top_p: options?.top_p ?? 0.9
+                    };
+                }
+            } else {
+                payload = {
+                    model,
+                    messages,
+                    stream,
+                    max_tokens: options?.max_tokens ?? 2048,
+                    temperature: options?.temperature ?? 0.7,
+                    top_p: options?.top_p ?? 0.9
+                };
+            }
             
             const response = await fetch(this.settings.lmStudioEndpoint, {
                 method: 'POST',

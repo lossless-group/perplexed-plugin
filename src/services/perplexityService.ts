@@ -10,13 +10,17 @@ export interface PerplexityOptions {
 export interface PerplexitySettings {
     perplexityApiKey: string;
     perplexityEndpoint: string;
+    promptsService?: any; // Will be PromptsService type
+    requestTemplate?: string;
 }
 
 export class PerplexityService {
     private settings: PerplexitySettings;
+    private promptsService: any;
 
     constructor(settings: PerplexitySettings) {
         this.settings = settings;
+        this.promptsService = settings.promptsService;
     }
 
     private convertRecencyFilter(filter: string): string | undefined {
@@ -121,22 +125,52 @@ export class PerplexityService {
         // Show loading notice for deep research
         let loadingNotice: Notice | null = null;
         if (isDeepResearch) {
-            loadingNotice = new Notice('🔍 Deep research in progress... This may take up to 60 seconds.', 0); // 0 = persistent
+            loadingNotice = new Notice(this.promptsService?.getDeepResearchLoadingNotice() || '🔍 Deep research in progress... This may take up to 60 seconds.', 0); // 0 = persistent
         }
         
         try {
             const convertedFilter = this.convertRecencyFilter(options?.search_recency_filter ?? "month");
             
-            const payload: any = {
-                model,
-                messages: [
-                    { role: 'user', content: query }
-                ],
-                stream: useStreaming,
-                return_citations: options?.return_citations ?? true,
-                return_images: options?.return_images ?? true,
-                return_related_questions: options?.return_related_questions ?? false
-            };
+            // Use template if available, otherwise construct payload manually
+            let payload: any;
+            if (this.settings.requestTemplate) {
+                try {
+                    const processedTemplate = this.promptsService?.processTemplate(this.settings.requestTemplate) || this.settings.requestTemplate;
+                    payload = JSON.parse(processedTemplate);
+                    // Override with current query and options
+                    payload.model = model;
+                    payload.messages = [
+                        { role: 'user', content: query }
+                    ];
+                    payload.stream = useStreaming;
+                    payload.return_citations = options?.return_citations ?? true;
+                    payload.return_images = options?.return_images ?? true;
+                    payload.return_related_questions = options?.return_related_questions ?? false;
+                } catch (error) {
+                    console.warn('Failed to parse request template, using default payload:', error);
+                    payload = {
+                        model,
+                        messages: [
+                            { role: 'user', content: query }
+                        ],
+                        stream: useStreaming,
+                        return_citations: options?.return_citations ?? true,
+                        return_images: options?.return_images ?? true,
+                        return_related_questions: options?.return_related_questions ?? false
+                    };
+                }
+            } else {
+                payload = {
+                    model,
+                    messages: [
+                        { role: 'user', content: query }
+                    ],
+                    stream: useStreaming,
+                    return_citations: options?.return_citations ?? true,
+                    return_images: options?.return_images ?? true,
+                    return_related_questions: options?.return_related_questions ?? false
+                };
+            }
             
             // Only include search_recency_filter if we have a filter value
             if (convertedFilter !== undefined) {

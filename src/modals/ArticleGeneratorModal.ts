@@ -1,55 +1,13 @@
 import { App, Editor, Notice } from 'obsidian';
 import { PerplexityService, PerplexityOptions } from '../services/perplexityService';
 import { PerplexityModal } from './PerplexityModal';
+import { PromptsService } from '../services/promptsService';
 
 export class ArticleGeneratorModal extends PerplexityModal {
     private termInput!: HTMLInputElement;
-    private predefinedPrompt: string;
 
-    constructor(app: App, editor: Editor, perplexityService: PerplexityService) {
-        super(app, editor, perplexityService);
-        
-        // Predefined prompt for generating one-page articles with image references
-        this.predefinedPrompt = `Write a comprehensive one-page article about "{TERM}". 
-
-Structure the article as follows:
-
-1. **Introduction** (2-3 sentences)
-   - Define the term and its significance
-   - Provide context for why it matters
-
-2. **Main Content** (3-4 paragraphs)
-   - Explain the concept in detail
-   - Include practical examples and use cases
-   - Discuss benefits and potential applications
-   - Address any challenges or considerations
-
-3. **Current State and Trends** (1-2 paragraphs)
-   - Discuss current adoption and market status
-   - Mention key players or technologies
-   - Highlight recent developments
-
-4. **Future Outlook** (1 paragraph)
-   - Predict future developments
-   - Discuss potential impact
-
-5. **Conclusion** (1-2 sentences)
-   - Summarize key points
-   - End with a forward-looking statement
-
-**Important Guidelines:**
-- Keep the total length to approximately one page (500-800 words)
-- Use clear, accessible language
-- Include specific examples and real-world applications
-- Make it engaging and informative for a general audience
-- Use markdown formatting for structure
-
-**Image References:**
-Include [IMAGE 1: {TERM} concept diagram or illustration] after the introduction.
-Include [IMAGE 2: {TERM} practical example or use case] after the main content section.
-Include [IMAGE 3: {TERM} future trends or technology visualization] before the conclusion.
-
-Replace "{TERM}" with the actual vocabulary term in the prompt.`;
+    constructor(app: App, editor: Editor, perplexityService: PerplexityService, promptsService: PromptsService) {
+        super(app, editor, perplexityService, promptsService);
     }
     
     onOpen() {
@@ -65,13 +23,13 @@ Replace "{TERM}" with the actual vocabulary term in the prompt.`;
         this.termInput = termDiv.createEl('input', {
             cls: 'text-input',
             attr: {
-                placeholder: 'e.g., AI Copilots, AI Studios, Machine Learning, etc.'
+                placeholder: this.promptsService.getArticleTermPlaceholder()
             }
         });
         
         // Add description for term input below the input
         const termDesc = termDiv.createDiv({cls: 'setting-item-description term-description'});
-        termDesc.textContent = 'Enter a vocabulary term to generate a comprehensive one-page article with images.';
+        termDesc.textContent = this.promptsService.getArticleTermDescription();
         
         // Call parent onOpen to add the rest of the form elements
         super.onOpen();
@@ -98,12 +56,12 @@ Replace "{TERM}" with the actual vocabulary term in the prompt.`;
     async onSubmit() {
         const term = this.termInput.value.trim();
         if (!term) {
-            new Notice('Please enter a vocabulary term');
+            new Notice(this.promptsService.getEnterTermNotice());
             return;
         }
 
-        // Generate the query by replacing {TERM} in the predefined prompt
-        const query = this.predefinedPrompt.replace(/{TERM}/g, term);
+        // Generate the query using the prompt template from settings
+        const query = this.promptsService.getArticleGeneratorTemplate(term);
 
         const options: PerplexityOptions = {
             return_citations: this.citationsToggle.checked,

@@ -1,9 +1,11 @@
 import { App, Modal, Notice, Editor } from 'obsidian';
 import { LMStudioService, LMStudioOptions } from '../services/lmStudioService';
+import { PromptsService } from '../services/promptsService';
 
 export class LMStudioModal extends Modal {
     private editor: Editor;
     private lmStudioService: LMStudioService;
+    private promptsService: PromptsService;
     private queryInput!: HTMLTextAreaElement;
     private modelSelect!: HTMLSelectElement;
     private streamToggle!: HTMLInputElement;
@@ -12,10 +14,11 @@ export class LMStudioModal extends Modal {
     private systemPromptInput!: HTMLTextAreaElement;
     private imagesToggle!: HTMLInputElement;
 
-    constructor(app: App, editor: Editor, lmStudioService: LMStudioService) {
+    constructor(app: App, editor: Editor, lmStudioService: LMStudioService, promptsService: PromptsService) {
         super(app);
         this.editor = editor;
         this.lmStudioService = lmStudioService;
+        this.promptsService = promptsService;
     }
     
     onOpen() {
@@ -32,7 +35,7 @@ export class LMStudioModal extends Modal {
             cls: 'text-input',
             attr: {
                 rows: '4',
-                placeholder: 'What would you like to ask?'
+                placeholder: this.promptsService.getLMStudioQueryPlaceholder()
             }
         });
 
@@ -53,7 +56,7 @@ export class LMStudioModal extends Modal {
             cls: 'text-input system-prompt-input',
             attr: {
                 rows: '2',
-                placeholder: 'You are a helpful AI assistant...'
+                placeholder: this.promptsService.getLMStudioSystemPromptPlaceholder()
             }
         });
 
@@ -89,7 +92,7 @@ export class LMStudioModal extends Modal {
         
         // Add description for images toggle
         const imagesDesc = imagesDiv.createDiv({cls: 'setting-item-description images-description'});
-        imagesDesc.textContent = 'Include image references throughout the response where appropriate';
+        imagesDesc.textContent = this.promptsService.getImagesToggleGenericDescription();
 
         // Stream toggle
         const streamDiv = form.createDiv({cls: 'setting-item'});
@@ -118,7 +121,7 @@ export class LMStudioModal extends Modal {
     async onSubmit() {
         const query = this.queryInput.value.trim();
         if (!query) {
-            new Notice('Please enter a question');
+            new Notice(this.promptsService.getEnterQuestionNotice());
             return;
         }
 
@@ -127,11 +130,7 @@ export class LMStudioModal extends Modal {
         if (this.imagesToggle.checked) {
             processedQuery = `${query}
 
-**Image References:**
-Please include the following image references throughout your response where appropriate:
-- [IMAGE 1: Relevant diagram or illustration related to the topic]
-- [IMAGE 2: Practical example or use case visualization]
-- [IMAGE 3: Additional supporting visual content]`;
+${this.promptsService.getImageReferencesPrompt()}`;
         }
 
         const options: LMStudioOptions = {

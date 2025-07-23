@@ -4,6 +4,8 @@ export interface PerplexicaSettings {
     perplexicaEndpoint: string;
     localLLMPath: string;
     defaultModel: string;
+    promptsService?: any; // Will be PromptsService type
+    requestTemplate?: string;
 }
 
 export interface PerplexicaOptions {
@@ -12,9 +14,11 @@ export interface PerplexicaOptions {
 
 export class PerplexicaService {
     private settings: PerplexicaSettings;
+    private promptsService: any;
 
     constructor(settings: PerplexicaSettings) {
         this.settings = settings;
+        this.promptsService = settings.promptsService;
     }
 
     private processContentWithImages(content: string): string {
@@ -69,29 +73,83 @@ export class PerplexicaService {
             
             for (const endpoint of endpoints) {
                 try {
-                    const payload = {
-                        chatModel: {
-                            provider: "ollama",
-                            name: this.settings.defaultModel
-                        },
-                        embeddingModel: {
-                            provider: "ollama",
-                            name: this.settings.defaultModel
-                        },
-                        optimizationMode,
-                        focusMode,
-                        query,
-                        history: [
-                            {
-                                role: "user",
-                                content: query
-                            }
-                        ],
-                        systemInstructions: "You are a helpful AI assistant. Provide clear, concise, and accurate information.",
-                        stream,
-                        maxTokens: 2048,
-                        temperature: 0.7
-                    };
+                    // Use template if available, otherwise construct payload manually
+                    let payload: any;
+                    if (this.settings.requestTemplate) {
+                        try {
+                            const processedTemplate = this.promptsService?.processTemplate(this.settings.requestTemplate) || this.settings.requestTemplate;
+                            payload = JSON.parse(processedTemplate);
+                            // Override with current parameters
+                            payload.chatModel = {
+                                provider: "ollama",
+                                name: this.settings.defaultModel
+                            };
+                            payload.embeddingModel = {
+                                provider: "ollama",
+                                name: this.settings.defaultModel
+                            };
+                            payload.optimizationMode = optimizationMode;
+                            payload.focusMode = focusMode;
+                            payload.query = query;
+                            payload.history = [
+                                {
+                                    role: "user",
+                                    content: query
+                                }
+                            ];
+                            payload.systemInstructions = this.promptsService?.getPerplexicaSystemPrompt() || "You are a helpful AI assistant. Provide clear, concise, and accurate information.";
+                            payload.stream = stream;
+                        } catch (error) {
+                            console.warn('Failed to parse request template, using default payload:', error);
+                            payload = {
+                                chatModel: {
+                                    provider: "ollama",
+                                    name: this.settings.defaultModel
+                                },
+                                embeddingModel: {
+                                    provider: "ollama",
+                                    name: this.settings.defaultModel
+                                },
+                                optimizationMode,
+                                focusMode,
+                                query,
+                                history: [
+                                    {
+                                        role: "user",
+                                        content: query
+                                    }
+                                ],
+                                systemInstructions: this.promptsService?.getPerplexicaSystemPrompt() || "You are a helpful AI assistant. Provide clear, concise, and accurate information.",
+                                stream,
+                                maxTokens: 2048,
+                                temperature: 0.7
+                            };
+                        }
+                    } else {
+                        payload = {
+                            chatModel: {
+                                provider: "ollama",
+                                name: this.settings.defaultModel
+                            },
+                            embeddingModel: {
+                                provider: "ollama",
+                                name: this.settings.defaultModel
+                            },
+                            optimizationMode,
+                            focusMode,
+                            query,
+                            history: [
+                                {
+                                    role: "user",
+                                    content: query
+                                }
+                            ],
+                            systemInstructions: this.promptsService?.getPerplexicaSystemPrompt() || "You are a helpful AI assistant. Provide clear, concise, and accurate information.",
+                            stream,
+                            maxTokens: 2048,
+                            temperature: 0.7
+                        };
+                    }
 
                     const response = await fetch(endpoint, {
                         method: 'POST',

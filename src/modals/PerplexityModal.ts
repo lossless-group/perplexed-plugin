@@ -1,9 +1,11 @@
 import { App, Modal, Notice, Editor } from 'obsidian';
 import { PerplexityService, PerplexityOptions } from '../services/perplexityService';
+import { PromptsService } from '../services/promptsService';
 
 export class PerplexityModal extends Modal {
     protected editor: Editor;
     protected perplexityService: PerplexityService;
+    protected promptsService: PromptsService;
     protected queryInput!: HTMLTextAreaElement;
     protected modelSelect!: HTMLSelectElement;
     protected streamToggle!: HTMLInputElement;
@@ -12,10 +14,11 @@ export class PerplexityModal extends Modal {
     protected relatedQuestionsToggle!: HTMLInputElement;
     protected recencyFilterSelect!: HTMLSelectElement;
 
-    constructor(app: App, editor: Editor, perplexityService: PerplexityService) {
+    constructor(app: App, editor: Editor, perplexityService: PerplexityService, promptsService: PromptsService) {
         super(app);
         this.editor = editor;
         this.perplexityService = perplexityService;
+        this.promptsService = promptsService;
     }
     
     onOpen() {
@@ -32,7 +35,7 @@ export class PerplexityModal extends Modal {
             cls: 'text-input',
             attr: {
                 rows: '4',
-                placeholder: 'What would you like to ask Perplexity?'
+                placeholder: this.promptsService.getPerplexityQueryPlaceholder()
             }
         });
 
@@ -50,7 +53,7 @@ export class PerplexityModal extends Modal {
         
         this.modelSelect.onchange = () => {
             if (this.modelSelect.value === 'sonar-deep-research') {
-                modelDesc.textContent = '⚡ Deep Research: Exhaustive research across hundreds of sources with expert-level analysis. Higher cost but comprehensive results. Note: Streaming is disabled for this model.';
+                modelDesc.textContent = this.promptsService.getDeepResearchDescription();
                 this.streamToggle.checked = false;
                 this.streamToggle.disabled = true;
             } else {
@@ -75,7 +78,7 @@ export class PerplexityModal extends Modal {
         
         // Add description for images toggle
         const imagesDesc = imagesDiv.createDiv({cls: 'setting-item-description images-description'});
-        imagesDesc.textContent = 'Include image results from search - images will be integrated throughout the response where appropriate';
+        imagesDesc.textContent = this.promptsService.getImagesToggleDescription();
 
         // Related questions toggle
         const relatedQuestionsDiv = form.createDiv({cls: 'setting-item'});
@@ -129,7 +132,7 @@ export class PerplexityModal extends Modal {
     async onSubmit() {
         const query = this.queryInput.value.trim();
         if (!query) {
-            new Notice('Please enter a question');
+            new Notice(this.promptsService.getEnterQuestionNotice());
             return;
         }
 
@@ -138,11 +141,7 @@ export class PerplexityModal extends Modal {
         if (this.imagesToggle.checked) {
             processedQuery = `${query}
 
-**Image References:**
-Please include the following image references throughout your response where appropriate:
-- [IMAGE 1: Relevant diagram or illustration related to the topic]
-- [IMAGE 2: Practical example or use case visualization]
-- [IMAGE 3: Additional supporting visual content]`;
+${this.promptsService.getImageReferencesPrompt()}`;
         }
 
         const options: PerplexityOptions = {
