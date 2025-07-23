@@ -1,4 +1,9 @@
-import { Editor, Notice } from 'obsidian';
+import { Editor } from 'obsidian';
+
+interface ChatMessage {
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+}
 
 export interface LMStudioOptions {
     max_tokens?: number;
@@ -12,24 +17,53 @@ export interface LMStudioSettings {
 }
 
 export class LMStudioService {
-    private settings: LMStudioSettings;
+    private readonly baseUrl: string;
 
     constructor(settings: LMStudioSettings) {
-        this.settings = settings;
+        this.baseUrl = settings.lmStudioEndpoint || 'http://localhost:1234';
+    }
+
+    private async queryModel(model: string, messages: ChatMessage[], options: LMStudioOptions = {}): Promise<Response> {
+        // Prepare the payload using the provided parameters
+        const payload = {
+            model: model,
+            messages: messages,
+            temperature: options.temperature ?? 0.7,
+            max_tokens: options.max_tokens ?? -1,
+            stream: false
+        };
+
+        try {
+            const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API request failed: ${response.status} ${errorText}`);
+            }
+
+            return response;
+        } catch (error) {
+            console.error('Error querying LM Studio:', error);
+            throw new Error(`Failed to query LM Studio: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     public async queryLMStudio(
-        query: string, 
-        model: string, 
-        stream: boolean, 
-        editor: Editor, 
-        options?: LMStudioOptions
+        query: string,
+        model: string,
+        stream: boolean = false,
+        editor: Editor,
+        options: LMStudioOptions = {}
     ): Promise<void> {
         const timestamp = new Date().toISOString();
-        
-        // Insert query header at the current cursor position
         const cursor = editor.getCursor();
-        console.log('Initial cursor position:', cursor);
         
         // Process query to handle multi-line content in callout
         const processedQuery = query.split('\n').map(line => `> ${line}`).join('\n');
@@ -47,42 +81,18 @@ export class LMStudioService {
             ch: lastLine.length
         };
         
-        console.log('Response cursor position:', responseCursor);
-        
         try {
-            const messages: any[] = [];
+            const messages: ChatMessage[] = [];
             
             // Add system message if provided
-            if (options?.system_prompt) {
+            if (options.system_prompt) {
                 messages.push({ role: 'system', content: options.system_prompt });
             }
             
             // Add user query
             messages.push({ role: 'user', content: query });
             
-            const payload: any = {
-                model,
-                messages,
-                stream,
-                max_tokens: options?.max_tokens ?? 2048,
-                temperature: options?.temperature ?? 0.7,
-                top_p: options?.top_p ?? 0.9
-            };
-            
-            const response = await fetch(this.settings.lmStudioEndpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                    // LM Studio doesn't require API key for local access
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            let finalCursor = responseCursor;
+            const response = await this.queryModel(model, messages, options);
             
             if (stream) {
                 await this.handleStreamingResponse(response, editor, responseCursor);
@@ -91,12 +101,17 @@ export class LMStudioService {
             }
             
             // Add separator at the final cursor position
+            const finalCursor = editor.getCursor();
             editor.replaceRange('\n\n***\n', finalCursor);
             
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            new Notice(`LM Studio Error: ${errorMsg}`);
-            editor.replaceRange(`\n**Error:** ${errorMsg}\n\n***\n`, editor.getCursor());
+            const errorText = `\n\n> [!error] **Error**\n> ${errorMsg.replace(/\n/g, '\n> ')}`;
+            
+            // Insert the error message at the cursor position
+            editor.replaceRange(errorText, responseCursor, responseCursor);
+            
+            console.error('Error querying LM Studio:', error);
         }
     }
 
