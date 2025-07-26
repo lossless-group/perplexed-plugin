@@ -1,4 +1,5 @@
 import { Editor, Notice } from 'obsidian';
+import { PerplexitySettings } from '../settings/PerplexitySettings';
 
 export interface PerplexityOptions {
     return_citations?: boolean;
@@ -7,12 +8,7 @@ export interface PerplexityOptions {
     search_recency_filter?: string;
 }
 
-export interface PerplexitySettings {
-    perplexityApiKey: string;
-    perplexityEndpoint: string;
-    promptsService?: any; // Will be PromptsService type
-    requestTemplate?: string;
-}
+// Use the imported PerplexitySettings interface from settings file
 
 export class PerplexityService {
     private settings: PerplexitySettings;
