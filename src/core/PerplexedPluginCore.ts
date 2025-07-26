@@ -26,7 +26,8 @@ export class PerplexedPluginCore extends Plugin {
             }
             
             // Load LM Studio settings
-            const loadedLMStudioSettings = await this.loadData('lmstudio-settings');
+            const loadedData = await this.loadData();
+            const loadedLMStudioSettings = loadedData?.['lmstudio-settings'];
             if (loadedLMStudioSettings) {
                 this.lmStudioSettings = { 
                     ...DEFAULT_LMSTUDIO_SETTINGS, 
@@ -44,19 +45,17 @@ export class PerplexedPluginCore extends Plugin {
             await this.saveData(this.settings);
             
             // Save LM Studio settings with a separate key
-            await this.saveData(this.lmStudioSettings, 'lmstudio-settings');
+            const currentData = await this.loadData() || {};
+            await this.saveData({
+                ...currentData,
+                'lmstudio-settings': this.lmStudioSettings
+            });
         } catch (error) {
             console.error('Error saving settings:', error);
         }
     }
     
     protected registerCommands(): void {
-        // Base implementation - can be overridden by child classes
-    }
-    
-    protected setupUI(): void {
-        // Base implementation - can be overridden by child classes
-    }    private registerCommands() {
         // Register your commands here
         // Example:
         this.addCommand({
@@ -66,5 +65,9 @@ export class PerplexedPluginCore extends Plugin {
                 // Command implementation
             }
         });
+    }
+    
+    protected setupUI(): void {
+        // Base implementation - can be overridden by child classes
     }
 }
