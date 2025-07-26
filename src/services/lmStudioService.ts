@@ -1,4 +1,27 @@
 import { Editor, Notice } from 'obsidian';
+import { LMStudioSettings } from '../settings/LMStudioSettings';
+
+export interface ChatMessage {
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+}
+
+export interface LMStudioResponse {
+    id: string;
+    object: string;
+    created: number;
+    model: string;
+    choices: Array<{
+        index: number;
+        message: ChatMessage;
+        finish_reason: string | null;
+    }>;
+    usage?: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+    };
+}
 
 export interface LMStudioOptions {
     max_tokens?: number;
@@ -8,19 +31,29 @@ export interface LMStudioOptions {
     return_images?: boolean;
 }
 
-export interface LMStudioSettings {
-    lmStudioEndpoint: string;
-    promptsService?: any; // Will be PromptsService type
-    requestTemplate?: string;
+export interface LMStudioEndpointConfig {
+    baseUrl: string;
+    chatCompletions: string;
+    completions: string;
+    embeddings: string;
+    models: string;
 }
 
+// LMStudioSettings is now imported from LMStudioSettings.ts
+
 export class LMStudioService {
-    private settings: LMStudioSettings;
+
+    private readonly settings: LMStudioSettings;
     private promptsService: any;
 
     constructor(settings: LMStudioSettings) {
         this.settings = settings;
-        this.promptsService = settings.promptsService;
+        this.initializePromptsService();
+    }
+
+    private initializePromptsService() {
+        // Initialize prompts service if needed
+        // This can be implemented based on your specific requirements
     }
 
     private processContentWithImages(content: string): string {
@@ -41,118 +74,10 @@ export class LMStudioService {
         }
         
         if (imageIndex > 0) {
-            console.log(`🔄 Processed ${imageIndex} image markers in LM Studio content`);
+            console.log(` Processed ${imageIndex} image markers in LM Studio content`);
         }
         
         return content;
-    }
-
-    public async queryLMStudio(
-        query: string, 
-        model: string, 
-        stream: boolean, 
-        editor: Editor, 
-        options?: LMStudioOptions
-    ): Promise<void> {
-        const timestamp = new Date().toISOString();
-        
-        // Insert query header at the current cursor position
-        const cursor = editor.getCursor();
-        console.log('Initial cursor position:', cursor);
-        
-        // Process query to handle multi-line content in callout
-        const processedQuery = query.split('\n').map(line => `> ${line}`).join('\n');
-        
-        const headerText = `\n\n***\n> [!info] **LM Studio Query** (${timestamp})\n> **Question:**\n${processedQuery}\n> **Model:** ${model}\n> \n> ### **Response from ${model}**:\n\n`;
-        
-        // Insert the header at the cursor position
-        editor.replaceRange(headerText, cursor, cursor);
-        
-        // Calculate where the response content should start
-        const headerLines = headerText.split('\n');
-        const lastLine = headerLines[headerLines.length - 1] || '';
-        const responseCursor = {
-            line: cursor.line + headerLines.length - 1,
-            ch: lastLine.length
-        };
-        
-        console.log('Response cursor position:', responseCursor);
-        
-        try {
-            const messages: any[] = [];
-            
-            // Add system message if provided
-            if (options?.system_prompt) {
-                messages.push({ role: 'system', content: options.system_prompt });
-            }
-            
-            // Add user query
-            messages.push({ role: 'user', content: query });
-            
-            // Use template if available, otherwise construct payload manually
-            let payload: any;
-            if (this.settings.requestTemplate) {
-                try {
-                    const processedTemplate = this.promptsService?.processTemplate(this.settings.requestTemplate) || this.settings.requestTemplate;
-                    payload = JSON.parse(processedTemplate);
-                    // Override with current parameters
-                    payload.model = model;
-                    payload.messages = messages;
-                    payload.stream = stream;
-                    payload.max_tokens = options?.max_tokens ?? 2048;
-                    payload.temperature = options?.temperature ?? 0.7;
-                    payload.top_p = options?.top_p ?? 0.9;
-                } catch (error) {
-                    console.warn('Failed to parse request template, using default payload:', error);
-                    payload = {
-                        model,
-                        messages,
-                        stream,
-                        max_tokens: options?.max_tokens ?? 2048,
-                        temperature: options?.temperature ?? 0.7,
-                        top_p: options?.top_p ?? 0.9
-                    };
-                }
-            } else {
-                payload = {
-                    model,
-                    messages,
-                    stream,
-                    max_tokens: options?.max_tokens ?? 2048,
-                    temperature: options?.temperature ?? 0.7,
-                    top_p: options?.top_p ?? 0.9
-                };
-            }
-            
-            const response = await fetch(this.settings.lmStudioEndpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                    // LM Studio doesn't require API key for local access
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            let finalCursor = responseCursor;
-            
-            if (stream) {
-                await this.handleStreamingResponse(response, editor, responseCursor, options);
-            } else {
-                await this.handleNonStreamingResponse(response, editor, responseCursor, options);
-            }
-            
-            // Add separator at the final cursor position
-            editor.replaceRange('\n\n***\n', finalCursor);
-            
-        } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            new Notice(`LM Studio Error: ${errorMsg}`);
-            editor.replaceRange(`\n**Error:** ${errorMsg}\n\n***\n`, editor.getCursor());
-        }
     }
 
     private async handleStreamingResponse(
@@ -165,55 +90,60 @@ export class LMStudioService {
         if (!reader) throw new Error('No response body');
         
         let buffer = '';
-        let currentPos = responseCursor;
+        let currentPos = { ...responseCursor };
         
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            const chunk = new TextDecoder().decode(value);
-            buffer += chunk;
-            
-            // Process complete lines from buffer
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || ''; // Keep incomplete line in buffer
-            
-            for (const line of lines) {
-                if (line.trim().startsWith('data: ')) {
-                    const data = line.replace('data: ', '').trim();
-                    if (data === '[DONE]') continue;
-                    
-                    try {
-                        const parsed = JSON.parse(data);
-                        if (parsed.choices?.[0]?.delta?.content) {
-                            let content = parsed.choices[0].delta.content;
-                            
-                            // Process images if enabled
-                            if (options?.return_images) {
-                                content = this.processContentWithImages(content);
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = new TextDecoder().decode(value);
+                buffer += chunk;
+                
+                // Process complete lines from buffer
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // Keep incomplete line in buffer
+                
+                for (const line of lines) {
+                    if (line.trim().startsWith('data: ')) {
+                        const data = line.replace('data: ', '').trim();
+                        if (data === '[DONE]') continue;
+                        
+                        try {
+                            const parsed = JSON.parse(data);
+                            if (parsed.choices?.[0]?.delta?.content) {
+                                let content = parsed.choices[0].delta.content;
+                                
+                                // Process images if enabled
+                                if (options?.return_images) {
+                                    content = this.processContentWithImages(content);
+                                }
+                                
+                                editor.replaceRange(content, currentPos);
+                                // Update cursor position after insertion
+                                const lines = content.split('\n');
+                                if (lines.length === 1) {
+                                    currentPos = { line: currentPos.line, ch: currentPos.ch + content.length };
+                                } else {
+                                    currentPos = { 
+                                        line: currentPos.line + lines.length - 1, 
+                                        ch: lines[lines.length - 1]?.length || 0
+                                    };
+                                }
+                                // Scroll to follow the new content
+                                editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
+                                // Small delay to make scrolling smoother
+                                await new Promise(resolve => setTimeout(resolve, 10));
                             }
-                            
-                            editor.replaceRange(content, currentPos);
-                            // Update cursor position after insertion
-                            const lines = content.split('\n');
-                            if (lines.length === 1) {
-                                currentPos = { line: currentPos.line, ch: currentPos.ch + content.length };
-                            } else {
-                                currentPos = { 
-                                    line: currentPos.line + lines.length - 1, 
-                                    ch: lines[lines.length - 1]?.length || 0
-                                };
-                            }
-                            // Scroll to follow the new content
-                            editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
-                            // Small delay to make scrolling smoother
-                            await new Promise(resolve => setTimeout(resolve, 10));
+                        } catch (e) {
+                            // Ignore JSON parse errors for partial chunks
+                            console.error('Error parsing streaming chunk:', e);
                         }
-                    } catch (e) {
-                        // Ignore JSON parse errors for partial chunks
                     }
                 }
             }
+        } finally {
+            reader.releaseLock();
         }
     }
 
@@ -234,4 +164,139 @@ export class LMStudioService {
         
         editor.replaceRange(processedContent, responseCursor);
     }
+
+    private async makeRequest(
+        endpoint: string, 
+        method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', 
+        data?: unknown
+    ): Promise<Response> {
+        const url = `${this.settings.endpoints.baseUrl}${endpoint}`;
+        
+        const headers: HeadersInit = new Headers({
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        });
+
+        const options: RequestInit = {
+            method,
+            headers,
+        };
+
+        if (data !== undefined) {
+            options.body = JSON.stringify(data);
+        }
+
+        try {
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            new Notice(`Request failed: ${errorMessage}`);
+            throw error;
+        }
+    }
+
+    async listModels(): Promise<{data: Array<{id: string}>, error?: string}> {
+        try {
+            const response = await this.makeRequest(this.settings.endpoints.models, 'GET');
+            return await response.json();
+        } catch (error) {
+            console.error('Error listing models:', error);
+            throw error;
+        }
+    }
+
+    public async queryLMStudio(
+        editor: Editor, 
+        model?: string, 
+        messages: ChatMessage[] = [],
+        stream = true,
+        options: LMStudioOptions = {}
+    ): Promise<void> {
+        if (!editor) {
+            throw new Error('Editor instance is required');
+        }
+
+        const cursor = editor.getCursor();
+        const timestamp = new Date().toLocaleString();
+        const modelToUse = model || this.settings.defaultModel || 'unknown-model';
+
+        // Process query for display
+        const processedQuery = messages.length > 0 
+            ? messages.map(message => `> ${message.content}`).join('\n') 
+            : '';
+            
+        const headerText = `\n\n***\n> [!info] **LM Studio Query** (${timestamp})\n> **Question:**\n${processedQuery}\n> **Model:** ${modelToUse}\n> \n> ### **Response from ${modelToUse}**:\n\n`;
+        
+        // Insert header and get response position
+        editor.replaceRange(headerText, cursor);
+        const headerLines = headerText.split('\n');
+        const lastLine = headerLines[headerLines.length - 1] || '';
+        const responseCursor = {
+            line: cursor.line + headerLines.length - 1,
+            ch: lastLine.length
+        };
+        
+        try {
+            // Prepare messages array with system prompt if provided
+            const messagesToSend = [...messages];
+            
+            if (options.system_prompt) {
+                messagesToSend.unshift({
+                    role: 'system',
+                    content: options.system_prompt
+                });
+            }
+            
+            // Build the request payload
+            let payload: Record<string, unknown> = {
+                model: modelToUse,
+                messages: messagesToSend,
+                stream,
+                temperature: options.temperature ?? 0.7,
+                max_tokens: options.max_tokens ?? 2048,
+                top_p: options.top_p ?? 0.9
+            };
+            
+            // Apply request template if available
+            if (this.settings.requestTemplate) {
+                try {
+                    const processedTemplate = this.promptsService?.processTemplate?.(this.settings.requestTemplate) || 
+                                            this.settings.requestTemplate;
+                    const templatePayload = JSON.parse(processedTemplate);
+                    // Merge with template, allowing template to be overridden
+                    Object.assign(payload, templatePayload);
+                } catch (error) {
+                    console.warn('Failed to parse request template, using default payload:', error);
+                }
+            }
+            
+            // Make the API request
+            const response = await this.makeRequest(
+                this.settings.endpoints.chatCompletions,
+                'POST',
+                payload
+            );
+            
+            // Handle the response based on streaming preference
+            if (stream) {
+                await this.handleStreamingResponse(response, editor, responseCursor, options);
+            } else {
+                await this.handleNonStreamingResponse(response, editor, responseCursor, options);
+            }
+            
+            // Add a separator after the response
+            editor.replaceRange('\n\n---\n\n', editor.getCursor());
+        } catch (error) {
+            console.error('Error querying LM Studio:', error);
+            // Show error to the user
+            const errorMessage = `Error: ${error instanceof Error ? error.message : String(error)}`;
+            editor.replaceRange(`\n\n${errorMessage}\n\n`, editor.getCursor());
+        }
+    }
+
+
 } 

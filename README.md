@@ -1,3 +1,4 @@
+![Perplexed: An Obsidian Community Plugin focused on Perplexity and Perplexica for rigorous, research-driven content automation](https://i.imgur.com/zUEJiYl.png)
 # Perplexed: AI Content Generation for Obsidian
 
 **Perplexed** is an Obsidian plugin that enables AI-powered content generation with source citations using [Perplexity](https://www.perplexity.ai/) and [Perplexica](https://perplexica.io/). This plugin brings research-grade AI capabilities directly into your Obsidian workspace, allowing you to generate well-cited content for your notes.

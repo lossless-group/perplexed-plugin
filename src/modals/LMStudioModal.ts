@@ -1,11 +1,13 @@
 import { App, Modal, Notice, Editor } from 'obsidian';
 import { LMStudioService, LMStudioOptions } from '../services/lmStudioService';
 import { PromptsService } from '../services/promptsService';
+import type PerplexedPlugin from '../../main';
 
 export class LMStudioModal extends Modal {
     private editor: Editor;
     private lmStudioService: LMStudioService;
     private promptsService: PromptsService;
+    private plugin: PerplexedPlugin;
     private queryInput!: HTMLTextAreaElement;
     private modelSelect!: HTMLSelectElement;
     private streamToggle!: HTMLInputElement;
@@ -14,9 +16,10 @@ export class LMStudioModal extends Modal {
     private systemPromptInput!: HTMLTextAreaElement;
     private imagesToggle!: HTMLInputElement;
 
-    constructor(app: App, editor: Editor, lmStudioService: LMStudioService, promptsService: PromptsService) {
+    constructor(app: App, editor: Editor, plugin: PerplexedPlugin, lmStudioService: LMStudioService, promptsService: PromptsService) {
         super(app);
         this.editor = editor;
+        this.plugin = plugin;
         this.lmStudioService = lmStudioService;
         this.promptsService = promptsService;
     }
@@ -43,10 +46,25 @@ export class LMStudioModal extends Modal {
         const modelDiv = form.createDiv({cls: 'setting-item'});
         modelDiv.createEl('label', {text: 'Model'});
         this.modelSelect = modelDiv.createEl('select', {cls: 'dropdown'});
-        // Use common LM Studio models - these would be dynamically loaded ideally
-        ['ibm/granite-3.2-8b', 'microsoft/phi-4-reasoning-plus', 'google/gemma-3-12b', 'meta-llama/llama-3.2-3b-instruct', 'custom-model'].forEach(model => {
+        
+        // Available models - these would ideally be dynamically loaded
+        const models = [
+            'ibm/granite-3.2-8b', 
+            'microsoft/phi-4-reasoning-plus', 
+            'google/gemma-3-12b', 
+            'meta-llama/llama-3.2-3b-instruct', 
+            'custom-model'
+        ];
+        
+        // Get default model from settings or use first model as fallback
+        const defaultModel = this.plugin?.settings?.defaultLMStudioModel || models[0];
+        
+        // Create model options
+        models.forEach(model => {
             const option = this.modelSelect.createEl('option', {value: model, text: model});
-            if (model === 'ibm/granite-3.2-8b') option.selected = true;
+            if (model === defaultModel) {
+                option.selected = true;
+            }
         });
 
         // System prompt

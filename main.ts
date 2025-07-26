@@ -1,68 +1,156 @@
-import { App, Editor, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-import * as dotenv from 'dotenv';
+import { App, Editor, Notice, PluginSettingTab, Setting } from 'obsidian';
+import PerplexedPluginCore from './src/core/PerplexedPluginCore';
 
-// Import services
+// Load environment variables
+import * as dotenv from 'dotenv';
+dotenv.config({ path: `${process.cwd()}/.env` });
+
+// Services
 import { PerplexityService } from './src/services/perplexityService';
 import { PerplexicaService } from './src/services/perplexicaService';
 import { LMStudioService } from './src/services/lmStudioService';
 import { PromptsService } from './src/services/promptsService';
 
-// Import modals
+// Modals
 import { PerplexityModal } from './src/modals/PerplexityModal';
 import { PerplexicaModal } from './src/modals/PerplexicaModal';
 import { LMStudioModal } from './src/modals/LMStudioModal';
 import { URLUpdateModal } from './src/modals/URLUpdateModal';
 import { ArticleGeneratorModal } from './src/modals/ArticleGeneratorModal';
 
-// Load environment variables
-dotenv.config({ path: `${process.cwd()}/.env` });
+// Settings and types
+import { PerplexedSettings } from './src/settings/PerplexedSettings';
+import type { PerplexitySettings } from './src/services/perplexityService';
+import type { PerplexicaSettings } from './src/services/perplexicaService';
+import { LMStudioSettings } from './src/settings/LMStudioSettings';
 
-interface PerplexedPluginSettings {
-    mySetting: string;
-    localLLMPath: string;
-    requestBodyTemplate: string;
-    perplexityRequestTemplate: string;
-    perplexityApiKey: string;
-    perplexicaEndpoint: string;
-    perplexityEndpoint: string;
-    lmStudioEndpoint: string;
-    lmStudioRequestTemplate: string;
-    defaultModel: string;
-    defaultOptimizationMode: string;
-    defaultFocusMode: string;
-    defaultLMStudioModel: string;
+/**
+ * Main plugin class that extends the core functionality
+ */
+export default class PerplexedPlugin extends PerplexedPluginCore {
+    // Service instances with proper types
+    public promptsService!: PromptsService;
+    public perplexityService!: PerplexityService;
+    public perplexicaService!: PerplexicaService;
+    public lmStudioService!: LMStudioService;
+
+    // Settings interfaces
+    public settings!: PerplexedSettings;
+
+    // Service settings
+    public perplexitySettings!: PerplexitySettings;
+    public perplexicaSettings!: PerplexicaSettings;
+    public lmStudioSettings!: LMStudioSettings;
+
+    // UI Elements
+    private statusBarItemEl: HTMLElement | null = null;
+    private ribbonIconEl: HTMLElement | null = null;
+
+    /**
+     * Initialize service-specific settings
+     */
+    private initializeServiceSettings(): void {
+        // Initialize Perplexity settings
+        this.perplexitySettings = {
+            perplexityApiKey: this.settings.perplexityApiKey || '',
+            perplexityEndpoint: this.settings.perplexityEndpoint || 'https://api.perplexity.ai',
+            promptsService: this.promptsService
+        };
+        
+        // Initialize Perplexica settings
+        this.perplexicaSettings = {
+            perplexicaEndpoint: this.settings.perplexityEndpoint || 'https://api.perplexity.ai',
+            localLLMPath: this.settings.localLLMPath || '',
+            defaultModel: this.settings.defaultModel || 'gpt-3.5-turbo',
+            promptsService: this.promptsService
+        };
+        
+        // Initialize LM Studio settings
+        this.lmStudioSettings = {
+            endpoints: {
+                baseUrl: this.settings.lmStudioEndpoint || 'http://localhost:1234',
+                chatCompletions: '/v1/chat/completions',
+                completions: '/v1/completions',
+                embeddings: '/v1/embeddings',
+                models: '/v1/models'
+            },
+            defaultModel: this.settings.defaultLMStudioModel || 'ibm/granite-3.2-8b',
+            promptsService: this.promptsService
+        };
+    }
     
-    // Prompt Settings
-    prompts: {
-        // System prompts
-        perplexitySystemPrompt: string;
-        perplexicaSystemPrompt: string;
-        lmStudioDefaultSystemPrompt: string;
+    /**
+     * Initialize all services with their respective settings
+     */
+    private initializeServices(): void {
+        // Initialize Perplexity service
+        this.perplexityService = new PerplexityService(this.perplexitySettings);
         
-        // Placeholder text
-        perplexityQueryPlaceholder: string;
-        perplexicaQueryPlaceholder: string;
-        lmStudioQueryPlaceholder: string;
-        lmStudioSystemPromptPlaceholder: string;
-        articleTermPlaceholder: string;
+        // Initialize Perplexica service
+        this.perplexicaService = new PerplexicaService(this.perplexicaSettings);
         
-        // Descriptions and labels
-        deepResearchDescription: string;
-        imagesToggleDescription: string;
-        imagesToggleGenericDescription: string;
-        articleTermDescription: string;
+        // Initialize LM Studio service
+        this.lmStudioService = new LMStudioService(this.lmStudioSettings);
+    }
+    
+    /**
+     * Initialize the UI components
+     */
+    private initializeUI(): void {
+        // Add status bar item if enabled
+        if (this.settings.showStatusBar) {
+            this.statusBarItemEl = this.addStatusBarItem();
+            this.statusBarItemEl.setText('Perplexed');
+        }
         
-        // Notices and messages
-        deepResearchLoadingNotice: string;
-        enterQuestionNotice: string;
-        enterTermNotice: string;
+        // Add ribbon icon
+        this.ribbonIconEl = this.addRibbonIcon(
+            'zap',
+            'Perplexed',
+            () => {
+                // Open command palette
+                // @ts-ignore - app is available in the Obsidian context
+                this.app.commands.executeCommandById('perplexed:open-command-palette');
+            }
+        );
+    }
+    
+    /**
+     * Initialize the plugin
+     */
+    async onload() {
+        await super.onload();
         
-        // Article generator template
-        articleGeneratorTemplate: string;
+        // Initialize prompts service first as it's used by other services
+        this.promptsService = new PromptsService(this.settings.prompts);
         
-        // Image prompts
-        imageReferencesPrompt: string;
-    };
+        // Initialize service settings
+        this.initializeServiceSettings();
+        
+        // Initialize services with their respective settings
+        this.initializeServices();
+        
+        // Register commands and UI elements
+        this.registerCommands();
+        this.initializeUI();
+        
+        // Add settings tab
+        this.addSettingTab(new PerplexedSettingTab(this.app, this));
+        
+        // Register service-specific commands
+        this.registerPerplexicaCommands();
+        this.registerPerplexityCommands();
+        this.registerLMStudioCommands();
+        this.registerArticleGeneratorCommands();
+        
+        console.log('Perplexed plugin loaded');
+    }
+    
+    onunload() {
+        this.statusBarItemEl?.remove();
+        this.ribbonIconEl?.remove();
+        console.log('Perplexed plugin unloaded');
+    }
 }
 
 const DEFAULT_SETTINGS: PerplexedPluginSettings = {
@@ -210,103 +298,29 @@ Replace "{TERM}" with the actual vocabulary term in the prompt.`,
     }
 };
 
-export default class PerplexedPlugin extends Plugin {
-    public settings: PerplexedPluginSettings = DEFAULT_SETTINGS;
-    private statusBarItemEl: HTMLElement | null = null;
-    private ribbonIconEl: HTMLElement | null = null;
-    
-    // Service instances
-    private perplexityService!: PerplexityService;
-    private perplexicaService!: PerplexicaService;
-    private lmStudioService!: LMStudioService;
-    private promptsService!: PromptsService;
 
-    async onload(): Promise<void> {
-        await this.loadSettings();
-        
-        // Initialize prompts service
-        this.promptsService = new PromptsService(this.settings.prompts);
-        
-        // Initialize services
-        this.perplexityService = new PerplexityService({
-            perplexityApiKey: this.settings.perplexityApiKey,
-            perplexityEndpoint: this.settings.perplexityEndpoint,
-            promptsService: this.promptsService,
-            requestTemplate: this.settings.perplexityRequestTemplate
-        });
-        
-        this.perplexicaService = new PerplexicaService({
-            perplexicaEndpoint: this.settings.perplexicaEndpoint,
-            localLLMPath: this.settings.localLLMPath,
-            defaultModel: this.settings.defaultModel,
-            promptsService: this.promptsService,
-            requestTemplate: this.settings.requestBodyTemplate
-        });
-        
-        this.lmStudioService = new LMStudioService({
-            lmStudioEndpoint: this.settings.lmStudioEndpoint,
-            promptsService: this.promptsService,
-            requestTemplate: this.settings.lmStudioRequestTemplate
-        });
-        
-        // Debug: Log current settings
-        console.log('Current Perplexica Path:', this.settings.perplexicaEndpoint);
-        console.log('Full settings:', JSON.stringify(this.settings, null, 2));
-
-        // This adds a settings tab so the user can configure various aspects of the plugin
-        this.addSettingTab(new PerplexedSettingTab(this.app, this));
-        
-        // Register commands
-        this.registerPerplexicaCommands();
-        this.registerPerplexityCommands();
-        this.registerLMStudioCommands();
-        this.registerArticleGeneratorCommands();
-    }
-
-    onunload(): void {
-        this.statusBarItemEl?.remove();
-        this.ribbonIconEl?.remove();
-    }
-
-    private async loadSettings() {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-    }
-
-
-
-    public async saveSettings(): Promise<void> {
-        try {
-            await this.saveData(this.settings);
-        } catch (error) {
-            console.error('Failed to save settings:', error);
-            new Notice('Failed to save settings');
+        editor: Editor, 
+        options?: {
+            max_tokens?: number;
+            temperature?: number;
+            top_p?: number;
+            system_prompt?: string;
+            return_images?: boolean;
         }
-    }
-
-    // Delegate methods to services
-    public async queryPerplexity(query: string, model: string, stream: boolean, editor: Editor, options?: {
-        return_citations?: boolean;
-        return_images?: boolean;
-        return_related_questions?: boolean;
-        search_recency_filter?: string;
-    }): Promise<void> {
-        await this.perplexityService.queryPerplexity(query, model, stream, editor, options);
-    }
-
-    public async queryPerplexica(query: string, focusMode: string, optimizationMode: string, stream: boolean, editor: Editor, options?: {
-        return_images?: boolean;
-    }): Promise<void> {
-        await this.perplexicaService.queryPerplexica(query, focusMode, optimizationMode, stream, editor, options);
-    }
-
-    public async queryLMStudio(query: string, model: string, stream: boolean, editor: Editor, options?: {
-        max_tokens?: number;
-        temperature?: number;
-        top_p?: number;
-        system_prompt?: string;
-        return_images?: boolean;
-    }): Promise<void> {
-        await this.lmStudioService.queryLMStudio(query, model, stream, editor, options);
+    ): Promise<void> {
+        // Use the provided model or fall back to the default from settings
+        const modelToUse = model || this.settings.defaultLMStudioModel;
+        
+        // Log the model being used for debugging
+        console.log('Using model:', modelToUse);
+        
+        await this.lmStudioService.queryLMStudio(
+            query, 
+            modelToUse, 
+            stream, 
+            editor, 
+            options
+        );
     }
 
     // Getter for prompts service
@@ -431,7 +445,7 @@ export default class PerplexedPlugin extends Plugin {
             id: 'ask-lmstudio',
             name: 'Ask LM Studio',
             editorCallback: (editor: Editor) => {
-                const modal = new LMStudioModal(this.app, editor, this.lmStudioService, this.promptsService);
+                const modal = new LMStudioModal(this.app, editor, this, this.lmStudioService, this.promptsService);
                 modal.open();
             }
         });
@@ -608,36 +622,94 @@ class PerplexedSettingTab extends PluginSettingTab {
         perplexicaJsonSetting.settingEl.appendChild(perplexicaTextArea);
 
         // LM Studio Section
-        const lmStudioHeader = containerEl.createEl('h3', { text: 'LM Studio (Local Models)' });
+        const lmStudioHeader = containerEl.createEl('h3', { text: 'LM Studio (Local LLM)' });
         lmStudioHeader.style.color = 'var(--text-accent)';
         containerEl.createEl('p', {
-            text: 'Configure settings for your local LM Studio installation with loaded models',
+            text: 'Configure settings for LM Studio local LLM service',
             cls: 'setting-item-description'
         });
 
+        // Base URL setting
         new Setting(containerEl)
-            .setName('Endpoint')
-            .setDesc('API endpoint for your local LM Studio instance')
+            .setName('Base URL')
+            .setDesc('Base URL for LM Studio API (e.g., http://localhost:1234)')
             .addText(text => text
-                .setPlaceholder('http://localhost:1234/v1/chat/completions')
+                .setPlaceholder('http://localhost:1234')
                 .setValue(this.plugin.settings.lmStudioEndpoint)
-                .onChange(async (value: string) => {
-                    this.plugin.settings.lmStudioEndpoint = value;
+                .onChange(async (value) => {
+                    this.plugin.settings.lmStudioEndpoint = value.trim();
                     await this.plugin.saveSettings();
-                })
-            );
+                }));
 
+        // Endpoints configuration
+        containerEl.createEl('h4', { text: 'API Endpoints' }).style.marginTop = '20px';
+        
+        // Chat Completions Endpoint
+        new Setting(containerEl)
+            .setName('Chat Completions')
+            .setDesc('Endpoint for chat completions')
+            .addText(text => text
+                .setValue('/v1/chat/completions')
+                .setDisabled(true));
+        
+        // Completions Endpoint
+        new Setting(containerEl)
+            .setName('Completions')
+            .setDesc('Endpoint for completions')
+            .addText(text => text
+                .setValue('/v1/completions')
+                .setDisabled(true));
+        
+        // Embeddings Endpoint
+        new Setting(containerEl)
+            .setName('Embeddings')
+            .setDesc('Endpoint for embeddings')
+            .addText(text => text
+                .setValue('/v1/embeddings')
+                .setDisabled(true));
+        
+        // Models Endpoint
+        new Setting(containerEl)
+            .setName('Models')
+            .setDesc('Endpoint for listing available models')
+            .addText(text => text
+                .setValue('/v1/models')
+                .setDisabled(true));
+
+        // Default Model
         new Setting(containerEl)
             .setName('Default Model')
-            .setDesc('Default model name for LM Studio to use')
+            .setDesc('Default model to use with LM Studio')
             .addText(text => text
                 .setPlaceholder('ibm/granite-3.2-8b')
                 .setValue(this.plugin.settings.defaultLMStudioModel)
-                .onChange(async (value: string) => {
-                    this.plugin.settings.defaultLMStudioModel = value;
+                .onChange(async (value) => {
+                    this.plugin.settings.defaultLMStudioModel = value.trim();
                     await this.plugin.saveSettings();
-                })
-            );
+                }));
+                
+        // Test Connection Button
+        const testConnectionSetting = new Setting(containerEl)
+            .setName('Test Connection')
+            .setDesc('Verify connection to LM Studio API');
+            
+        testConnectionSetting.addButton(button => {
+            button.setButtonText('Test Connection')
+                .onClick(async () => {
+                    try {
+                        const response = await fetch(`${this.plugin.settings.lmStudioEndpoint}/v1/models`);
+                        if (response.ok) {
+                            new Notice('✅ Successfully connected to LM Studio API');
+                        } else {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                    } catch (error: unknown) {
+                        console.error('LM Studio connection test failed:', error);
+                        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                        new Notice(`❌ Failed to connect to LM Studio: ${errorMessage}`);
+                    }
+                });
+        });
 
         // LM Studio Request Template
         const lmStudioJsonSetting = new Setting(containerEl)
