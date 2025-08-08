@@ -1,4 +1,5 @@
-import { Editor, Notice } from 'obsidian';
+import { Editor, Notice, request } from 'obsidian';
+import { formatCitationDate, getMostRecentDate, formatPublicationInfo } from '../utils/formatDate';
 
 export interface PerplexityOptions {
     return_citations?: boolean;
@@ -47,42 +48,82 @@ export class PerplexityService {
     }
 
     private processContentWithImages(content: string, images: any[]): string {
+        if (!images || images.length === 0) return content;
+        
         let processedContent = content;
         let imageIndex = 0;
-        
-        // Find image markers like [IMAGE 1: description] or [IMAGE 1: description]
         const imageRegex = /\[IMAGE\s+(\d+):\s*(.*?)\]/gi;
         let match;
         
         while ((match = imageRegex.exec(content)) !== null && imageIndex < images.length) {
-            const imageNumber = parseInt(match[1] || '0');
-            const description = match[2]?.trim() || '';
+            const [fullMatch, , description] = match;
             const image = images[imageIndex];
             
             if (image && image.image_url) {
-                // Create the image markdown with description and source
-                let imageMarkdown = `\n\n![${description}](${image.image_url})\n`;
-                if (image.origin_url) {
-                    imageMarkdown += `*Source: ${image.origin_url}*\n`;
-                }
-                imageMarkdown += '\n';
-                
-                // Replace the marker with the actual image
-                processedContent = processedContent.replace(match[0], imageMarkdown);
-                console.log(`🖼️ Replaced [IMAGE ${imageNumber}] with actual image: ${image.image_url}`);
+                const imageMarkdown = `![${description || 'Image'}](${image.image_url})`;
+                processedContent = processedContent.replace(fullMatch, imageMarkdown);
             }
             
             imageIndex++;
         }
         
-        // If we found and replaced any markers, return the processed content
-        if (imageIndex > 0) {
-            console.log(`🔄 Processed ${imageIndex} image markers in content`);
-            return processedContent;
-        }
+        return processedContent;
+    }
+
+    private addCitations(editor: Editor, sources: any[]): void {
+        if (!sources || sources.length === 0) return;
+
+        console.log('📚 Processing sources:', JSON.stringify(sources, null, 2));
+
+        // Add a section for citations
+        let citationsText = '\n\n### Citations\n\n';
         
-        // If no markers were found, return original content
-        return content;
+        sources.forEach((source, index) => {
+            console.log(`📖 Source ${index + 1}:`, source);
+            
+            // Handle different formats:
+            // 1. search_results format: {title, url, date, last_updated}
+            // 2. citations format: just URL strings
+            let title: string;
+            let url: string;
+            let formattedDate = '';
+            let publicationInfo = '';
+            
+            if (typeof source === 'string') {
+                // citations array format - just URLs
+                url = source;
+                title = 'Source';
+            } else if (source && typeof source === 'object') {
+                // search_results format - detailed objects
+                title = source.title || 'Source';
+                url = source.url || '#';
+                
+                // Format the most recent date for the footnote
+                const mostRecentDate = getMostRecentDate(source);
+                if (mostRecentDate) {
+                    formattedDate = formatCitationDate(mostRecentDate);
+                }
+                
+                // Create publication info string
+                publicationInfo = formatPublicationInfo(source);
+            } else {
+                // Fallback
+                title = 'Source';
+                url = '#';
+            }
+            
+            console.log(`📝 Extracted - Title: "${title}", URL: "${url}", Date: "${formattedDate}", Info: "${publicationInfo}"`);
+            
+            // Format: [1]: 2024, Dec 13. [Title](URL). Published: date | Updated: date
+            citationsText += `[${index + 1}]: ${formattedDate ? formattedDate + '. ' : ''}[${title}](${url}).${publicationInfo ? ' ' + publicationInfo : ''}\n\n`;
+        });
+
+        console.log('📄 Final citations text:', citationsText);
+
+        // Insert citations at the end of the editor content
+        const endOfDoc = editor.lastLine();
+        const endPos = { line: endOfDoc, ch: editor.getLine(endOfDoc).length };
+        editor.replaceRange(citationsText, endPos);
     }
 
     public async queryPerplexity(
@@ -136,7 +177,38 @@ export class PerplexityService {
             if (this.settings.requestTemplate) {
                 try {
                     const processedTemplate = this.promptsService?.processTemplate(this.settings.requestTemplate) || this.settings.requestTemplate;
-                    payload = JSON.parse(processedTemplate);
+                    
+                    // Strip JavaScript-style comments that would break JSON parsing
+                    let cleanedTemplate = processedTemplate
+                        .replace(/\/\*[\s\S]*?\*\//g, '') // Remove /* */ comments
+                        .replace(/\/\/.*$/gm, '') // Remove // comments
+                        .replace(/^\s*$/gm, '') // Remove empty lines
+                        .trim();
+                    
+                    // Check if template contains JavaScript code instead of JSON
+                    if (cleanedTemplate.includes('const ') || cleanedTemplate.includes('fetch(') || cleanedTemplate.includes('await ')) {
+                        console.warn('⚠️ Template contains JavaScript code, not JSON. Extracting payload object...');
+                        
+                        // Try to extract JSON payload from JavaScript code
+                        const payloadMatch = cleanedTemplate.match(/payload\s*=\s*({[\s\S]*?});/);
+                        if (payloadMatch) {
+                            let jsObject = payloadMatch[1];
+                            console.log('🔍 Extracted payload from JavaScript:', jsObject);
+                            
+                            // Convert JavaScript object syntax to valid JSON
+                            // Replace unquoted property names with quoted ones
+                            jsObject = jsObject.replace(/(\w+):/g, '"$1":');
+                            // Fix single quotes to double quotes
+                            jsObject = jsObject.replace(/'/g, '"');
+                            
+                            cleanedTemplate = jsObject;
+                        } else {
+                            throw new Error('Template contains JavaScript code but no valid payload object found. Please use JSON format only.');
+                        }
+                    }
+                    
+                    console.log('🧹 Final cleaned template:', cleanedTemplate);
+                    payload = JSON.parse(cleanedTemplate);
                     // Override with current query and options
                     payload.model = model;
                     payload.messages = [
@@ -177,44 +249,89 @@ export class PerplexityService {
                 payload.search_recency_filter = convertedFilter;
             }
 
+            // Add cache busting to prevent request/response caching
+            const requestId = Date.now() + Math.random();
+            
             // Debug: Log the API payload being sent
-            console.log('🚀 Perplexity API Payload:', JSON.stringify(payload, null, 2));
+            console.log(`🚀 Perplexity API Payload [${requestId}]:`, JSON.stringify(payload, null, 2));
 
-            const response = await fetch(this.settings.perplexityEndpoint, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.settings.perplexityApiKey}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            });
+            try {
+                if (useStreaming) {
+                    // Use fetch for streaming responses with cache busting headers
+                    const response = await fetch(this.settings.perplexityEndpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.settings.perplexityApiKey}`,
+                            'Content-Type': 'application/json',
+                            'Accept': 'text/event-stream'
+                        },
+                        body: JSON.stringify(payload),
+                        cache: 'no-store'
+                    });
 
-            // Debug: Log the response status
-            console.log('📡 Perplexity API Response Status:', response.status);
-            console.log('📡 Perplexity API Response Headers:', {
-                'content-type': response.headers.get('content-type'),
-                'x-ratelimit-remaining': response.headers.get('x-ratelimit-remaining'),
-                'x-ratelimit-reset': response.headers.get('x-ratelimit-reset')
-            });
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            let finalCursor = responseCursor;
-            
-            if (useStreaming) {
-                await this.handleStreamingResponse(response, editor, responseCursor);
-            } else {
-                await this.handleNonStreamingResponse(response, editor, responseCursor);
-            }
-            
-            // Add separator at the final cursor position
-            editor.replaceRange('\n\n***\n', finalCursor);
-            
-            // Close loading notice if it exists
-            if (loadingNotice) {
-                loadingNotice.hide();
+                    if (!response.body) {
+                        throw new Error('No response body');
+                    }
+
+                    await this.handleStreamingResponse(response, editor, responseCursor, requestId);
+                } else {
+                    // Use Obsidian's request method for non-streaming with cache busting
+                    const response = await request({
+                        url: this.settings.perplexityEndpoint,
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.settings.perplexityApiKey}`,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    // Parse the response
+                    const data = JSON.parse(response);
+
+                    // Process the response
+                    if (data.choices && data.choices.length > 0) {
+                        let content = data.choices[0].message.content;
+                        
+                        // Process images if available
+                        if (options?.return_images && data.images) {
+                            content = this.processContentWithImages(content, data.images);
+                        }
+                        
+                        // Insert the response at the cursor position
+                        editor.replaceRange(content, responseCursor);
+                        
+                        // Add citations if available
+                        if (options?.return_citations) {
+                            if (data.search_results && data.search_results.length > 0) {
+                                // Use search_results for detailed info (preferred for Perplexity)
+                                this.addCitations(editor, data.search_results);
+                            } else if (data.citations && data.citations.length > 0) {
+                                // Fallback to citations array (could be URLs or other format)
+                                this.addCitations(editor, data.citations);
+                            }
+                        }
+                    }
+                    
+                    // Add separator at the final cursor position
+                    editor.replaceRange('\n\n***\n', responseCursor);
+                }
+                
+            } catch (error) {
+                console.error('Error making request to Perplexity API:', error);
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                new Notice(`Perplexity Error: ${errorMsg}`);
+                editor.replaceRange(`\n**Error:** ${errorMsg}\n\n***\n`, editor.getCursor());
+            } finally {
+                // Close loading notice if it exists
+                if (loadingNotice) {
+                    loadingNotice.hide();
+                }
             }
             
         } catch (error) {
@@ -232,146 +349,99 @@ export class PerplexityService {
     private async handleStreamingResponse(
         response: Response, 
         editor: Editor, 
-        responseCursor: { line: number; ch: number }
+        responseCursor: { line: number; ch: number },
+        requestId?: number
     ): Promise<void> {
         const reader = response.body?.getReader();
         if (!reader) throw new Error('No response body');
         
+        console.log(`🔄 Starting streaming response handler [${requestId || 'unknown'}]`);
+        
         let buffer = '';
-        let currentPos = responseCursor;
+        let currentPos = { ...responseCursor };
         let finalResponseData: any = null;
         
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            const chunk = new TextDecoder().decode(value);
-            buffer += chunk;
-            
-            // Debug: Log streaming chunks (verbose - uncomment if needed)
-            // console.log('📦 Perplexity Streaming chunk received:', chunk);
-            
-            // Process complete lines from buffer
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || ''; // Keep incomplete line in buffer
-            
-            for (const line of lines) {
-                if (line.trim().startsWith('data: ')) {
-                    const data = line.replace('data: ', '').trim();
-                    if (data === '[DONE]') continue;
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = new TextDecoder().decode(value, { stream: true });
+                buffer += chunk;
+                
+                // Process complete lines from buffer
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // Keep incomplete line in buffer
+                
+                for (const line of lines) {
+                    if (line.trim() === '') continue;
                     
                     try {
-                        const parsed = JSON.parse(data);
-                        
-                        // Store the final response data for processing citations and images
-                        if (parsed.citations || parsed.images || parsed.search_results) {
-                            finalResponseData = parsed;
-                        }
-                        
-                        if (parsed.choices?.[0]?.delta?.content) {
-                            const content = parsed.choices[0].delta.content;
-                            editor.replaceRange(content, currentPos);
-                            // Update cursor position after insertion
-                            const lines = content.split('\n');
-                            if (lines.length === 1) {
-                                currentPos = { line: currentPos.line, ch: currentPos.ch + content.length };
-                            } else {
-                                currentPos = { 
-                                    line: currentPos.line + lines.length - 1, 
-                                    ch: lines[lines.length - 1]?.length || 0
-                                };
+                        if (line.startsWith('data: ')) {
+                            const data = line.replace('data: ', '').trim();
+                            if (data === '[DONE]') continue;
+                            
+                            const parsed = JSON.parse(data);
+                            
+                            // Store the final response data for processing citations and images
+                            // Always update finalResponseData to ensure we have the latest metadata
+                            if (parsed.citations || parsed.images || parsed.search_results) {
+                                finalResponseData = parsed;
                             }
-                            // Scroll to follow the new content
-                            editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
-                            // Small delay to make scrolling smoother
-                            await new Promise(resolve => setTimeout(resolve, 10));
+                            
+                            // Also clear any stale data if this chunk doesn't have metadata
+                            // This prevents using old metadata from previous requests
+                            if (parsed.choices?.[0]?.finish_reason === 'stop' && !parsed.citations && !parsed.images && !parsed.search_results) {
+                                // This is the final chunk but has no metadata, ensure we don't use stale data
+                                if (finalResponseData && !finalResponseData.choices?.[0]?.finish_reason) {
+                                    // Only clear if the stored data doesn't have finish_reason (meaning it's incomplete)
+                                    console.log('🧹 Clearing potentially stale finalResponseData');
+                                    finalResponseData = null;
+                                }
+                            }
+                            
+                            if (parsed.choices?.[0]?.delta?.content) {
+                                const content = parsed.choices[0].delta.content;
+                                if (content) {
+                                    editor.replaceRange(content, currentPos);
+                                    // Update cursor position after insertion
+                                    const contentLines = content.split('\n');
+                                    if (contentLines.length === 1) {
+                                        currentPos.ch += content.length;
+                                    } else {
+                                        currentPos.line += contentLines.length - 1;
+                                        currentPos.ch = contentLines[contentLines.length - 1].length;
+                                    }
+                                    // Scroll to follow the new content
+                                    editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
+                                }
+                            }
                         }
                     } catch (e) {
-                        // Ignore JSON parse errors for partial chunks
+                        console.warn('Error processing streaming chunk:', e);
+                        // Continue processing other lines even if one fails
                     }
                 }
-            }
-        }
-        
-        // After streaming is complete, add citations and images if available
-        if (finalResponseData) {
-            await this.processStreamingMetadata(finalResponseData, editor);
-        }
-    }
-
-    private async handleNonStreamingResponse(
-        response: Response, 
-        editor: Editor, 
-        responseCursor: { line: number; ch: number }
-    ): Promise<void> {
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || 'No response received';
-        
-        // Extract citations/sources if available
-        let fullResponse = content;
-        console.log('🔍 Perplexity Response Data:', JSON.stringify(data, null, 2));
-        
-        // Process images with intelligent placement
-        if (data.images && data.images.length > 0) {
-            console.log('📸 Perplexity Images Found:', data.images.length);
-            console.log('📸 Images Data:', JSON.stringify(data.images, null, 2));
-            
-            // Process the content for image markers
-            const processedContent = this.processContentWithImages(content, data.images);
-            
-            if (processedContent !== content) {
-                // Use the processed content with inline images
-                fullResponse = processedContent;
-                console.log('🔄 Content updated with inline images (non-streaming)');
-            } else {
-                // Fallback: add images at the end if no markers found
-                fullResponse += '\n\n## Images\n\n';
-                data.images.forEach((image: any, index: number) => {
-                    if (image.image_url) {
-                        fullResponse += `![Image ${index + 1}](${image.image_url})\n`;
-                        if (image.origin_url) {
-                            fullResponse += `*Source: ${image.origin_url}*\n\n`;
-                        } else {
-                            fullResponse += '\n';
-                        }
-                    }
-                });
-            }
-        } else {
-            console.log('📸 No images found in Perplexity response');
-        }
-        
-        editor.replaceRange(fullResponse, responseCursor);
-        
-        // Add sources after the last non-empty line if available
-        if (data.citations && data.citations.length > 0) {
-            console.log('📚 Perplexity Sources Found:', data.citations.length);
-            console.log('📚 Sources Data:', JSON.stringify(data.citations, null, 2));
-            
-            // Find the last non-empty line
-            let lastNonEmptyLine = editor.lastLine();
-            while (lastNonEmptyLine >= 0) {
-                const lineContent = editor.getLine(lastNonEmptyLine);
-                if (lineContent.trim() !== '') {
-                    break;
-                }
-                lastNonEmptyLine--;
-            }
-            
-            // If we found a non-empty line, insert sources after it
-            if (lastNonEmptyLine >= 0) {
-                const lastLineContent = editor.getLine(lastNonEmptyLine);
-                const insertPosition = { line: lastNonEmptyLine, ch: lastLineContent.length };
                 
-                let sourcesSection = '\n\n## Sources\n\n';
-                data.citations.forEach((citation: any, index: number) => {
-                    sourcesSection += `[${index + 1}] ${citation.url || citation.title || citation}\n`;
-                });
-                
-                editor.replaceRange(sourcesSection, insertPosition);
+                // Small delay to prevent UI blocking
+                await new Promise(resolve => setTimeout(resolve, 10));
             }
-        } else {
-            console.log('📚 No sources/citations found in Perplexity response');
+            
+            // Process final metadata (citations, images) after streaming is complete
+            if (finalResponseData) {
+                console.log(`📝 Processing final response data [${requestId || 'unknown'}]:`, finalResponseData);
+                await this.processStreamingMetadata(finalResponseData, editor);
+            }
+            
+            // Add final separator
+            const endPos = { ...currentPos };
+            editor.replaceRange('\n\n***\n', endPos);
+            
+        } catch (error) {
+            console.error('Error in streaming response:', error);
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error during streaming';
+            new Notice(`Streaming error: ${errorMsg}`);
+            editor.replaceRange(`\n**Streaming Error:** ${errorMsg}\n\n`, currentPos);
         }
     }
 
@@ -383,17 +453,13 @@ export class PerplexityService {
         
         // Process images with intelligent placement
         if (finalResponseData.images && finalResponseData.images.length > 0) {
-            console.log('📸 Perplexity Images Found (Streaming):', finalResponseData.images.length);
-            console.log('📸 Images Data (Streaming):', JSON.stringify(finalResponseData.images, null, 2));
+            const content = editor.getValue();
+            const processedContent = this.processContentWithImages(content, finalResponseData.images);
             
-            // Get the current content to process for image markers
-            const currentContent = editor.getValue();
-            const processedContent = this.processContentWithImages(currentContent, finalResponseData.images);
-            
-            if (processedContent !== currentContent) {
-                // Replace the entire content with processed version
+            if (processedContent !== content) {
+                // Update the editor with the processed content
                 editor.setValue(processedContent);
-                console.log('🔄 Content updated with inline images');
+                console.log('🔄 Content updated with inline images (streaming)');
             } else {
                 // Fallback: add images at the end if no markers found
                 let imagesSection = '\n\n## Images\n\n';
@@ -408,41 +474,22 @@ export class PerplexityService {
                     }
                 });
                 
-                editor.replaceRange(imagesSection, editor.getCursor());
+                // Append images section to the end of the document
+                const endOfDoc = editor.lastLine();
+                const endPos = { line: endOfDoc, ch: editor.getLine(endOfDoc).length };
+                editor.replaceRange(imagesSection, endPos);
             }
-        } else {
-            console.log('📸 No images found in Perplexity streaming response');
         }
         
-        // Add citations/sources after the last non-empty line if available
-        if (finalResponseData.citations && finalResponseData.citations.length > 0) {
-            console.log('📚 Perplexity Sources Found (Streaming):', finalResponseData.citations.length);
-            console.log('📚 Sources Data (Streaming):', JSON.stringify(finalResponseData.citations, null, 2));
-            
-            // Find the last non-empty line
-            let lastNonEmptyLine = editor.lastLine();
-            while (lastNonEmptyLine >= 0) {
-                const lineContent = editor.getLine(lastNonEmptyLine);
-                if (lineContent.trim() !== '') {
-                    break;
-                }
-                lastNonEmptyLine--;
-            }
-            
-            // If we found a non-empty line, insert sources after it
-            if (lastNonEmptyLine >= 0) {
-                const lastLineContent = editor.getLine(lastNonEmptyLine);
-                const insertPosition = { line: lastNonEmptyLine, ch: lastLineContent.length };
-                
-                let sourcesSection = '\n\n## Sources\n\n';
-                finalResponseData.citations.forEach((citation: any, index: number) => {
-                    sourcesSection += `[${index + 1}] ${citation}\n`;
-                });
-                
-                editor.replaceRange(sourcesSection, insertPosition);
-            }
+        // Process sources/citations if available
+        if (finalResponseData.search_results && finalResponseData.search_results.length > 0) {
+            // Use search_results for detailed info (preferred for Perplexity streaming)
+            this.addCitations(editor, finalResponseData.search_results);
+        } else if (finalResponseData.citations && finalResponseData.citations.length > 0) {
+            // Fallback to citations array (could be URLs or other format)
+            this.addCitations(editor, finalResponseData.citations);
         } else {
             console.log('📚 No sources/citations found in Perplexity streaming response');
         }
     }
-} 
+}

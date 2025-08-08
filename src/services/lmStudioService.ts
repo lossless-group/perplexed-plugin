@@ -94,7 +94,15 @@ export class LMStudioService {
             if (this.settings.requestTemplate) {
                 try {
                     const processedTemplate = this.promptsService?.processTemplate(this.settings.requestTemplate) || this.settings.requestTemplate;
-                    payload = JSON.parse(processedTemplate);
+                    
+                    // Strip JavaScript-style comments that would break JSON parsing
+                    const cleanedTemplate = processedTemplate
+                        .replace(/\/\*[\s\S]*?\*\//g, '') // Remove /* */ comments
+                        .replace(/\/\/.*$/gm, '') // Remove // comments
+                        .replace(/^\s*$/gm, '') // Remove empty lines
+                        .trim();
+                    
+                    payload = JSON.parse(cleanedTemplate);
                     // Override with current parameters
                     payload.model = model;
                     payload.messages = messages;

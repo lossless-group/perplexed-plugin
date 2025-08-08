@@ -1,3 +1,4 @@
+![Perplexed: An Obsidian Plugin for Perplexity and Perplexica](https://i.imgur.com/MVOK3rk.png)
 # Perplexed: AI Content Generation for Obsidian
 
 **Perplexed** is an Obsidian plugin that enables AI-powered content generation with source citations using [Perplexity](https://www.perplexity.ai/) and [Perplexica](https://perplexica.io/). This plugin brings research-grade AI capabilities directly into your Obsidian workspace, allowing you to generate well-cited content for your notes.
@@ -5,6 +6,15 @@
 ## 🎯 Key Features
 
 - **Source-Cited AI Responses**: Get AI-generated content with proper citations and references
+   - Default format:
+   > ```markdown
+    ### Citations
+
+[1]: 2024, Dec 13. [What is GRC (Governance, Risk and Compliance) - Metricstream](https://www.metricstream.com/learn/what-is-grc.html). Published: 2024-05-01 | Updated: 2024-12-13
+
+[2]: 2025, Jun 16. [Governance, risk and compliance (GRC): Definitions and resources](https://www.diligent.com/resources/guides/grc). Published: 2025-05-27 | Updated: 2025-06-16
+   > ```
+
 - **Multiple AI Providers**: Support for Perplexity (commercial) and Perplexica (self-hosted)
 - **Streaming Responses**: Real-time streaming of AI responses for better UX
 - **Flexible Configuration**: Customizable endpoints, models, and parameters

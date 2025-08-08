@@ -1,1 +1,72 @@
-.perplexity-modal .text-input{width:100%;margin:8px 0;padding:12px}.perplexity-modal .setting-item-description{font-size:12px;color:var(--text-muted);margin-top:5px}.perplexity-modal .setting-item-description.images-description{font-size:11px;margin-top:3px}.article-generator-modal .text-input{width:100%;margin:8px 0;padding:12px}.article-generator-modal .setting-item-description{font-size:12px;color:var(--text-muted);margin-top:5px}.article-generator-modal .term-description{display:block!important;margin-top:8px;margin-bottom:10px;width:100%!important;flex-basis:100%!important;order:2}.article-generator-modal .setting-item{flex-direction:column!important;align-items:flex-start!important}.article-generator-modal .setting-item>*{width:100%!important}.article-generator-modal .hidden-input{display:none}.perplexica-modal .text-input{width:100%;margin:8px 0;padding:12px}.lmstudio-modal .text-input{width:100%;margin:8px 0;padding:12px}.lmstudio-modal .system-prompt-input{width:100%;min-height:60px}.url-update-modal .text-input{width:100%;margin:8px 0;padding:12px}
+/* src/styles/perplexity-modal.css */
+.perplexity-modal .text-input {
+  width: 100%;
+  margin: 8px 0;
+  padding: 12px;
+}
+.perplexity-modal .setting-item-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 5px;
+}
+.perplexity-modal .setting-item-description.images-description {
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+/* src/styles/article-generator-modal.css */
+.article-generator-modal .text-input {
+  width: 100%;
+  margin: 8px 0;
+  padding: 12px;
+}
+.article-generator-modal .setting-item-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 5px;
+}
+.article-generator-modal .term-description {
+  display: block !important;
+  margin-top: 8px;
+  margin-bottom: 10px;
+  width: 100% !important;
+  flex-basis: 100% !important;
+  order: 2;
+}
+.article-generator-modal .setting-item {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+}
+.article-generator-modal .setting-item > * {
+  width: 100% !important;
+}
+.article-generator-modal .hidden-input {
+  display: none;
+}
+
+/* src/styles/perplexica-modal.css */
+.perplexica-modal .text-input {
+  width: 100%;
+  margin: 8px 0;
+  padding: 12px;
+}
+
+/* src/styles/lmstudio-modal.css */
+.lmstudio-modal .text-input {
+  width: 100%;
+  margin: 8px 0;
+  padding: 12px;
+}
+.lmstudio-modal .system-prompt-input {
+  width: 100%;
+  min-height: 60px;
+}
+
+/* src/styles/url-update-modal.css */
+.url-update-modal .text-input {
+  width: 100%;
+  margin: 8px 0;
+  padding: 12px;
+}
+
+/* src/styles/main.css */
