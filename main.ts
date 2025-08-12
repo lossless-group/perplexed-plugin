@@ -32,6 +32,9 @@ interface PerplexedPluginSettings {
     defaultFocusMode: string;
     defaultLMStudioModel: string;
     
+    // Display Settings
+    headerPosition: 'top' | 'bottom';
+    
     // Prompt Settings
     prompts: {
         // System prompts
@@ -72,6 +75,7 @@ const DEFAULT_SETTINGS: PerplexedPluginSettings = {
     perplexicaEndpoint: 'http://localhost:3030/api/search',
     perplexityEndpoint: 'https://api.perplexity.ai/chat/completions',
     lmStudioEndpoint: 'http://localhost:1234/v1/chat/completions',
+    headerPosition: 'top',
     requestBodyTemplate: `{
   "chatModel": {
     "provider": "ollama",
@@ -216,51 +220,142 @@ export default class PerplexedPlugin extends Plugin {
     private ribbonIconEl: HTMLElement | null = null;
     
     // Service instances
-    private perplexityService!: PerplexityService;
-    private perplexicaService!: PerplexicaService;
-    private lmStudioService!: LMStudioService;
-    private promptsService!: PromptsService;
+    private perplexityService!: PerplexityService | null;
+    private perplexicaService!: PerplexicaService | null;
+    private lmStudioService!: LMStudioService | null;
+    private promptsService!: PromptsService | null;
 
     async onload(): Promise<void> {
-        await this.loadSettings();
-        
-        // Initialize prompts service
-        this.promptsService = new PromptsService(this.settings.prompts);
-        
-        // Initialize services
-        this.perplexityService = new PerplexityService({
-            perplexityApiKey: this.settings.perplexityApiKey,
-            perplexityEndpoint: this.settings.perplexityEndpoint,
-            promptsService: this.promptsService,
-            requestTemplate: this.settings.perplexityRequestTemplate
-        });
-        
-        this.perplexicaService = new PerplexicaService({
-            perplexicaEndpoint: this.settings.perplexicaEndpoint,
-            localLLMPath: this.settings.localLLMPath,
-            defaultModel: this.settings.defaultModel,
-            promptsService: this.promptsService,
-            requestTemplate: this.settings.requestBodyTemplate
-        });
-        
-        this.lmStudioService = new LMStudioService({
-            lmStudioEndpoint: this.settings.lmStudioEndpoint,
-            promptsService: this.promptsService,
-            requestTemplate: this.settings.lmStudioRequestTemplate
-        });
-        
-        // Debug: Log current settings
-        console.log('Current Perplexica Path:', this.settings.perplexicaEndpoint);
-        console.log('Full settings:', JSON.stringify(this.settings, null, 2));
+        try {
+            console.log('Perplexed Plugin: Starting initialization...');
+            
+            await this.loadSettings();
+            console.log('Perplexed Plugin: Settings loaded successfully');
+            
+            // Initialize prompts service first
+            try {
+                this.promptsService = new PromptsService(this.settings.prompts);
+                console.log('Perplexed Plugin: PromptsService initialized successfully');
+            } catch (error) {
+                console.error('Perplexed Plugin: Failed to initialize PromptsService:', error);
+                new Notice('Failed to initialize PromptsService');
+                this.promptsService = null;
+            }
+            
+            // Initialize services with error handling - only if promptsService is available
+            if (this.promptsService) {
+                try {
+                    this.perplexityService = new PerplexityService({
+                        perplexityApiKey: this.settings.perplexityApiKey,
+                        perplexityEndpoint: this.settings.perplexityEndpoint,
+                        promptsService: this.promptsService,
+                        requestTemplate: this.settings.perplexityRequestTemplate,
+                        headerPosition: this.settings.headerPosition
+                    });
+                    console.log('Perplexed Plugin: PerplexityService initialized successfully');
+                } catch (error) {
+                    console.error('Perplexed Plugin: Failed to initialize PerplexityService:', error);
+                    new Notice('Failed to initialize PerplexityService');
+                    this.perplexityService = null;
+                }
+                
+                try {
+                    this.perplexicaService = new PerplexicaService({
+                        perplexicaEndpoint: this.settings.perplexicaEndpoint,
+                        localLLMPath: this.settings.localLLMPath,
+                        defaultModel: this.settings.defaultModel,
+                        promptsService: this.promptsService,
+                        requestTemplate: this.settings.requestBodyTemplate
+                    });
+                    console.log('Perplexed Plugin: PerplexicaService initialized successfully');
+                } catch (error) {
+                    console.error('Perplexed Plugin: Failed to initialize PerplexicaService:', error);
+                    new Notice('Failed to initialize PerplexicaService');
+                    this.perplexicaService = null;
+                }
+                
+                try {
+                    this.lmStudioService = new LMStudioService({
+                        lmStudioEndpoint: this.settings.lmStudioEndpoint,
+                        promptsService: this.promptsService,
+                        requestTemplate: this.settings.lmStudioRequestTemplate
+                    });
+                    console.log('Perplexed Plugin: LMStudioService initialized successfully');
+                } catch (error) {
+                    console.error('Perplexed Plugin: Failed to initialize LMStudioService:', error);
+                    new Notice('Failed to initialize LMStudioService');
+                    this.lmStudioService = null;
+                }
+            } else {
+                // If promptsService failed, set all other services to null
+                this.perplexityService = null;
+                this.perplexicaService = null;
+                this.lmStudioService = null;
+                console.log('Perplexed Plugin: Skipping service initialization due to PromptsService failure');
+            }
+            
+            // Debug: Log current settings
+            console.log('Perplexed Plugin: Current Perplexica Path:', this.settings.perplexicaEndpoint);
+            console.log('Perplexed Plugin: Full settings:', JSON.stringify(this.settings, null, 2));
 
-        // This adds a settings tab so the user can configure various aspects of the plugin
-        this.addSettingTab(new PerplexedSettingTab(this.app, this));
-        
-        // Register commands
-        this.registerPerplexicaCommands();
-        this.registerPerplexityCommands();
-        this.registerLMStudioCommands();
-        this.registerArticleGeneratorCommands();
+            // This adds a settings tab so the user can configure various aspects of the plugin
+            this.addSettingTab(new PerplexedSettingTab(this.app, this));
+            console.log('Perplexed Plugin: Settings tab added successfully');
+            
+            // Register commands with error handling
+            try {
+                this.registerPerplexicaCommands();
+                console.log('Perplexed Plugin: Perplexica commands registered successfully');
+            } catch (error) {
+                console.error('Perplexed Plugin: Failed to register Perplexica commands:', error);
+            }
+            
+            try {
+                this.registerPerplexityCommands();
+                console.log('Perplexed Plugin: Perplexity commands registered successfully');
+            } catch (error) {
+                console.error('Perplexed Plugin: Failed to register Perplexity commands:', error);
+            }
+            
+            try {
+                this.registerLMStudioCommands();
+                console.log('Perplexed Plugin: LM Studio commands registered successfully');
+            } catch (error) {
+                console.error('Perplexed Plugin: Failed to register LM Studio commands:', error);
+            }
+            
+            try {
+                this.registerArticleGeneratorCommands();
+                console.log('Perplexed Plugin: Article generator commands registered successfully');
+            } catch (error) {
+                console.error('Perplexed Plugin: Failed to register article generator commands:', error);
+            }
+            
+            // Add debug command to check command status
+            this.addCommand({
+                id: 'perplexed-debug-commands',
+                name: 'Debug: Check Perplexed Commands',
+                callback: () => {
+                    this.debugCommands();
+                }
+            });
+            
+            // Add command to reinitialize services
+            this.addCommand({
+                id: 'perplexed-reinitialize-services',
+                name: 'Reinitialize Perplexed Services',
+                callback: async () => {
+                    await this.reinitializeServices();
+                }
+            });
+            
+            console.log('Perplexed Plugin: Initialization completed successfully');
+            new Notice('Perplexed Plugin loaded successfully');
+            
+        } catch (error) {
+            console.error('Perplexed Plugin: Critical initialization error:', error);
+            new Notice('Perplexed Plugin failed to load properly');
+        }
     }
 
     onunload(): void {
@@ -290,12 +385,18 @@ export default class PerplexedPlugin extends Plugin {
         return_related_questions?: boolean;
         search_recency_filter?: string;
     }): Promise<void> {
+        if (!this.perplexityService) {
+            throw new Error('Perplexity service not initialized');
+        }
         await this.perplexityService.queryPerplexity(query, model, stream, editor, options);
     }
 
     public async queryPerplexica(query: string, focusMode: string, optimizationMode: string, stream: boolean, editor: Editor, options?: {
         return_images?: boolean;
     }): Promise<void> {
+        if (!this.perplexicaService) {
+            throw new Error('Perplexica service not initialized');
+        }
         await this.perplexicaService.queryPerplexica(query, focusMode, optimizationMode, stream, editor, options);
     }
 
@@ -306,11 +407,14 @@ export default class PerplexedPlugin extends Plugin {
         system_prompt?: string;
         return_images?: boolean;
     }): Promise<void> {
+        if (!this.lmStudioService) {
+            throw new Error('LM Studio service not initialized');
+        }
         await this.lmStudioService.queryLMStudio(query, model, stream, editor, options);
     }
 
     // Getter for prompts service
-    public getPromptsService(): PromptsService {
+    public getPromptsService(): PromptsService | null {
         return this.promptsService;
     }
 
@@ -349,51 +453,103 @@ export default class PerplexedPlugin extends Plugin {
             id: 'ask-perplexica',
             name: 'Ask Perplexica',
             editorCallback: (editor: Editor) => {
-                const modal = new PerplexicaModal(this.app, editor, this.perplexicaService, this.promptsService);
-                modal.open();
+                try {
+                    if (!this.perplexicaService) {
+                        new Notice('Perplexica service not initialized. Please check console for errors and try the debug command.');
+                        console.error('Perplexica service is not initialized');
+                        return;
+                    }
+                    if (!this.promptsService) {
+                        new Notice('Prompts service not initialized. Please check console for errors and try the debug command.');
+                        console.error('Prompts service is not initialized');
+                        return;
+                    }
+                    const modal = new PerplexicaModal(this.app, editor, this.perplexicaService, this.promptsService);
+                    modal.open();
+                } catch (error) {
+                    console.error('Error opening Perplexica modal:', error);
+                    new Notice('Failed to open Perplexica modal. Check console for details.');
+                }
             }
         });
     }
 
     private registerPerplexityCommands(): void {
-        // Command to update Perplexity URL
-        this.addCommand({
-            id: 'update-perplexity-url',
-            name: 'Update Perplexity URL',
-            callback: () => {
-                const modal = new URLUpdateModal(this.app, {
-                    title: 'Update Perplexity API URL',
-                    label: 'Perplexity API URL',
-                    placeholder: 'https://api.perplexity.ai/chat/completions',
-                    currentValue: this.settings.perplexityEndpoint,
-                    onSave: async (newUrl: string) => {
-                        this.settings.perplexityEndpoint = newUrl;
-                        await this.saveSettings();
+        try {
+            // Command to update Perplexity URL
+            this.addCommand({
+                id: 'update-perplexity-url',
+                name: 'Update Perplexity URL',
+                callback: () => {
+                    const modal = new URLUpdateModal(this.app, {
+                        title: 'Update Perplexity API URL',
+                        label: 'Perplexity API URL',
+                        placeholder: 'https://api.perplexity.ai/chat/completions',
+                        currentValue: this.settings.perplexityEndpoint,
+                        onSave: async (newUrl: string) => {
+                            this.settings.perplexityEndpoint = newUrl;
+                            await this.saveSettings();
+                        }
+                    });
+                    modal.open();
+                }
+            });
+
+            // Command to show current Perplexity settings
+            this.addCommand({
+                id: 'show-perplexity-settings',
+                name: 'Show Perplexity Settings',
+                callback: () => {
+                    new Notice(`Current Perplexity URL: ${this.settings.perplexityEndpoint}`);
+                    console.log('Perplexity Settings:', this.settings);
+                }
+            });
+
+            // Command to ask Perplexity
+            this.addCommand({
+                id: 'ask-perplexity',
+                name: 'Ask Perplexity',
+                editorCallback: (editor: Editor) => {
+                    try {
+                        if (!this.perplexityService) {
+                            new Notice('Perplexity service not initialized. Please check console for errors and try the debug command.');
+                            console.error('Perplexity service is not initialized');
+                            return;
+                        }
+                        if (!this.promptsService) {
+                            new Notice('Prompts service not initialized. Please check console for errors and try the debug command.');
+                            console.error('Prompts service is not initialized');
+                            return;
+                        }
+                        const modal = new PerplexityModal(this.app, editor, this.perplexityService, this.promptsService);
+                        modal.open();
+                    } catch (error) {
+                        console.error('Error opening Perplexity modal:', error);
+                        new Notice('Failed to open Perplexity modal. Check console for details.');
                     }
-                });
-                modal.open();
-            }
-        });
-
-        // Command to show current Perplexity settings
-        this.addCommand({
-            id: 'show-perplexity-settings',
-            name: 'Show Perplexity Settings',
-            callback: () => {
-                new Notice(`Current Perplexity URL: ${this.settings.perplexityEndpoint}`);
-                console.log('Perplexity Settings:', this.settings);
-            }
-        });
-
-        // Command to ask Perplexity
-        this.addCommand({
-            id: 'ask-perplexity',
-            name: 'Ask Perplexity',
-            editorCallback: (editor: Editor) => {
-                const modal = new PerplexityModal(this.app, editor, this.perplexityService, this.promptsService);
-                modal.open();
-            }
-        });
+                }
+            });
+            
+            // Add a fallback command that shows service status
+            this.addCommand({
+                id: 'perplexity-service-status',
+                name: 'Check Perplexity Service Status',
+                callback: () => {
+                    if (this.perplexityService) {
+                        new Notice('Perplexity service is initialized and ready');
+                        console.log('Perplexity service status: OK');
+                    } else {
+                        new Notice('Perplexity service is NOT initialized. Check console for errors.');
+                        console.error('Perplexity service status: FAILED');
+                    }
+                }
+            });
+            
+            console.log('Perplexed Plugin: Perplexity commands registered successfully');
+        } catch (error) {
+            console.error('Perplexed Plugin: Error registering Perplexity commands:', error);
+            throw error;
+        }
     }
 
     private registerLMStudioCommands(): void {
@@ -431,8 +587,23 @@ export default class PerplexedPlugin extends Plugin {
             id: 'ask-lmstudio',
             name: 'Ask LM Studio',
             editorCallback: (editor: Editor) => {
-                const modal = new LMStudioModal(this.app, editor, this.lmStudioService, this.promptsService);
-                modal.open();
+                try {
+                    if (!this.lmStudioService) {
+                        new Notice('LM Studio service not initialized. Please check console for errors and try the debug command.');
+                        console.error('LM Studio service is not initialized');
+                        return;
+                    }
+                    if (!this.promptsService) {
+                        new Notice('Prompts service not initialized. Please check console for errors and try the debug command.');
+                        console.error('Prompts service is not initialized');
+                        return;
+                    }
+                    const modal = new LMStudioModal(this.app, editor, this.lmStudioService, this.promptsService);
+                    modal.open();
+                } catch (error) {
+                    console.error('Error opening LM Studio modal:', error);
+                    new Notice('Failed to open LM Studio modal. Check console for details.');
+                }
             }
         });
     }
@@ -443,9 +614,127 @@ export default class PerplexedPlugin extends Plugin {
             id: 'generate-article',
             name: 'Generate One-Page Article',
             editorCallback: (editor: Editor) => {
-                new ArticleGeneratorModal(this.app, editor, this.perplexityService, this.promptsService).open();
+                try {
+                    if (!this.perplexityService) {
+                        new Notice('Perplexity service not initialized. Please check console for errors and try the debug command.');
+                        console.error('Perplexity service is not initialized');
+                        return;
+                    }
+                    if (!this.promptsService) {
+                        new Notice('Prompts service not initialized. Please check console for errors and try the debug command.');
+                        console.error('Prompts service is not initialized');
+                        return;
+                    }
+                    new ArticleGeneratorModal(this.app, editor, this.perplexityService, this.promptsService).open();
+                } catch (error) {
+                    console.error('Error opening Article Generator modal:', error);
+                    new Notice('Failed to open Article Generator modal. Check console for details.');
+                }
             }
         });
+    }
+
+    private debugCommands(): void {
+        console.log('=== Perplexed Plugin Debug Information ===');
+        console.log('Plugin instance:', this);
+        console.log('Settings:', this.settings);
+        console.log('Services status:');
+        console.log('- PromptsService:', this.promptsService ? 'Initialized' : 'NOT INITIALIZED');
+        console.log('- PerplexityService:', this.perplexityService ? 'Initialized' : 'NOT INITIALIZED');
+        console.log('- PerplexicaService:', this.perplexicaService ? 'Initialized' : 'NOT INITIALIZED');
+        console.log('- LMStudioService:', this.lmStudioService ? 'Initialized' : 'NOT INITIALIZED');
+        
+        // Check if commands are registered in Obsidian
+        const registeredCommands = this.app.commands.commands;
+        const perplexedCommands = Object.keys(registeredCommands).filter(cmd => 
+            cmd.startsWith('perplexed') || 
+            cmd.includes('perplexity') || 
+            cmd.includes('perplexica') || 
+            cmd.includes('lmstudio') ||
+            cmd.includes('generate-article')
+        );
+        
+        console.log('Registered Perplexed commands:', perplexedCommands);
+        
+        if (perplexedCommands.length === 0) {
+            new Notice('No Perplexed commands found! Check console for details.');
+        } else {
+            new Notice(`Found ${perplexedCommands.length} Perplexed commands. Check console for details.`);
+        }
+        
+        console.log('=== End Debug Information ===');
+    }
+
+    private async reinitializeServices(): Promise<void> {
+        try {
+            console.log('Perplexed Plugin: Reinitializing services...');
+            new Notice('Reinitializing Perplexed services...');
+            
+            // Reinitialize prompts service first
+            try {
+                this.promptsService = new PromptsService(this.settings.prompts);
+                console.log('Perplexed Plugin: PromptsService reinitialized successfully');
+            } catch (error) {
+                console.error('Perplexed Plugin: Failed to reinitialize PromptsService:', error);
+                this.promptsService = null;
+            }
+            
+            // Reinitialize other services only if promptsService is available
+            if (this.promptsService) {
+                try {
+                    this.perplexityService = new PerplexityService({
+                        perplexityApiKey: this.settings.perplexityApiKey,
+                        perplexityEndpoint: this.settings.perplexityEndpoint,
+                        promptsService: this.promptsService,
+                        requestTemplate: this.settings.perplexityRequestTemplate,
+                        headerPosition: this.settings.headerPosition
+                    });
+                    console.log('Perplexed Plugin: PerplexityService reinitialized successfully');
+                } catch (error) {
+                    console.error('Perplexed Plugin: Failed to reinitialize PerplexityService:', error);
+                    this.perplexityService = null;
+                }
+                
+                try {
+                    this.perplexicaService = new PerplexicaService({
+                        perplexicaEndpoint: this.settings.perplexicaEndpoint,
+                        localLLMPath: this.settings.localLLMPath,
+                        defaultModel: this.settings.defaultModel,
+                        promptsService: this.promptsService,
+                        requestTemplate: this.settings.requestBodyTemplate
+                    });
+                    console.log('Perplexed Plugin: PerplexicaService reinitialized successfully');
+                } catch (error) {
+                    console.error('Perplexed Plugin: Failed to reinitialize PerplexicaService:', error);
+                    this.perplexicaService = null;
+                }
+                
+                try {
+                    this.lmStudioService = new LMStudioService({
+                        lmStudioEndpoint: this.settings.lmStudioEndpoint,
+                        promptsService: this.promptsService,
+                        requestTemplate: this.settings.lmStudioRequestTemplate
+                    });
+                    console.log('Perplexed Plugin: LMStudioService reinitialized successfully');
+                } catch (error) {
+                    console.error('Perplexed Plugin: Failed to reinitialize LMStudioService:', error);
+                    this.lmStudioService = null;
+                }
+            } else {
+                // If promptsService failed, set all other services to null
+                this.perplexityService = null;
+                this.perplexicaService = null;
+                this.lmStudioService = null;
+                console.log('Perplexed Plugin: Skipping service reinitialization due to PromptsService failure');
+            }
+            
+            new Notice('Services reinitialization completed. Check console for details.');
+            console.log('Perplexed Plugin: Services reinitialization completed');
+            
+        } catch (error) {
+            console.error('Perplexed Plugin: Error during services reinitialization:', error);
+            new Notice('Failed to reinitialize services. Check console for details.');
+        }
     }
 }
 
@@ -455,6 +744,14 @@ class PerplexedSettingTab extends PluginSettingTab {
     constructor(app: App, plugin: PerplexedPlugin) {
         super(app, plugin);
         this.plugin = plugin;
+    }
+
+    // Helper method to safely update prompts service
+    private updatePromptsService(): void {
+        const promptsService = this.plugin.getPromptsService();
+        if (promptsService) {
+            promptsService.updateSettings(this.plugin.settings.prompts);
+        }
     }
 
     display(): void {
@@ -491,6 +788,19 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.perplexityApiKey)
                 .onChange(async (value: string) => {
                     this.plugin.settings.perplexityApiKey = value;
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName('Header Position')
+            .setDesc('Where to place the query header in generated articles')
+            .addDropdown(dropdown => dropdown
+                .addOption('top', 'Top of article')
+                .addOption('bottom', 'Bottom of article')
+                .setValue(this.plugin.settings.headerPosition)
+                .onChange(async (value: string) => {
+                    this.plugin.settings.headerPosition = value as 'top' | 'bottom';
                     await this.plugin.saveSettings();
                 })
             );
@@ -692,7 +1002,10 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.perplexitySystemPrompt)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.perplexitySystemPrompt = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    const promptsService = this.plugin.getPromptsService();
+                    if (promptsService) {
+                        promptsService.updateSettings(this.plugin.settings.prompts);
+                    }
                     await this.plugin.saveSettings();
                 })
             );
@@ -705,7 +1018,10 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.perplexicaSystemPrompt)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.perplexicaSystemPrompt = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    const promptsService = this.plugin.getPromptsService();
+                    if (promptsService) {
+                        promptsService.updateSettings(this.plugin.settings.prompts);
+                    }
                     await this.plugin.saveSettings();
                 })
             );
@@ -718,7 +1034,10 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.lmStudioDefaultSystemPrompt)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.lmStudioDefaultSystemPrompt = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    const promptsService = this.plugin.getPromptsService();
+                    if (promptsService) {
+                        promptsService.updateSettings(this.plugin.settings.prompts);
+                    }
                     await this.plugin.saveSettings();
                 })
             );
@@ -734,7 +1053,10 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.perplexityQueryPlaceholder)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.perplexityQueryPlaceholder = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    const promptsService = this.plugin.getPromptsService();
+                    if (promptsService) {
+                        promptsService.updateSettings(this.plugin.settings.prompts);
+                    }
                     await this.plugin.saveSettings();
                 })
             );
@@ -747,7 +1069,10 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.perplexicaQueryPlaceholder)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.perplexicaQueryPlaceholder = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    const promptsService = this.plugin.getPromptsService();
+                    if (promptsService) {
+                        promptsService.updateSettings(this.plugin.settings.prompts);
+                    }
                     await this.plugin.saveSettings();
                 })
             );
@@ -760,7 +1085,10 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.lmStudioQueryPlaceholder)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.lmStudioQueryPlaceholder = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    const promptsService = this.plugin.getPromptsService();
+                    if (promptsService) {
+                        promptsService.updateSettings(this.plugin.settings.prompts);
+                    }
                     await this.plugin.saveSettings();
                 })
             );
@@ -773,7 +1101,10 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.lmStudioSystemPromptPlaceholder)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.lmStudioSystemPromptPlaceholder = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    const promptsService = this.plugin.getPromptsService();
+                    if (promptsService) {
+                        promptsService.updateSettings(this.plugin.settings.prompts);
+                    }
                     await this.plugin.saveSettings();
                 })
             );
@@ -786,7 +1117,7 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.articleTermPlaceholder)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.articleTermPlaceholder = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    this.updatePromptsService();
                     await this.plugin.saveSettings();
                 })
             );
@@ -802,7 +1133,7 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.deepResearchDescription)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.deepResearchDescription = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    this.updatePromptsService();
                     await this.plugin.saveSettings();
                 })
             );
@@ -815,7 +1146,7 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.imagesToggleDescription)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.imagesToggleDescription = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    this.updatePromptsService();
                     await this.plugin.saveSettings();
                 })
             );
@@ -828,7 +1159,7 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.imagesToggleGenericDescription)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.imagesToggleGenericDescription = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    this.updatePromptsService();
                     await this.plugin.saveSettings();
                 })
             );
@@ -841,7 +1172,7 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.articleTermDescription)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.articleTermDescription = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    this.updatePromptsService();
                     await this.plugin.saveSettings();
                 })
             );
@@ -857,7 +1188,7 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.deepResearchLoadingNotice)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.deepResearchLoadingNotice = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    this.updatePromptsService();
                     await this.plugin.saveSettings();
                 })
             );
@@ -870,7 +1201,7 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.enterQuestionNotice)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.enterQuestionNotice = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    this.updatePromptsService();
                     await this.plugin.saveSettings();
                 })
             );
@@ -883,7 +1214,7 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.prompts.enterTermNotice)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.enterTermNotice = value;
-                    this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+                    this.updatePromptsService();
                     await this.plugin.saveSettings();
                 })
             );
@@ -906,7 +1237,7 @@ class PerplexedSettingTab extends PluginSettingTab {
         
         articleTemplateTextArea.addEventListener('input', async () => {
             this.plugin.settings.prompts.articleGeneratorTemplate = articleTemplateTextArea.value;
-            this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+            this.updatePromptsService();
             await this.plugin.saveSettings();
         });
         
@@ -930,7 +1261,7 @@ class PerplexedSettingTab extends PluginSettingTab {
         
         imagePromptsTextArea.addEventListener('input', async () => {
             this.plugin.settings.prompts.imageReferencesPrompt = imagePromptsTextArea.value;
-            this.plugin.getPromptsService().updateSettings(this.plugin.settings.prompts);
+            this.updatePromptsService();
             await this.plugin.saveSettings();
         });
         
