@@ -119,7 +119,7 @@ export class PerplexityService {
         let currentIndex = 0;
         
         for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
+            const line = lines[i]!; // Non-null assertion since we're iterating within bounds
             const lineStartIndex = currentIndex;
             
             // Check if this line starts a callout
