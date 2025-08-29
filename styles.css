@@ -43,6 +43,12 @@
 .article-generator-modal .hidden-input {
   display: none;
 }
+.article-generator-modal .setting-item-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 5px;
+  font-style: italic;
+}
 
 /* src/styles/perplexica-modal.css */
 .perplexica-modal .text-input {
@@ -69,4 +75,171 @@
   padding: 12px;
 }
 
+/* src/styles/text-enhancement-modal.css */
+.text-enhancement-modal {
+  max-width: 800px;
+  width: 90vw;
+}
+.text-enhancement-modal .setting-item {
+  margin-bottom: 20px;
+}
+.text-enhancement-modal .setting-item label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+.text-enhancement-modal .text-input {
+  width: 40%;
+  min-height: 100px;
+  font-family: var(--font-monospace);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.text-enhancement-modal .dropdown {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+}
+.text-enhancement-modal button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+.text-enhancement-modal button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.text-enhancement-modal button.mod-cta {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+.text-enhancement-modal button.mod-cta:hover:not(:disabled) {
+  background-color: var(--interactive-accent-hover);
+}
+.text-enhancement-modal button.mod-warning {
+  background-color: var(--text-error);
+  color: var(--text-on-accent);
+}
+.text-enhancement-modal button.mod-warning:hover:not(:disabled) {
+  background-color: var(--text-error-hover);
+}
+.text-enhancement-modal input[type=checkbox] {
+  margin-right: 8px;
+}
+.text-enhancement-modal .setting-item-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.text-enhancement-modal .text-input[readonly] {
+  background-color: var(--background-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+}
+.text-enhancement-modal .text-input:not([readonly]) {
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+}
+@media (max-width: 768px) {
+  .text-enhancement-modal {
+    width: 95vw;
+    max-width: none;
+  }
+  .text-enhancement-modal button {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+  .text-enhancement-modal .setting-item {
+    margin-bottom: 15px;
+  }
+}
+
+/* src/styles/text-enhancement-with-images-modal.css */
+.get-related-images-modal {
+  max-width: 600px;
+  width: 90vw;
+}
+.get-related-images-modal .setting-item {
+  margin-bottom: 20px;
+}
+.get-related-images-modal .setting-item label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+.get-related-images-modal .text-input {
+  width: 40%;
+  min-height: 120px;
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+  font-family: var(--font-monospace);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.get-related-images-modal .text-input:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px var(--interactive-accent-hover);
+}
+.get-related-images-modal .text-input[readonly] {
+  background-color: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.get-related-images-modal button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.get-related-images-modal button.mod-cta {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+.get-related-images-modal button.mod-cta:hover {
+  background-color: var(--interactive-accent-hover);
+}
+.get-related-images-modal button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.get-related-images-modal h2 {
+  margin-bottom: 20px;
+  color: var(--text-normal);
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
 /* src/styles/main.css */
+.callout[data-callout=brain] {
+  background-color: rgba(147, 51, 234, 0.1);
+  border-left: 4px solid #9333ea;
+}
+.callout[data-callout=brain] .callout-title {
+  color: #9333ea;
+  font-weight: 600;
+}
+.callout[data-callout=brain] .callout-content {
+  color: var(--text-normal);
+  font-style: normal;
+}
+.callout[data-callout=brain] .callout-icon {
+  color: #9333ea;
+}

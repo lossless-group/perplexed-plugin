@@ -13,6 +13,8 @@ import { PerplexicaModal } from './src/modals/PerplexicaModal';
 import { LMStudioModal } from './src/modals/LMStudioModal';
 import { URLUpdateModal } from './src/modals/URLUpdateModal';
 import { ArticleGeneratorModal } from './src/modals/ArticleGeneratorModal';
+import { TextEnhancementModal } from './src/modals/TextEnhancementModal';
+import { TextEnhancementWithImagesModal } from './src/modals/TextEnhancementWithImagesModal';
 
 // Load environment variables
 dotenv.config({ path: `${process.cwd()}/.env` });
@@ -49,22 +51,20 @@ interface PerplexedPluginSettings {
         lmStudioSystemPromptPlaceholder: string;
         articleTermPlaceholder: string;
         
-        // Descriptions and labels
-        deepResearchDescription: string;
-        imagesToggleDescription: string;
-        imagesToggleGenericDescription: string;
-        articleTermDescription: string;
-        
-        // Notices and messages
-        deepResearchLoadingNotice: string;
-        enterQuestionNotice: string;
-        enterTermNotice: string;
-        
         // Article generator template
         articleGeneratorTemplate: string;
         
+        // Deep Research article generator template
+        deepResearchArticleTemplate: string;
+        
         // Image prompts
         imageReferencesPrompt: string;
+        
+        // Text enhancement prompt
+        enhancePrompt: string;
+        
+        // Text enhancement with images prompt
+        enhanceWithImagesPrompt: string;
     };
 }
 
@@ -156,16 +156,7 @@ const DEFAULT_SETTINGS: PerplexedPluginSettings = {
         lmStudioSystemPromptPlaceholder: "You are a helpful AI assistant...",
         articleTermPlaceholder: "e.g., AI Copilots, AI Studios, Machine Learning, etc.",
         
-        // Descriptions and labels
-        deepResearchDescription: "⚡ Deep Research: Exhaustive research across hundreds of sources with expert-level analysis. Higher cost but comprehensive results. Note: Streaming is disabled for this model.",
-        imagesToggleDescription: "Include image results from search - images will be integrated throughout the response where appropriate",
-        imagesToggleGenericDescription: "Include image references throughout the response where appropriate",
-        articleTermDescription: "Enter a vocabulary term to generate a comprehensive one-page article with images.",
-        
-        // Notices and messages
-        deepResearchLoadingNotice: "🔍 Deep research in progress... This may take up to 60 seconds.",
-        enterQuestionNotice: "Please enter a question",
-        enterTermNotice: "Please enter a vocabulary term",
+
         
         // Article generator template
         articleGeneratorTemplate: `Write a comprehensive one-page article about "{TERM}". 
@@ -200,17 +191,86 @@ Structure the article as follows:
 - Use clear, accessible language
 - Include specific examples and real-world applications
 - Make it engaging and informative for a general audience
-- Use markdown formatting for structure
+- Use markdown formatting for structure`,
+        
+        // Deep Research article generator template
+        deepResearchArticleTemplate: `Conduct comprehensive research and write an in-depth article about "{TERM}". 
 
-**Image References:**
-Include [IMAGE 1: {TERM} concept diagram or illustration] after the introduction.
-Include [IMAGE 2: {TERM} practical example or use case] after the main content section.
-Include [IMAGE 3: {TERM} future trends or technology visualization] before the conclusion.
+**Research Requirements:**
+- Conduct exhaustive research across hundreds of sources
+- Analyze multiple perspectives and viewpoints
+- Include academic, industry, and expert sources
+- Provide detailed citations and references
+- Examine historical context and evolution
+- Consider global implications and regional variations
 
-Replace "{TERM}" with the actual vocabulary term in the prompt.`,
+**Article Structure:**
+
+1. **Executive Summary** (1 paragraph)
+   - Concise overview of key findings
+   - Main conclusions and implications
+
+2. **Introduction and Definition** (2-3 paragraphs)
+   - Comprehensive definition and scope
+   - Historical context and evolution
+   - Current significance and relevance
+
+3. **Comprehensive Analysis** (6-8 paragraphs)
+   - Detailed examination of core concepts
+   - Multiple perspectives and approaches
+   - Industry applications and use cases
+   - Technical implementation details
+   - Market analysis and competitive landscape
+   - Regulatory and ethical considerations
+
+4. **Current State and Market Dynamics** (3-4 paragraphs)
+   - Global adoption patterns and trends
+   - Key players, technologies, and platforms
+   - Regional variations and cultural factors
+   - Economic impact and market size
+   - Recent developments and breakthroughs
+
+5. **Challenges and Opportunities** (2-3 paragraphs)
+   - Technical challenges and limitations
+   - Implementation barriers and solutions
+   - Future opportunities and potential
+   - Risk factors and mitigation strategies
+
+6. **Future Outlook and Predictions** (2-3 paragraphs)
+   - Short-term developments (1-2 years)
+   - Medium-term trends (3-5 years)
+   - Long-term implications (5+ years)
+   - Strategic recommendations
+
+7. **Conclusion** (1-2 paragraphs)
+   - Synthesis of key findings
+   - Strategic implications
+   - Call to action or forward-looking statement
+
+**Research Guidelines:**
+- Include diverse source types (academic, industry, news, expert opinions)
+- Provide detailed citations for all claims
+- Analyze conflicting viewpoints and evidence
+- Consider global and regional perspectives
+- Include quantitative data where available
+- Examine both benefits and risks
+- Address ethical and societal implications
+
+**Quality Standards:**
+- Academic rigor with practical relevance
+- Balanced analysis of multiple perspectives
+- Evidence-based conclusions
+- Clear, professional writing style
+- Comprehensive bibliography`,
         
         // Image prompts
-        imageReferencesPrompt: "**Image References:**\nPlease include the following image references throughout your response where appropriate:\n- [IMAGE 1: Relevant diagram or illustration related to the topic]\n- [IMAGE 2: Practical example or use case visualization]\n- [IMAGE 3: Additional supporting visual content]"
+        imageReferencesPrompt: "**Image References:**\nPlease include the following image references throughout your response where appropriate:\n- [IMAGE 1: Relevant diagram or illustration related to the topic]\n- [IMAGE 2: Practical example or use case visualization]\n- [IMAGE 3: Additional supporting visual content]",
+        
+        // Text enhancement prompt
+        enhancePrompt: "Please enhance the following text by improving clarity, adding relevant details, expanding on key points, and making it more comprehensive and engaging. Maintain the original meaning and tone while making it more informative and well-structured:\n\n{TEXT}",
+        
+        // Text enhancement with images prompt
+        enhanceWithImagesPrompt: "Please provide 1-3 relevant images for the following text. Return ONLY the image markers in the format [IMAGE 1: description], [IMAGE 2: description], etc. Each image should illustrate a key concept, example, or visual representation related to the text. Do not include any other text or explanation:\n\n{TEXT}"
     }
 };
 
@@ -331,12 +391,35 @@ export default class PerplexedPlugin extends Plugin {
                 console.error('Perplexed Plugin: Failed to register article generator commands:', error);
             }
             
+            try {
+                this.registerTextEnhancementCommands();
+                console.log('Perplexed Plugin: Text enhancement commands registered successfully');
+            } catch (error) {
+                console.error('Perplexed Plugin: Failed to register text enhancement commands:', error);
+            }
+            
+            try {
+                this.registerTextEnhancementWithImagesCommands();
+                console.log('Perplexed Plugin: Get related images commands registered successfully');
+            } catch (error) {
+                console.error('Perplexed Plugin: Failed to register get related images commands:', error);
+            }
+            
             // Add debug command to check command status
             this.addCommand({
                 id: 'perplexed-debug-commands',
                 name: 'Debug: Check Perplexed Commands',
                 callback: () => {
                     this.debugCommands();
+                }
+            });
+            
+            // Add command to reset prompts to defaults
+            this.addCommand({
+                id: 'perplexed-reset-prompts',
+                name: 'Reset Prompts to Default',
+                callback: async () => {
+                    await this.resetPromptsToDefault();
                 }
             });
             
@@ -364,7 +447,22 @@ export default class PerplexedPlugin extends Plugin {
     }
 
     private async loadSettings() {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        const savedData = await this.loadData();
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, savedData);
+        
+        // Ensure new fields are always present (migration for existing users)
+        if (!this.settings.prompts.deepResearchArticleTemplate) {
+            this.settings.prompts.deepResearchArticleTemplate = DEFAULT_SETTINGS.prompts.deepResearchArticleTemplate;
+            await this.saveSettings();
+        }
+        if (!this.settings.prompts.enhancePrompt) {
+            this.settings.prompts.enhancePrompt = DEFAULT_SETTINGS.prompts.enhancePrompt;
+            await this.saveSettings();
+        }
+        if (!this.settings.prompts.enhanceWithImagesPrompt) {
+            this.settings.prompts.enhanceWithImagesPrompt = DEFAULT_SETTINGS.prompts.enhanceWithImagesPrompt;
+            await this.saveSettings();
+        }
     }
 
 
@@ -634,6 +732,72 @@ export default class PerplexedPlugin extends Plugin {
         });
     }
 
+    private registerTextEnhancementCommands(): void {
+        // Register Text Enhancement command
+        this.addCommand({
+            id: 'enhance-text',
+            name: 'Enhance Selected Text with Perplexity',
+            editorCallback: (editor: Editor) => {
+                try {
+                    const selectedText = editor.getSelection();
+                    if (!selectedText || selectedText.trim() === '') {
+                        new Notice('Please select some text to enhance');
+                        return;
+                    }
+                    
+                    if (!this.perplexityService) {
+                        new Notice('Perplexity service not initialized. Please check console for errors and try the debug command.');
+                        console.error('Perplexity service is not initialized');
+                        return;
+                    }
+                    if (!this.promptsService) {
+                        new Notice('Prompts service not initialized. Please check console for errors and try the debug command.');
+                        console.error('Prompts service is not initialized');
+                        return;
+                    }
+                    
+                    new TextEnhancementModal(this.app, editor, this.perplexityService, this.promptsService, selectedText).open();
+                } catch (error) {
+                    console.error('Error opening Text Enhancement modal:', error);
+                    new Notice('Failed to open Text Enhancement modal. Check console for details.');
+                }
+            }
+        });
+    }
+
+    private registerTextEnhancementWithImagesCommands(): void {
+        // Register Get Related Images command
+        this.addCommand({
+            id: 'enhance-text-with-images',
+            name: 'Get Related Images for Selected Text',
+            editorCallback: (editor: Editor) => {
+                try {
+                    const selectedText = editor.getSelection();
+                    if (!selectedText || selectedText.trim() === '') {
+                        new Notice('Please select some text to get related images for');
+                        return;
+                    }
+                    
+                    if (!this.perplexityService) {
+                        new Notice('Perplexity service not initialized. Please check console for errors and try the debug command.');
+                        console.error('Perplexity service is not initialized');
+                        return;
+                    }
+                    if (!this.promptsService) {
+                        new Notice('Prompts service not initialized. Please check console for errors and try the debug command.');
+                        console.error('Prompts service is not initialized');
+                        return;
+                    }
+                    
+                    new TextEnhancementWithImagesModal(this.app, editor, this.perplexityService, this.promptsService, selectedText).open();
+                } catch (error) {
+                    console.error('Error opening Get Related Images modal:', error);
+                    new Notice('Failed to open Get Related Images modal. Check console for details.');
+                }
+            }
+        });
+    }
+
     private debugCommands(): void {
         console.log('=== Perplexed Plugin Debug Information ===');
         console.log('Plugin instance:', this);
@@ -651,7 +815,8 @@ export default class PerplexedPlugin extends Plugin {
             cmd.includes('perplexity') || 
             cmd.includes('perplexica') || 
             cmd.includes('lmstudio') ||
-            cmd.includes('generate-article')
+            cmd.includes('generate-article') ||
+            cmd.includes('enhance-text')
         );
         
         console.log('Registered Perplexed commands:', perplexedCommands);
@@ -663,6 +828,32 @@ export default class PerplexedPlugin extends Plugin {
         }
         
         console.log('=== End Debug Information ===');
+    }
+
+    private async resetPromptsToDefault(): Promise<void> {
+        try {
+            console.log('Perplexed Plugin: Resetting prompts to default...');
+            new Notice('Resetting prompts to default values...');
+            
+            // Reset all prompt settings to default values
+            this.settings.prompts = { ...DEFAULT_SETTINGS.prompts };
+            
+            // Save the updated settings
+            await this.saveSettings();
+            
+            // Reinitialize the prompts service with new settings
+            if (this.promptsService) {
+                this.promptsService.updateSettings(this.settings.prompts);
+                console.log('Perplexed Plugin: PromptsService updated with default settings');
+            }
+            
+            new Notice('✅ Prompts reset to default values successfully');
+            console.log('Perplexed Plugin: Prompts reset to default successfully');
+            
+        } catch (error) {
+            console.error('Perplexed Plugin: Failed to reset prompts to default:', error);
+            new Notice('❌ Failed to reset prompts to default. Check console for details.');
+        }
     }
 
     private async reinitializeServices(): Promise<void> {
@@ -1122,103 +1313,6 @@ class PerplexedSettingTab extends PluginSettingTab {
                 })
             );
 
-        // Descriptions and Labels
-        containerEl.createEl('h4', { text: 'Descriptions & Labels' });
-        
-        new Setting(containerEl)
-            .setName('Deep Research Description')
-            .setDesc('Description shown for deep research model')
-            .addTextArea(text => text
-                .setPlaceholder('Enter description...')
-                .setValue(this.plugin.settings.prompts.deepResearchDescription)
-                .onChange(async (value: string) => {
-                    this.plugin.settings.prompts.deepResearchDescription = value;
-                    this.updatePromptsService();
-                    await this.plugin.saveSettings();
-                })
-            );
-
-        new Setting(containerEl)
-            .setName('Images Toggle Description')
-            .setDesc('Description for images toggle in Perplexity modal')
-            .addTextArea(text => text
-                .setPlaceholder('Enter description...')
-                .setValue(this.plugin.settings.prompts.imagesToggleDescription)
-                .onChange(async (value: string) => {
-                    this.plugin.settings.prompts.imagesToggleDescription = value;
-                    this.updatePromptsService();
-                    await this.plugin.saveSettings();
-                })
-            );
-
-        new Setting(containerEl)
-            .setName('Images Toggle Generic Description')
-            .setDesc('Generic description for images toggle in other modals')
-            .addTextArea(text => text
-                .setPlaceholder('Enter description...')
-                .setValue(this.plugin.settings.prompts.imagesToggleGenericDescription)
-                .onChange(async (value: string) => {
-                    this.plugin.settings.prompts.imagesToggleGenericDescription = value;
-                    this.updatePromptsService();
-                    await this.plugin.saveSettings();
-                })
-            );
-
-        new Setting(containerEl)
-            .setName('Article Term Description')
-            .setDesc('Description for article generator term input')
-            .addTextArea(text => text
-                .setPlaceholder('Enter description...')
-                .setValue(this.plugin.settings.prompts.articleTermDescription)
-                .onChange(async (value: string) => {
-                    this.plugin.settings.prompts.articleTermDescription = value;
-                    this.updatePromptsService();
-                    await this.plugin.saveSettings();
-                })
-            );
-
-        // Notices and Messages
-        containerEl.createEl('h4', { text: 'Notices & Messages' });
-        
-        new Setting(containerEl)
-            .setName('Deep Research Loading Notice')
-            .setDesc('Notice shown when deep research is in progress')
-            .addText(text => text
-                .setPlaceholder('Enter notice text...')
-                .setValue(this.plugin.settings.prompts.deepResearchLoadingNotice)
-                .onChange(async (value: string) => {
-                    this.plugin.settings.prompts.deepResearchLoadingNotice = value;
-                    this.updatePromptsService();
-                    await this.plugin.saveSettings();
-                })
-            );
-
-        new Setting(containerEl)
-            .setName('Enter Question Notice')
-            .setDesc('Notice shown when no question is entered')
-            .addText(text => text
-                .setPlaceholder('Enter notice text...')
-                .setValue(this.plugin.settings.prompts.enterQuestionNotice)
-                .onChange(async (value: string) => {
-                    this.plugin.settings.prompts.enterQuestionNotice = value;
-                    this.updatePromptsService();
-                    await this.plugin.saveSettings();
-                })
-            );
-
-        new Setting(containerEl)
-            .setName('Enter Term Notice')
-            .setDesc('Notice shown when no term is entered for article generator')
-            .addText(text => text
-                .setPlaceholder('Enter notice text...')
-                .setValue(this.plugin.settings.prompts.enterTermNotice)
-                .onChange(async (value: string) => {
-                    this.plugin.settings.prompts.enterTermNotice = value;
-                    this.updatePromptsService();
-                    await this.plugin.saveSettings();
-                })
-            );
-
         // Article Generator Template
         containerEl.createEl('h4', { text: 'Article Generator Template' });
         
@@ -1243,6 +1337,28 @@ class PerplexedSettingTab extends PluginSettingTab {
         
         articleTemplateSetting.settingEl.appendChild(articleTemplateTextArea);
 
+        // Deep Research Article Generator Template
+        const deepResearchTemplateSetting = new Setting(containerEl)
+            .setName('Deep Research Article Generator Template')
+            .setDesc('Template for generating articles with Deep Research model. Use {TERM} as placeholder for the term.');
+            
+        const deepResearchTemplateTextArea = document.createElement('textarea');
+        deepResearchTemplateTextArea.rows = 20;
+        deepResearchTemplateTextArea.cols = 50;
+        deepResearchTemplateTextArea.style.width = '100%';
+        deepResearchTemplateTextArea.style.minHeight = '500px';
+        deepResearchTemplateTextArea.style.fontFamily = 'monospace';
+        deepResearchTemplateTextArea.placeholder = 'Enter Deep Research article generator template...';
+        deepResearchTemplateTextArea.value = this.plugin.settings.prompts.deepResearchArticleTemplate;
+        
+        deepResearchTemplateTextArea.addEventListener('input', async () => {
+            this.plugin.settings.prompts.deepResearchArticleTemplate = deepResearchTemplateTextArea.value;
+            this.updatePromptsService();
+            await this.plugin.saveSettings();
+        });
+        
+        deepResearchTemplateSetting.settingEl.appendChild(deepResearchTemplateTextArea);
+
         // Image Prompts
         containerEl.createEl('h4', { text: 'Image Prompts' });
         
@@ -1266,5 +1382,51 @@ class PerplexedSettingTab extends PluginSettingTab {
         });
         
         imagePromptsSetting.settingEl.appendChild(imagePromptsTextArea);
+
+        // Text Enhancement Prompt
+        containerEl.createEl('h4', { text: 'Text Enhancement' });
+        
+        const enhancePromptSetting = new Setting(containerEl)
+            .setName('Text Enhancement Prompt')
+            .setDesc('Template for enhancing selected text. Use {TEXT} as placeholder for the selected text.');
+            
+        const enhancePromptTextArea = document.createElement('textarea');
+        enhancePromptTextArea.rows = 10;
+        enhancePromptTextArea.cols = 50;
+        enhancePromptTextArea.style.width = '100%';
+        enhancePromptTextArea.style.minHeight = '250px';
+        enhancePromptTextArea.style.fontFamily = 'monospace';
+        enhancePromptTextArea.placeholder = 'Enter text enhancement prompt template...';
+        enhancePromptTextArea.value = this.plugin.settings.prompts.enhancePrompt;
+        
+        enhancePromptTextArea.addEventListener('input', async () => {
+            this.plugin.settings.prompts.enhancePrompt = enhancePromptTextArea.value;
+            this.updatePromptsService();
+            await this.plugin.saveSettings();
+        });
+        
+        enhancePromptSetting.settingEl.appendChild(enhancePromptTextArea);
+
+        // Text Enhancement with Images Prompt
+        const enhanceWithImagesPromptSetting = new Setting(containerEl)
+            .setName('Related Images Prompt')
+            .setDesc('Template for requesting related images for selected text. Use {TEXT} as placeholder for the selected text.');
+            
+        const enhanceWithImagesPromptTextArea = document.createElement('textarea');
+        enhanceWithImagesPromptTextArea.rows = 10;
+        enhanceWithImagesPromptTextArea.cols = 50;
+        enhanceWithImagesPromptTextArea.style.width = '100%';
+        enhanceWithImagesPromptTextArea.style.minHeight = '250px';
+        enhanceWithImagesPromptTextArea.style.fontFamily = 'monospace';
+        enhanceWithImagesPromptTextArea.placeholder = 'Enter related images prompt template...';
+        enhanceWithImagesPromptTextArea.value = this.plugin.settings.prompts.enhanceWithImagesPrompt;
+        
+        enhanceWithImagesPromptTextArea.addEventListener('input', async () => {
+            this.plugin.settings.prompts.enhanceWithImagesPrompt = enhanceWithImagesPromptTextArea.value;
+            this.updatePromptsService();
+            await this.plugin.saveSettings();
+        });
+        
+        enhanceWithImagesPromptSetting.settingEl.appendChild(enhanceWithImagesPromptTextArea);
     }
 }

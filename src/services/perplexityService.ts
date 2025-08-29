@@ -51,8 +51,7 @@ export class PerplexityService {
     private processContentWithImages(content: string, images: any[]): string {
         if (!images || images.length === 0) return content;
         
-        console.log('🖼️ Processing images:', JSON.stringify(images, null, 2));
-        console.log('📝 Original content length:', content.length);
+        console.log(`🖼️ Processing ${images.length} images for content replacement`);
         
         let processedContent = content;
         const imageRegex = /\[IMAGE\s+(\d+):\s*(.*?)\]/gi;
@@ -62,6 +61,7 @@ export class PerplexityService {
         let match;
         while ((match = imageRegex.exec(content)) !== null) {
             const [fullMatch, number, description] = match;
+            console.log(`🔍 Regex match found: "${fullMatch}" with number="${number}" description="${description}"`);
             if (number && description) {
                 matches.push({
                     fullMatch,
@@ -69,43 +69,210 @@ export class PerplexityService {
                     description: description.trim(),
                     index: match.index
                 });
+            } else {
+                console.log(`⚠️ Invalid match - number: "${number}", description: "${description}"`);
             }
         }
         
-        console.log('🔍 Found image markers:', matches);
+        if (matches.length === 0) {
+            console.log('🔍 No image markers found in content');
+            return content;
+        }
+        
+        console.log(`🔍 Found ${matches.length} image markers in content`);
         
         // Sort matches by their position in the content (descending) to avoid index shifting issues
         matches.sort((a, b) => b.index - a.index);
         
+        let replacedCount = 0;
+        
         // Replace matches from end to beginning to avoid index shifting
         matches.forEach((matchInfo) => {
+            console.log(`🔍 Processing image reference: "${matchInfo.fullMatch}" at index ${matchInfo.index}`);
+            
             const imageIndex = parseInt(matchInfo.number) - 1; // Convert 1-based to 0-based
             const image = images[imageIndex];
             
             if (image && image.image_url) {
                 const imageMarkdown = `![${matchInfo.description || 'Image'}](${image.image_url})`;
                 processedContent = processedContent.replace(matchInfo.fullMatch, imageMarkdown);
-                console.log(`✅ Replaced IMAGE ${matchInfo.number} with: ${image.image_url}`);
+                replacedCount++;
+                console.log(`🔄 Replaced "${matchInfo.fullMatch}" with image markdown`);
             } else {
-                console.log(`❌ No image found for IMAGE ${matchInfo.number} (index ${imageIndex})`);
+                console.log(`⚠️ No image found for index ${imageIndex} or no image_url`);
             }
         });
         
-        console.log('📝 Processed content length:', processedContent.length);
+        console.log(`✅ Replaced ${replacedCount} image markers with actual images`);
         return processedContent;
+    }
+
+
+
+    private findQueryHeaderEnd(content: string): number {
+        // Find where the query header ends (after the callout block)
+        // Look for patterns that indicate the end of a query header
+        
+        const lines = content.split('\n');
+        let inCallout = false;
+        let calloutEndIndex = -1;
+        let currentIndex = 0;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const lineStartIndex = currentIndex;
+            
+            // Check if this line starts a callout
+            if (line.match(/^\s*>\s*\[!.*?\]/)) {
+                inCallout = true;
+            }
+            
+            // If we're in a callout and find a blank line, that's the end
+            if (inCallout && line.trim() === '') {
+                calloutEndIndex = currentIndex;
+                break;
+            }
+            
+            // If we're in a callout and find a line that doesn't start with '>', that's the end
+            if (inCallout && !line.match(/^\s*>/)) {
+                calloutEndIndex = lineStartIndex;
+                break;
+            }
+            
+            currentIndex += line.length + 1; // +1 for newline
+        }
+        
+        // If we found a callout end, return it
+        if (calloutEndIndex > 0) {
+            console.log(`🔍 Query header ends at position ${calloutEndIndex}`);
+            return calloutEndIndex;
+        }
+        
+        // If no callout found, look for other patterns that might indicate header end
+        const headerEndPatterns = [
+            /\*\*\*/, // Horizontal rule
+            /^#\s/, // Heading
+            /^##\s/, // Subheading
+            /^###\s/ // Sub-subheading
+        ];
+        
+        for (const pattern of headerEndPatterns) {
+            const match = content.match(pattern);
+            if (match) {
+                const endIndex = match.index || 0;
+                console.log(`🔍 Found header end pattern at position ${endIndex}`);
+                return endIndex;
+            }
+        }
+        
+        return -1; // No header end found
+    }
+
+    private processThinkBlocks(content: string): string {
+        if (!content.includes('<think>')) return content;
+        
+        console.log('🧠 Processing think blocks in content');
+        
+        // Replace <think> blocks with markdown callouts
+        let processedContent = content;
+        
+        // Match <think>...</think> blocks, including nested content
+        const thinkRegex = /<think>([\s\S]*?)<\/think>/gi;
+        
+        processedContent = processedContent.replace(thinkRegex, (_match, thinkContent) => {
+            // Clean up the think content - remove extra whitespace and format
+            const cleanedContent = thinkContent
+                .trim()
+                .split('\n')
+                .map((line: string) => line.trim())
+                .filter((line: string) => line.length > 0)
+                .join('\n');
+            
+            // Create a markdown callout for the think block
+            const callout = `> [!brain] **AI Reasoning Process**
+> 
+> ${cleanedContent}
+> 
+> ---
+> *This shows the AI's internal reasoning before generating the response.*`;
+            
+            console.log('🧠 Converted think block to callout');
+            return callout;
+        });
+        
+        return processedContent;
+    }
+
+    private clearLoadingText(editor: Editor): void {
+        // Look for loading text in the document and remove it
+        const content = editor.getValue();
+        const loadingPattern = /🔍 Deep Research Loading\.*$/gm;
+        
+        if (loadingPattern.test(content)) {
+            // Find and remove loading text
+            const lines = content.split('\n');
+            const updatedLines = lines.filter(line => !line.includes('🔍 Deep Research Loading'));
+            
+            if (updatedLines.length !== lines.length) {
+                editor.setValue(updatedLines.join('\n'));
+                console.log('🧹 Cleared loading text from document');
+            }
+        }
+    }
+
+    private clearLoadingAnimation(): void {
+        // Clear the animation interval if it exists
+        if ((this as any).loadingInterval) {
+            console.log('🛑 Clearing loading animation interval');
+            clearInterval((this as any).loadingInterval);
+            (this as any).loadingInterval = null;
+        }
     }
 
     private addCitations(editor: Editor, sources: any[]): void {
         if (!sources || sources.length === 0) return;
 
-        console.log('📚 Processing sources:', JSON.stringify(sources, null, 2));
+        console.log(`📚 Processing ${sources.length} sources for citations`);
 
-        // Add a section for citations
-        let citationsText = '\n\n### Citations\n\n';
+        // Check if there's already a citations section
+        const content = editor.getValue();
+        const existingCitationsMatch = content.match(/### Citations\n\n([\s\S]*?)(?=\n\n\*\*\*|\n\n### |\n\n## |\n\n# |$)/);
+        
+        let existingCitations = '';
+        
+        if (existingCitationsMatch && existingCitationsMatch[1]) {
+            // Found existing citations section
+            existingCitations = existingCitationsMatch[1];
+            console.log('📚 Found existing citations section, will append to it');
+        }
+
+        // Generate new citations
+        let newCitationsText = '';
+        let citationNumber = 1;
+        
+        // If there are existing citations, find the next available number
+        if (existingCitations) {
+            // Check for both numbered citations [1]: and footnote citations [^abc123]:
+            const numberedCitations = existingCitations.match(/\[(\d+)\]:/g);
+            const footnoteCitations = existingCitations.match(/\[\^[a-zA-Z0-9]+\]:/g);
+            
+            if (numberedCitations && numberedCitations.length > 0) {
+                // Use numbered format and continue from highest number
+                const maxNumber = Math.max(...numberedCitations.map(n => {
+                    const match = n.match(/\d+/);
+                    return match ? parseInt(match[0]) : 0;
+                }));
+                citationNumber = maxNumber + 1;
+            } else if (footnoteCitations && footnoteCitations.length > 0) {
+                // Convert to numbered format starting from 1
+                citationNumber = 1;
+            } else {
+                // No existing citations found, start from 1
+                citationNumber = 1;
+            }
+        }
         
         sources.forEach((source, index) => {
-            console.log(`📖 Source ${index + 1}:`, source);
-            
             // Handle different formats:
             // 1. search_results format: {title, url, date, last_updated}
             // 2. citations format: just URL strings
@@ -137,18 +304,31 @@ export class PerplexityService {
                 url = '#';
             }
             
-            console.log(`📝 Extracted - Title: "${title}", URL: "${url}", Date: "${formattedDate}", Info: "${publicationInfo}"`);
-            
             // Format: [1]: 2024, Dec 13. [Title](URL). Published: date | Updated: date
-            citationsText += `[${index + 1}]: ${formattedDate ? formattedDate + '. ' : ''}[${title}](${url}).${publicationInfo ? ' ' + publicationInfo : ''}\n\n`;
+            newCitationsText += `[${citationNumber + index}]: ${formattedDate ? formattedDate + '. ' : ''}[${title}](${url}).${publicationInfo ? ' ' + publicationInfo : ''}\n\n`;
         });
 
-        console.log('📄 Final citations text:', citationsText);
-
-        // Insert citations at the end of the editor content
-        const endOfDoc = editor.lastLine();
-        const endPos = { line: endOfDoc, ch: editor.getLine(endOfDoc).length };
-        editor.replaceRange(citationsText, endPos);
+        if (existingCitationsMatch) {
+            // Append to existing citations section
+            const updatedCitations = existingCitations + newCitationsText;
+            const citationsStartIndex = content.indexOf('### Citations');
+            const citationsEndIndex = citationsStartIndex + '### Citations\n\n'.length + existingCitations.length;
+            
+            // Replace the existing citations section with the updated one
+            const beforeCitations = content.substring(0, citationsStartIndex + '### Citations\n\n'.length);
+            const afterCitations = content.substring(citationsEndIndex);
+            const updatedContent = beforeCitations + updatedCitations + afterCitations;
+            
+            editor.setValue(updatedContent);
+            console.log('✅ Citations appended to existing section');
+        } else {
+            // Create new citations section at the end
+            const citationsText = '\n\n### Citations\n\n' + newCitationsText;
+            const endOfDoc = editor.lastLine();
+            const endPos = { line: endOfDoc, ch: editor.getLine(endOfDoc).length };
+            editor.replaceRange(citationsText, endPos);
+            console.log('✅ New citations section created');
+        }
     }
 
     public async queryPerplexity(
@@ -158,11 +338,16 @@ export class PerplexityService {
         editor: Editor, 
         options?: PerplexityOptions
     ): Promise<void> {
+        console.log('🚀 PerplexityService.queryPerplexity called');
+        console.log('📊 Parameters:', { model, stream, options, queryLength: query.length });
+        
         const timestamp = new Date().toISOString();
         
-        // Force non-streaming for sonar-deep-research
+        // Check if using deep research model
         const isDeepResearch = model === 'sonar-deep-research';
-        const useStreaming = stream && !isDeepResearch;
+        const useStreaming = stream; // Allow streaming for all models including deep research
+        
+        console.log('🔍 Model analysis:', { isDeepResearch, useStreaming });
         
         // Insert query header based on headerPosition setting
         const cursor = editor.getCursor();
@@ -172,8 +357,8 @@ export class PerplexityService {
         const processedQuery = query.split('\n').map(line => `> ${line}`).join('\n');
         
         const headerText = isDeepResearch 
-            ? `\n\n***\n> [!info] **Perplexity Deep Research Query** (${timestamp})\n> **Question:**\n${processedQuery}\n> **Model:** ${model}\n> \n> 🔍 **Conducting exhaustive research across hundreds of sources...**\n> *This may take 30-60 seconds for comprehensive analysis.*\n> \n> ### **Deep Research Analysis**:\n\n`
-            : `\n\n***\n> [!info] **Perplexity Query** (${timestamp})\n> **Question:**\n${processedQuery}\n> **Model:** ${model}\n> \n> ### **Response from ${model}**:\n\n`;
+            ? `\n\n***\n> [!info] **Perplexity Deep Research Query** (${timestamp})\n> **Question:**\n${processedQuery}\n> **Model:** ${model}\n> \n> 🔍 **Conducting exhaustive research across hundreds of sources...**\n> *This may take 30-60 seconds for comprehensive analysis.*\n> \n>`
+            : `\n\n***\n> [!info] **Perplexity Query** (${timestamp})\n> **Question:**\n${processedQuery}\n> \n> **Model:** ${model}\n> \n>`;
         
         let responseCursor;
         
@@ -293,6 +478,7 @@ export class PerplexityService {
 
             try {
                 if (useStreaming) {
+                    console.log('🔄 Making streaming API request...');
                     // Use fetch for streaming responses with cache busting headers
                     const response = await fetch(this.settings.perplexityEndpoint, {
                         method: 'POST',
@@ -313,8 +499,10 @@ export class PerplexityService {
                         throw new Error('No response body');
                     }
 
+                    console.log('✅ Streaming response received, starting to handle...');
                     await this.handleStreamingResponse(response, editor, responseCursor, requestId, headerText);
                 } else {
+                    console.log('🔄 Making non-streaming API request...');
                     // Use Obsidian's request method for non-streaming with cache busting
                     const response = await request({
                         url: this.settings.perplexityEndpoint,
@@ -327,17 +515,21 @@ export class PerplexityService {
                         body: JSON.stringify(payload)
                     });
 
+                    console.log('✅ Non-streaming response received');
                     // Parse the response
                     const data = JSON.parse(response);
 
+                    console.log('📊 Response data structure:', Object.keys(data));
                     // Process the response
                     if (data.choices && data.choices.length > 0) {
                         let content = data.choices[0].message.content;
                         
+                        // Process think blocks first
+                        content = this.processThinkBlocks(content);
+                        
                         // Process images if available
-                        if (options?.return_images && data.images) {
+                        if (options?.return_images && data.images && data.images.length > 0) {
                             console.log('🖼️ Processing images in non-streaming response:', data.images.length, 'images found');
-                            console.log('📝 Content before image processing:', content.substring(0, 500) + '...');
                             content = this.processContentWithImages(content, data.images);
                         }
                         
@@ -371,6 +563,10 @@ export class PerplexityService {
                 console.error('Error making request to Perplexity API:', error);
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 new Notice(`Perplexity Error: ${errorMsg}`);
+                
+                // Clear loading text and animation before showing error
+                this.clearLoadingText(editor);
+                this.clearLoadingAnimation();
                 editor.replaceRange(`\n**Error:** ${errorMsg}\n\n***\n`, editor.getCursor());
             } finally {
                 // Close loading notice if it exists
@@ -382,6 +578,10 @@ export class PerplexityService {
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             new Notice(`Perplexity Error: ${errorMsg}`);
+            
+            // Clear loading text and animation before showing error
+            this.clearLoadingText(editor);
+            this.clearLoadingAnimation();
             editor.replaceRange(`\n**Error:** ${errorMsg}\n\n***\n`, editor.getCursor());
             
             // Close loading notice if it exists
@@ -398,6 +598,7 @@ export class PerplexityService {
         requestId?: number,
         headerText?: string
     ): Promise<void> {
+        console.log('🔄 handleStreamingResponse called');
         const reader = response.body?.getReader();
         if (!reader) throw new Error('No response body');
         
@@ -451,7 +652,14 @@ export class PerplexityService {
                             if (parsed.choices?.[0]?.delta?.content) {
                                 const content = parsed.choices[0].delta.content;
                                 if (content) {
-                                    console.log(`📝 Inserting content at position:`, currentPos, `Content:`, content.substring(0, 50) + '...');
+                                    // console.log('🎉 First content received! Clearing loading text...');
+                                    // Clear any loading text before inserting content
+                                    this.clearLoadingText(editor);
+                                    
+                                    // Clear the animation interval if it exists
+                                    this.clearLoadingAnimation();
+                                    
+                                    // console.log(`📝 Inserting content at position:`, currentPos, `Content:`, content.substring(0, 50) + '...');
                                     editor.replaceRange(content, currentPos);
                                     // Update cursor position after insertion
                                     const contentLines = content.split('\n');
@@ -482,14 +690,22 @@ export class PerplexityService {
                 await this.processStreamingMetadata(finalResponseData, editor, headerText);
             }
             
-            // Add final separator
-            const endPos = { ...currentPos };
+            // Add final separator at the very end of the document
+            const endOfDoc = editor.lastLine();
+            const endPos = { line: endOfDoc, ch: editor.getLine(endOfDoc).length };
             editor.replaceRange('\n\n***\n', endPos);
+            
+            // Clear any remaining loading animation
+            this.clearLoadingAnimation();
             
         } catch (error) {
             console.error('Error in streaming response:', error);
             const errorMsg = error instanceof Error ? error.message : 'Unknown error during streaming';
             new Notice(`Streaming error: ${errorMsg}`);
+            
+            // Clear loading text and animation before showing error
+            this.clearLoadingText(editor);
+            this.clearLoadingAnimation();
             editor.replaceRange(`\n**Streaming Error:** ${errorMsg}\n\n`, currentPos);
         }
     }
@@ -499,38 +715,98 @@ export class PerplexityService {
         editor: Editor,
         headerText?: string
     ): Promise<void> {
-        console.log('🔍 Perplexity Streaming Response Data:', JSON.stringify(finalResponseData, null, 2));
+        console.log('🔍 Processing streaming metadata');
+        console.log('📊 Response data keys:', Object.keys(finalResponseData || {}));
+        if (finalResponseData.images) {
+            console.log(`🖼️ Images array length: ${finalResponseData.images.length}`);
+        }
+        if (finalResponseData.search_results) {
+            console.log(`📚 Search results array length: ${finalResponseData.search_results.length}`);
+        }
+        
+        // Get current content for processing
+        let content = editor.getValue();
+        let contentUpdated = false;
+        
+        // Process think blocks first
+        const processedThinkContent = this.processThinkBlocks(content);
+        if (processedThinkContent !== content) {
+            content = processedThinkContent;
+            contentUpdated = true;
+            console.log('🧠 Think blocks processed in streaming response');
+        }
         
         // Process images with intelligent placement
         if (finalResponseData.images && finalResponseData.images.length > 0) {
             console.log('🖼️ Processing images in streaming response:', finalResponseData.images.length, 'images found');
-            const content = editor.getValue();
-            console.log('📝 Content before image processing:', content.substring(0, 500) + '...');
+            
+                    // Debug: Let's see what image references are in the content
+            const imageRegex = /\[IMAGE\s+(\d+):\s*(.*?)\]/gi;
+            const allMatches = content.match(imageRegex);
+            console.log('🔍 All image references found in content:', allMatches);
+            
+            // Also log a sample of the content to see the format
+            const sampleContent = content.substring(0, Math.min(500, content.length));
+            console.log('🔍 Sample content:', sampleContent);
+            
             const processedContent = this.processContentWithImages(content, finalResponseData.images);
             
             if (processedContent !== content) {
-                // Update the editor with the processed content
-                editor.setValue(processedContent);
+                content = processedContent;
+                contentUpdated = true;
                 console.log('🔄 Content updated with inline images (streaming)');
             } else {
-                // Fallback: add images at the end if no markers found
-                let imagesSection = '\n\n## Images\n\n';
-                finalResponseData.images.forEach((image: any, index: number) => {
-                    if (image.image_url) {
-                        imagesSection += `![Image ${index + 1}](${image.image_url})\n`;
-                        if (image.origin_url) {
-                            imagesSection += `*Source: ${image.origin_url}*\n\n`;
-                        } else {
-                            imagesSection += '\n';
-                        }
-                    }
-                });
+                console.log('⚠️ No image markers were replaced, falling back to Images section');
                 
-                // Append images section to the end of the document
-                const endOfDoc = editor.lastLine();
-                const endPos = { line: endOfDoc, ch: editor.getLine(endOfDoc).length };
-                editor.replaceRange(imagesSection, endPos);
+                // Try to find where the response content starts (after the query header)
+                const queryHeaderEnd = this.findQueryHeaderEnd(content);
+                if (queryHeaderEnd > 0) {
+                    console.log(`📍 Found query header end at position ${queryHeaderEnd}, inserting images inline`);
+                    
+                    // Insert images inline after the query header
+                    let imagesSection = '\n\n';
+                    finalResponseData.images.forEach((image: any, index: number) => {
+                        if (image.image_url) {
+                            imagesSection += `![Image ${index + 1}](${image.image_url})\n\n`;
+                        }
+                    });
+                    
+                    // Insert images after the query header
+                    const beforeHeader = content.substring(0, queryHeaderEnd);
+                    const afterHeader = content.substring(queryHeaderEnd);
+                    const newContent = beforeHeader + imagesSection + afterHeader;
+                    editor.setValue(newContent);
+                    contentUpdated = true;
+                    console.log('🔄 Images inserted inline after query header');
+                } else {
+                    // Fallback: add images at the end if no markers found
+                    let imagesSection = '\n\n## Images\n\n';
+                    finalResponseData.images.forEach((image: any, index: number) => {
+                        if (image.image_url) {
+                            imagesSection += `![Image ${index + 1}](${image.image_url})\n`;
+                            if (image.origin_url) {
+                                imagesSection += `*Source: ${image.origin_url}*\n\n`;
+                            } else {
+                                imagesSection += '\n';
+                            }
+                        }
+                    });
+                    
+                    // Append images section to the end of the document
+                    const endOfDoc = editor.lastLine();
+                    const endPos = { line: endOfDoc, ch: editor.getLine(endOfDoc).length };
+                    editor.replaceRange(imagesSection, endPos);
+                }
             }
+        } else {
+            console.log('🖼️ No images found in streaming response data');
+            console.log('💡 Note: Deep Research with streaming may not support images. Consider using non-streaming mode for image support.');
+        }
+        
+        // Update editor with processed content if any changes were made
+        if (contentUpdated) {
+            editor.setValue(content);
+            console.log('🔄 Editor updated with processed content (think blocks and/or images)');
         }
         
         // Process sources/citations if available

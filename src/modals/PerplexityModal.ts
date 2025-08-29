@@ -54,8 +54,11 @@ export class PerplexityModal extends Modal {
         this.modelSelect.onchange = () => {
             if (this.modelSelect.value === 'sonar-deep-research') {
                 modelDesc.textContent = this.promptsService.getDeepResearchDescription();
-                this.streamToggle.checked = false;
-                this.streamToggle.disabled = true;
+                // Enable streaming for deep research but keep it unchecked by default due to longer processing time
+                this.streamToggle.disabled = false;
+                if (!this.streamToggle.checked) {
+                    this.streamToggle.checked = false; // Keep unchecked by default for deep research
+                }
             } else {
                 modelDesc.textContent = '';
                 this.streamToggle.disabled = false;

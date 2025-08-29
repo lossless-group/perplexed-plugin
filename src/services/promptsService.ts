@@ -11,22 +11,22 @@ export interface PromptSettings {
     lmStudioSystemPromptPlaceholder: string;
     articleTermPlaceholder: string;
     
-    // Descriptions and labels
-    deepResearchDescription: string;
-    imagesToggleDescription: string;
-    imagesToggleGenericDescription: string;
-    articleTermDescription: string;
-    
-    // Notices and messages
-    deepResearchLoadingNotice: string;
-    enterQuestionNotice: string;
-    enterTermNotice: string;
+
     
     // Article generator template
     articleGeneratorTemplate: string;
     
+    // Deep Research article generator template
+    deepResearchArticleTemplate: string;
+    
     // Image prompts
     imageReferencesPrompt: string;
+    
+    // Text enhancement prompt
+    enhancePrompt: string;
+    
+    // Text enhancement with images prompt
+    enhanceWithImagesPrompt: string;
 }
 
 export class PromptsService {
@@ -72,37 +72,62 @@ export class PromptsService {
 
     // Descriptions and labels
     getDeepResearchDescription(): string {
-        return this.settings.deepResearchDescription;
+        return "⚡ Deep Research: Exhaustive research across hundreds of sources with expert-level analysis. Higher cost but comprehensive results. Supports streaming for real-time updates.";
     }
 
     getImagesToggleDescription(): string {
-        return this.settings.imagesToggleDescription;
+        return "Include image results from search - images will be integrated throughout the response where appropriate";
     }
 
     getImagesToggleGenericDescription(): string {
-        return this.settings.imagesToggleGenericDescription;
+        return "Include image references throughout the response where appropriate";
     }
 
     getArticleTermDescription(): string {
-        return this.settings.articleTermDescription;
+        return "Enter a vocabulary term to generate a comprehensive one-page article with images.";
     }
 
     // Notices and messages
     getDeepResearchLoadingNotice(): string {
-        return this.settings.deepResearchLoadingNotice;
+        return "🔍 Deep research in progress... This may take up to 60 seconds.";
     }
 
     getEnterQuestionNotice(): string {
-        return this.settings.enterQuestionNotice;
+        return "Please enter a question";
     }
 
     getEnterTermNotice(): string {
-        return this.settings.enterTermNotice;
+        return "Please enter a vocabulary term";
     }
 
     // Article generator template
     getArticleGeneratorTemplate(term: string): string {
         return this.settings.articleGeneratorTemplate.replace(/{TERM}/g, term);
+    }
+    
+    // Text enhancement template
+    getEnhanceTemplate(text: string): string {
+        return this.settings.enhancePrompt.replace(/{TEXT}/g, text);
+    }
+    
+    // Text enhancement with images template
+    getEnhanceWithImagesTemplate(text: string): string {
+        return this.settings.enhanceWithImagesPrompt.replace(/{TEXT}/g, text);
+    }
+    
+    // Get enhance prompt
+    getEnhancePrompt(): string {
+        return this.settings.enhancePrompt;
+    }
+    
+    // Get enhance with images prompt
+    getEnhanceWithImagesPrompt(): string {
+        return this.settings.enhanceWithImagesPrompt;
+    }
+
+    // Deep Research article generator template
+    getDeepResearchArticleTemplate(term: string): string {
+        return this.settings.deepResearchArticleTemplate.replace(/{TERM}/g, term);
     }
 
     // Image prompts

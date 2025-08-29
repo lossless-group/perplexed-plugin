@@ -1,0 +1,106 @@
+.text-enhancement-modal {
+    max-width: 800px;
+    width: 90vw;
+}
+
+.text-enhancement-modal .setting-item {
+    margin-bottom: 20px;
+}
+
+.text-enhancement-modal .setting-item label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: var(--text-normal);
+}
+
+.text-enhancement-modal .text-input {
+    width: 40%;
+    min-height: 100px;
+    font-family: var(--font-monospace);
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.text-enhancement-modal .dropdown {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+}
+
+.text-enhancement-modal button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+
+.text-enhancement-modal button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.text-enhancement-modal button.mod-cta {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.text-enhancement-modal button.mod-cta:hover:not(:disabled) {
+    background-color: var(--interactive-accent-hover);
+}
+
+.text-enhancement-modal button.mod-warning {
+    background-color: var(--text-error);
+    color: var(--text-on-accent);
+}
+
+.text-enhancement-modal button.mod-warning:hover:not(:disabled) {
+    background-color: var(--text-error-hover);
+}
+
+.text-enhancement-modal input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.text-enhancement-modal .setting-item-description {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* Original text area styling */
+.text-enhancement-modal .text-input[readonly] {
+    background-color: var(--background-secondary);
+    color: var(--text-muted);
+    border: 1px solid var(--background-modifier-border);
+}
+
+/* Enhanced text area styling */
+.text-enhancement-modal .text-input:not([readonly]) {
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .text-enhancement-modal {
+        width: 95vw;
+        max-width: none;
+    }
+    
+    .text-enhancement-modal button {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+    
+    .text-enhancement-modal .setting-item {
+        margin-bottom: 15px;
+    }
+}

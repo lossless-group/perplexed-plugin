@@ -32,4 +32,12 @@
 
 .article-generator-modal .hidden-input {
     display: none;
+}
+
+/* Style for streaming toggle description in article generator */
+.article-generator-modal .setting-item-description {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 5px;
+    font-style: italic;
 } 

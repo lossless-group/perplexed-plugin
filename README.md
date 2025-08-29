@@ -144,6 +144,39 @@ Perplexity responses include:
 - **Images**: Relevant images (if enabled)
 - **Related Questions**: Additional questions for exploration (if enabled)
 
+### Text Enhancement
+
+Enhance selected text using Perplexity AI to improve clarity, add details, and make content more comprehensive.
+
+#### Quick Start
+
+1. **Select Text**: Highlight the text you want to enhance in your note
+2. **Open Command Palette**: `Ctrl/Cmd + Shift + P`
+3. **Run Command**: Type "Enhance Selected Text with Perplexity" and select it
+4. **Configure Options**:
+   - **Model**: Choose from available Perplexity models
+   - **Citations**: Enable/disable source citations
+   - **Images**: Include image results
+   - **Streaming**: Enable real-time response streaming
+
+#### Enhancement Options
+
+- **Replace Original**: Replace the selected text with the enhanced version
+- **Insert Below**: Insert the enhanced text below the current cursor position
+- **Preview**: Review the enhanced text before applying changes
+
+#### Example Usage
+
+**Original Text**:
+```
+AI is changing how we work.
+```
+
+**Enhanced Text**:
+```
+Artificial Intelligence (AI) is fundamentally transforming how we work across various industries and sectors. From automating routine tasks to enabling more sophisticated decision-making processes, AI technologies are reshaping traditional workflows and creating new opportunities for productivity and innovation.
+```
+
 ## Using Perplexica
 
 ### Quick Start
@@ -225,6 +258,7 @@ System Prompt: "You are a technical expert who explains complex concepts clearly
 | Command | Description | Usage |
 |---------|-------------|-------|
 | `Ask Perplexity` | Query Perplexity AI with full configuration | Editor command with modal interface |
+| `Enhance Selected Text with Perplexity` | Enhance selected text using Perplexity AI | Editor command with modal interface |
 | `Update Perplexity URL` | Change Perplexity API endpoint | Settings command |
 | `Show Perplexity Settings` | Display current Perplexity configuration | Debug command |
 
@@ -290,18 +324,12 @@ perplexed-plugin/
 pnpm install
    ```
 
-3. **Set up Environment Variables**:
-   ```bash
-   # Create .env file
-   echo "PERPLEXITY_API_KEY=your_api_key_here" > .env
-   ```
-
-4. **Build the Plugin**:
+3. **Build the Plugin**:
    ```bash
 pnpm build
    ```
 
-5. **Development Mode**:
+4. **Development Mode**:
    ```bash
 pnpm dev
 ```
