@@ -632,21 +632,14 @@ export class PerplexityService {
                             
                             const parsed = JSON.parse(data);
                             
-                            // Store the final response data for processing citations and images
-                            // Always update finalResponseData to ensure we have the latest metadata
+                            // Capture the latest metadata across chunks. Perplexity typically
+                            // sends citations/search_results in earlier chunks; the final chunk
+                            // often carries only finish_reason. Merge so nothing is lost.
                             if (parsed.citations || parsed.images || parsed.search_results) {
-                                finalResponseData = parsed;
-                            }
-                            
-                            // Also clear any stale data if this chunk doesn't have metadata
-                            // This prevents using old metadata from previous requests
-                            if (parsed.choices?.[0]?.finish_reason === 'stop' && !parsed.citations && !parsed.images && !parsed.search_results) {
-                                // This is the final chunk but has no metadata, ensure we don't use stale data
-                                if (finalResponseData && !finalResponseData.choices?.[0]?.finish_reason) {
-                                    // Only clear if the stored data doesn't have finish_reason (meaning it's incomplete)
-                                    console.log('🧹 Clearing potentially stale finalResponseData');
-                                    finalResponseData = null;
-                                }
+                                finalResponseData = {
+                                    ...(finalResponseData || {}),
+                                    ...parsed,
+                                };
                             }
                             
                             if (parsed.choices?.[0]?.delta?.content) {
