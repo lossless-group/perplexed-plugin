@@ -1,106 +1,180 @@
+/* ============================================================
+   Text Enhancement Modal — selection rewrite/expand composer
+   Built on the unified wide-modal pattern (see
+   context-v/issues/Widen-Modals-in-Obsidian-using-CSS.md).
+   ============================================================ */
+
 .text-enhancement-modal {
-    max-width: 800px;
     width: 90vw;
+    max-width: 720px;
 }
 
-.text-enhancement-modal .setting-item {
-    margin-bottom: 20px;
+.text-enhancement-modal .modal-content {
+    padding: 0;
 }
 
-.text-enhancement-modal .setting-item label {
-    display: block;
-    margin-bottom: 5px;
+/* ----- Header ----- */
+
+.text-enhancement-modal__header {
+    padding: 24px 28px 16px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.text-enhancement-modal__title {
+    margin: 0 0 6px;
+    font-size: 1.5em;
     font-weight: 600;
     color: var(--text-normal);
+    letter-spacing: -0.01em;
 }
 
-.text-enhancement-modal .text-input {
-    width: 40%;
-    min-height: 100px;
-    font-family: var(--font-monospace);
+.text-enhancement-modal__subtitle {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
+/* ----- Sections ----- */
+
+.text-enhancement-modal__section {
+    padding: 18px 28px 4px;
+}
+
+.text-enhancement-modal__section + .text-enhancement-modal__section {
+    border-top: 1px solid var(--background-modifier-border-hover);
+    margin-top: 4px;
+}
+
+/* ----- Inline hint paragraph ----- */
+
+.text-enhancement-modal__hint {
+    margin: -4px 0 8px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
+/* ----- Labels + textareas ----- */
+
+.text-enhancement-modal__label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.text-enhancement-modal__textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 12px 14px;
+    font-family: var(--font-text);
     font-size: 14px;
     line-height: 1.5;
+    color: var(--text-normal);
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
     resize: vertical;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
 }
 
-.text-enhancement-modal .dropdown {
-    width: 100%;
-    padding: 8px;
+.text-enhancement-modal__textarea:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 3px var(--interactive-accent-hover);
+}
+
+.text-enhancement-modal__textarea::placeholder {
+    color: var(--text-faint);
+}
+
+/* Read-only "Selected Text" display — visually distinct from editable input */
+.text-enhancement-modal__textarea--readonly {
+    background-color: var(--background-secondary);
+    color: var(--text-muted);
+    cursor: default;
+}
+
+.text-enhancement-modal__textarea--readonly:focus {
+    border-color: var(--background-modifier-border);
+    box-shadow: none;
+}
+
+/* ----- Footer / actions ----- */
+
+.text-enhancement-modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 28px 24px;
+    margin-top: 12px;
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+    border-bottom-left-radius: var(--modal-radius, 8px);
+    border-bottom-right-radius: var(--modal-radius, 8px);
+}
+
+.text-enhancement-modal__button {
+    padding: 8px 18px;
+    font-size: 14px;
+    font-weight: 500;
     border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
+    border-radius: 6px;
     background-color: var(--background-primary);
     color: var(--text-normal);
-}
-
-.text-enhancement-modal button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
     cursor: pointer;
-    font-weight: 500;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
 }
 
-.text-enhancement-modal button:disabled {
+.text-enhancement-modal__button:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.text-enhancement-modal__button:active {
+    transform: translateY(1px);
+}
+
+.text-enhancement-modal__button.mod-cta {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
+}
+
+.text-enhancement-modal__button.mod-cta:hover {
+    background-color: var(--interactive-accent-hover);
+    border-color: var(--interactive-accent-hover);
+}
+
+.text-enhancement-modal__button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
-.text-enhancement-modal button.mod-cta {
-    background-color: var(--interactive-accent);
-    color: var(--text-on-accent);
-}
+/* ----- Responsive ----- */
 
-.text-enhancement-modal button.mod-cta:hover:not(:disabled) {
-    background-color: var(--interactive-accent-hover);
-}
-
-.text-enhancement-modal button.mod-warning {
-    background-color: var(--text-error);
-    color: var(--text-on-accent);
-}
-
-.text-enhancement-modal button.mod-warning:hover:not(:disabled) {
-    background-color: var(--text-error-hover);
-}
-
-.text-enhancement-modal input[type="checkbox"] {
-    margin-right: 8px;
-}
-
-.text-enhancement-modal .setting-item-description {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-top: 4px;
-}
-
-/* Original text area styling */
-.text-enhancement-modal .text-input[readonly] {
-    background-color: var(--background-secondary);
-    color: var(--text-muted);
-    border: 1px solid var(--background-modifier-border);
-}
-
-/* Enhanced text area styling */
-.text-enhancement-modal .text-input:not([readonly]) {
-    background-color: var(--background-primary);
-    color: var(--text-normal);
-    border: 1px solid var(--background-modifier-border);
-}
-
-/* Responsive design */
-@media (max-width: 768px) {
+@media (max-width: 600px) {
     .text-enhancement-modal {
         width: 95vw;
         max-width: none;
     }
-    
-    .text-enhancement-modal button {
-        width: 100%;
-        margin-bottom: 8px;
+
+    .text-enhancement-modal__header,
+    .text-enhancement-modal__section,
+    .text-enhancement-modal__footer {
+        padding-left: 18px;
+        padding-right: 18px;
     }
-    
-    .text-enhancement-modal .setting-item {
-        margin-bottom: 15px;
+
+    .text-enhancement-modal__footer {
+        flex-direction: column-reverse;
+    }
+
+    .text-enhancement-modal__button {
+        width: 100%;
     }
 }

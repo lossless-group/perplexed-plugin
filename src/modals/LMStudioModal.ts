@@ -1,162 +1,217 @@
 import type { App, Editor } from 'obsidian';
-import { Modal, Notice } from 'obsidian';
+import { Modal, Notice, Setting } from 'obsidian';
 import type { LMStudioService, LMStudioOptions } from '../services/lmStudioService';
 import type { PromptsService } from '../services/promptsService';
+
+const LMSTUDIO_MODELS: Array<{ value: string; label: string; tagline: string }> = [
+    { value: 'ibm/granite-3.2-8b',                label: 'IBM Granite 3.2 8B',          tagline: 'IBM Granite — strong on code and structured reasoning.' },
+    { value: 'microsoft/phi-4-reasoning-plus',    label: 'Phi-4 Reasoning Plus',        tagline: 'Microsoft Phi-4 — small, fast model tuned for chain-of-thought reasoning.' },
+    { value: 'google/gemma-3-12b',                label: 'Gemma 3 12B',                 tagline: 'Google Gemma 3 — solid all-rounder open model.' },
+    { value: 'meta-llama/llama-3.2-3b-instruct',  label: 'Llama 3.2 3B Instruct',       tagline: 'Meta Llama 3.2 — small instruction-tuned model, fastest of the bundled choices.' },
+    { value: 'custom-model',                      label: 'custom-model',                tagline: 'Generic placeholder — LM Studio will route this to whichever model is currently loaded.' },
+];
+
+const DEFAULT_MODEL = 'ibm/granite-3.2-8b';
+const DEFAULT_MAX_TOKENS = 2048;
+const DEFAULT_TEMPERATURE = 0.7;
 
 export class LMStudioModal extends Modal {
     private editor: Editor;
     private lmStudioService: LMStudioService;
     private promptsService: PromptsService;
-    private queryInput!: HTMLTextAreaElement;
-    private modelSelect!: HTMLSelectElement;
-    private streamToggle!: HTMLInputElement;
-    private maxTokensInput!: HTMLInputElement;
-    private temperatureInput!: HTMLInputElement;
-    private systemPromptInput!: HTMLTextAreaElement;
-    private imagesToggle!: HTMLInputElement;
 
-    constructor(app: App, editor: Editor, lmStudioService: LMStudioService, promptsService: PromptsService) {
+    private query = '';
+    private model: string = DEFAULT_MODEL;
+    private systemPrompt = '';
+    private maxTokens: number = DEFAULT_MAX_TOKENS;
+    private temperature: number = DEFAULT_TEMPERATURE;
+    private images = false;
+    private stream = true;
+
+    private modelDescEl: HTMLElement | null = null;
+
+    constructor(
+        app: App,
+        editor: Editor,
+        lmStudioService: LMStudioService,
+        promptsService: PromptsService
+    ) {
         super(app);
         this.editor = editor;
         this.lmStudioService = lmStudioService;
         this.promptsService = promptsService;
     }
-    
-    onOpen() {
-        const {contentEl} = this;
-        contentEl.addClass('lmstudio-modal');
-        contentEl.createEl('h2', {text: 'Ask LM Studio'});
-        
-        const form = contentEl.createEl('form');
-        
-        // Query input
-        const queryDiv = form.createDiv({cls: 'setting-item'});
-        queryDiv.createEl('label', {text: 'Your Question'});
-        this.queryInput = queryDiv.createEl('textarea', {
-            cls: 'text-input',
+
+    onOpen(): void {
+        const { contentEl, modalEl } = this;
+        modalEl.addClass('lmstudio-modal');
+        contentEl.empty();
+
+        // ----- Header -----
+        const header = contentEl.createDiv({ cls: 'lmstudio-modal__header' });
+        header.createEl('h2', { text: 'Ask LM Studio', cls: 'lmstudio-modal__title' });
+        header.createEl('p', {
+            cls: 'lmstudio-modal__subtitle',
+            text: 'Run queries against your local LM Studio server. Streams into the active note at the cursor.',
+        });
+
+        // ----- Question -----
+        const querySection = contentEl.createDiv({ cls: 'lmstudio-modal__section' });
+        querySection.createEl('label', {
+            text: 'Question',
+            cls: 'lmstudio-modal__label',
+            attr: { for: 'lmstudio-modal-query' },
+        });
+        const queryTextarea = querySection.createEl('textarea', {
+            cls: 'lmstudio-modal__textarea',
             attr: {
-                rows: '4',
-                placeholder: this.promptsService.getLMStudioQueryPlaceholder()
-            }
-        });
-
-        // Model selection
-        const modelDiv = form.createDiv({cls: 'setting-item'});
-        modelDiv.createEl('label', {text: 'Model'});
-        this.modelSelect = modelDiv.createEl('select', {cls: 'dropdown'});
-        // Use common LM Studio models - these would be dynamically loaded ideally
-        ['ibm/granite-3.2-8b', 'microsoft/phi-4-reasoning-plus', 'google/gemma-3-12b', 'meta-llama/llama-3.2-3b-instruct', 'custom-model'].forEach(model => {
-            const option = this.modelSelect.createEl('option', {value: model, text: model});
-            if (model === 'ibm/granite-3.2-8b') option.selected = true;
-        });
-
-        // System prompt
-        const systemDiv = form.createDiv({cls: 'setting-item'});
-        systemDiv.createEl('label', {text: 'System Prompt (Optional)'});
-        this.systemPromptInput = systemDiv.createEl('textarea', {
-            cls: 'text-input system-prompt-input',
-            attr: {
-                rows: '2',
-                placeholder: this.promptsService.getLMStudioSystemPromptPlaceholder()
-            }
-        });
-
-        // Max tokens
-        const maxTokensDiv = form.createDiv({cls: 'setting-item'});
-        maxTokensDiv.createEl('label', {text: 'Max Tokens'});
-        this.maxTokensInput = maxTokensDiv.createEl('input', {
-            type: 'number',
-            value: '2048',
-            cls: 'text-input'
-        });
-
-        // Temperature
-        const tempDiv = form.createDiv({cls: 'setting-item'});
-        tempDiv.createEl('label', {text: 'Temperature (0.0 - 2.0)'});
-        this.temperatureInput = tempDiv.createEl('input', {
-            type: 'number',
-            value: '0.7',
-            attr: {
-                step: '0.1',
-                min: '0',
-                max: '2'
+                id: 'lmstudio-modal-query',
+                rows: '6',
+                placeholder: this.promptsService.getLMStudioQueryPlaceholder(),
             },
-            cls: 'text-input'
+        });
+        queryTextarea.value = this.query;
+        queryTextarea.addEventListener('input', () => {
+            this.query = queryTextarea.value;
+        });
+        queryTextarea.addEventListener('keydown', (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                void this.onSubmit();
+            }
         });
 
-        // Images toggle
-        const imagesDiv = form.createDiv({cls: 'setting-item'});
-        const imagesLabel = imagesDiv.createEl('label');
-        this.imagesToggle = imagesLabel.createEl('input', {type: 'checkbox'});
-        this.imagesToggle.checked = false;
-        imagesLabel.createSpan({text: ' Include Images'});
-        
-        // Add description for images toggle
-        const imagesDesc = imagesDiv.createDiv({cls: 'setting-item-description images-description'});
-        imagesDesc.textContent = this.promptsService.getImagesToggleGenericDescription();
+        // ----- Model -----
+        const modelSection = contentEl.createDiv({ cls: 'lmstudio-modal__section' });
+        modelSection.createEl('h3', { text: 'Model', cls: 'lmstudio-modal__section-title' });
 
-        // Stream toggle
-        const streamDiv = form.createDiv({cls: 'setting-item'});
-        const streamLabel = streamDiv.createEl('label');
-        this.streamToggle = streamLabel.createEl('input', {type: 'checkbox'});
-        this.streamToggle.checked = true;
-        streamLabel.createSpan({text: ' Stream response'});
-        
-        const buttonDiv = contentEl.createDiv({cls: 'setting-item'});
-        const askButton = buttonDiv.createEl('button', {
+        const modelSetting = new Setting(modelSection)
+            .setName('Model')
+            .setDesc(this.modelTagline(this.model))
+            .addDropdown(dd => {
+                LMSTUDIO_MODELS.forEach(({ value, label }) => dd.addOption(value, label));
+                dd.setValue(this.model);
+                dd.onChange((value) => {
+                    this.model = value;
+                    if (this.modelDescEl) this.modelDescEl.textContent = this.modelTagline(value);
+                });
+            });
+        this.modelDescEl = modelSetting.descEl;
+
+        new Setting(modelSection)
+            .setName('Max Tokens')
+            .setDesc('Upper bound on response length. Local models cap lower than cloud — 2048 is a safe default.')
+            .addText(t => t
+                .setValue(String(this.maxTokens))
+                .onChange(v => {
+                    const parsed = parseInt(v, 10);
+                    this.maxTokens = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_TOKENS;
+                }));
+
+        new Setting(modelSection)
+            .setName('Temperature')
+            .setDesc('Higher = more creative / varied. 0.7 is the conventional default. Slide to 0 for deterministic output.')
+            .addSlider(s => s
+                .setLimits(0, 2, 0.1)
+                .setValue(this.temperature)
+                .setDynamicTooltip()
+                .onChange(v => { this.temperature = v; }));
+
+        // ----- System Prompt (multi-line, doesn't fit a Setting row) -----
+        const systemSection = contentEl.createDiv({ cls: 'lmstudio-modal__section' });
+        systemSection.createEl('h3', { text: 'System Prompt (Optional)', cls: 'lmstudio-modal__section-title' });
+        systemSection.createEl('p', {
+            cls: 'lmstudio-modal__hint',
+            text: 'Override the default system prompt for this request. Leave blank to use the plugin default.',
+        });
+        const systemTextarea = systemSection.createEl('textarea', {
+            cls: 'lmstudio-modal__textarea lmstudio-modal__textarea--system',
+            attr: {
+                rows: '3',
+                placeholder: this.promptsService.getLMStudioSystemPromptPlaceholder(),
+            },
+        });
+        systemTextarea.value = this.systemPrompt;
+        systemTextarea.addEventListener('input', () => {
+            this.systemPrompt = systemTextarea.value;
+        });
+
+        // ----- Returns -----
+        const returnsSection = contentEl.createDiv({ cls: 'lmstudio-modal__section' });
+        returnsSection.createEl('h3', { text: 'Include in response', cls: 'lmstudio-modal__section-title' });
+
+        new Setting(returnsSection)
+            .setName('Images')
+            .setDesc(this.promptsService.getImagesToggleGenericDescription())
+            .addToggle(t => t
+                .setValue(this.images)
+                .onChange(v => { this.images = v; }));
+
+        // ----- Behavior -----
+        const behaviorSection = contentEl.createDiv({ cls: 'lmstudio-modal__section' });
+        behaviorSection.createEl('h3', { text: 'Behavior', cls: 'lmstudio-modal__section-title' });
+
+        new Setting(behaviorSection)
+            .setName('Stream Response')
+            .setDesc('Write tokens into the note as they arrive — recommended for long answers and slow local models.')
+            .addToggle(t => t
+                .setValue(this.stream)
+                .onChange(v => { this.stream = v; }));
+
+        // ----- Footer -----
+        const footer = contentEl.createDiv({ cls: 'lmstudio-modal__footer' });
+        const cancelBtn = footer.createEl('button', {
+            text: 'Cancel',
+            cls: 'lmstudio-modal__button',
+        });
+        cancelBtn.addEventListener('click', () => this.close());
+
+        const askBtn = footer.createEl('button', {
             text: 'Ask LM Studio',
-            cls: 'mod-cta'
+            cls: 'lmstudio-modal__button mod-cta',
         });
-        
-        form.onsubmit = (e) => {
-            e.preventDefault();
-            void this.onSubmit();
-        };
-        
-        askButton.onclick = () => this.onSubmit();
-        
-        // Focus on the query input
-        setTimeout(() => this.queryInput.focus(), 100);
+        askBtn.addEventListener('click', () => void this.onSubmit());
+
+        setTimeout(() => queryTextarea.focus(), 50);
     }
-    
-    async onSubmit() {
-        const query = this.queryInput.value.trim();
-        if (!query) {
+
+    private modelTagline(value: string): string {
+        return LMSTUDIO_MODELS.find(m => m.value === value)?.tagline ?? '';
+    }
+
+    private async onSubmit(): Promise<void> {
+        const trimmed = this.query.trim();
+        if (!trimmed) {
             new Notice(this.promptsService.getEnterQuestionNotice());
             return;
         }
 
-        // If images are enabled, add image markers to the query
-        let processedQuery = query;
-        if (this.imagesToggle.checked) {
-            processedQuery = `${query}
-
-${this.promptsService.getImageReferencesPrompt()}`;
+        let processedQuery = trimmed;
+        if (this.images) {
+            processedQuery = `${trimmed}\n\n${this.promptsService.getImageReferencesPrompt()}`;
         }
 
         const options: LMStudioOptions = {
-            max_tokens: parseInt(this.maxTokensInput.value) || 2048,
-            temperature: parseFloat(this.temperatureInput.value) || 0.7,
-            return_images: this.imagesToggle.checked
+            max_tokens: this.maxTokens,
+            temperature: this.temperature,
+            return_images: this.images,
         };
-        
-        const systemPrompt = this.systemPromptInput.value.trim();
-        if (systemPrompt) {
-            options.system_prompt = systemPrompt;
+        const trimmedSystemPrompt = this.systemPrompt.trim();
+        if (trimmedSystemPrompt) {
+            options.system_prompt = trimmedSystemPrompt;
         }
 
         this.close();
         await this.lmStudioService.queryLMStudio(
-            processedQuery, 
-            this.modelSelect.value, 
-            this.streamToggle.checked, 
-            this.editor, 
+            processedQuery,
+            this.model,
+            this.stream,
+            this.editor,
             options
         );
     }
-    
-    onClose() {
-        const {contentEl} = this;
-        contentEl.empty();
+
+    onClose(): void {
+        this.contentEl.empty();
     }
-} 
+}

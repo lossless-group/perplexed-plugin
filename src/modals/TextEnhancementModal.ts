@@ -8,120 +8,141 @@ export class TextEnhancementModal extends Modal {
     protected perplexityService: PerplexityService;
     protected promptsService: PromptsService;
     protected selectedText: string;
-    protected promptTextArea!: HTMLTextAreaElement;
-    protected enhanceButton!: HTMLButtonElement;
 
-    constructor(app: App, editor: Editor, perplexityService: PerplexityService, promptsService: PromptsService, selectedText: string) {
+    private prompt: string;
+    private enhanceBtn!: HTMLButtonElement;
+
+    constructor(
+        app: App,
+        editor: Editor,
+        perplexityService: PerplexityService,
+        promptsService: PromptsService,
+        selectedText: string
+    ) {
         super(app);
         this.editor = editor;
         this.perplexityService = perplexityService;
         this.promptsService = promptsService;
         this.selectedText = selectedText;
+        this.prompt = this.promptsService.getEnhanceTemplate(this.selectedText);
     }
-    
-    onOpen() {
-        const {contentEl} = this;
-        contentEl.addClass('text-enhancement-modal');
-        contentEl.createEl('h2', {text: 'Enhance Text with Perplexity'});
-        
-        const form = contentEl.createEl('form');
-        
-        // Original text display
-        const originalTextDiv = form.createDiv({cls: 'setting-item'});
-        originalTextDiv.createEl('label', {text: 'Selected Text'});
-        const originalTextArea = originalTextDiv.createEl('textarea', {
-            cls: 'text-input',
+
+    onOpen(): void {
+        const { contentEl, modalEl } = this;
+        modalEl.addClass('text-enhancement-modal');
+        contentEl.empty();
+
+        // ----- Header -----
+        const header = contentEl.createDiv({ cls: 'text-enhancement-modal__header' });
+        header.createEl('h2', { text: 'Enhance Text with Perplexity', cls: 'text-enhancement-modal__title' });
+        header.createEl('p', {
+            cls: 'text-enhancement-modal__subtitle',
+            text: 'Rewrite or expand selected text via Perplexity (sonar-pro). Streams into the active note at the cursor with Citations.',
+        });
+
+        // ----- Selected Text (read-only) -----
+        const selectedSection = contentEl.createDiv({ cls: 'text-enhancement-modal__section' });
+        selectedSection.createEl('label', {
+            text: 'Selected Text',
+            cls: 'text-enhancement-modal__label',
+        });
+        const selectedTextarea = selectedSection.createEl('textarea', {
+            cls: 'text-enhancement-modal__textarea text-enhancement-modal__textarea--readonly',
             attr: {
+                rows: '6',
+                readonly: 'readonly',
+            },
+        });
+        selectedTextarea.value = this.selectedText;
+
+        // ----- Enhancement Prompt (editable) -----
+        const promptSection = contentEl.createDiv({ cls: 'text-enhancement-modal__section' });
+        promptSection.createEl('label', {
+            text: 'Enhancement Prompt',
+            cls: 'text-enhancement-modal__label',
+            attr: { for: 'text-enhancement-modal-prompt' },
+        });
+        promptSection.createEl('p', {
+            cls: 'text-enhancement-modal__hint',
+            text: 'Pre-filled from the plugin template — edit to refine the rewrite instructions before submitting.',
+        });
+        const promptTextarea = promptSection.createEl('textarea', {
+            cls: 'text-enhancement-modal__textarea',
+            attr: {
+                id: 'text-enhancement-modal-prompt',
                 rows: '8',
-                readonly: 'readonly'
+                placeholder: 'Enter your enhancement prompt…',
+            },
+        });
+        promptTextarea.value = this.prompt;
+        promptTextarea.addEventListener('input', () => {
+            this.prompt = promptTextarea.value;
+        });
+        promptTextarea.addEventListener('keydown', (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                void this.onSubmit();
             }
         });
-        originalTextArea.value = this.selectedText;
-        originalTextArea.style.backgroundColor = 'var(--background-secondary)';
-        originalTextArea.style.color = 'var(--text-muted)';
 
-        // Editable prompt
-        const promptDiv = form.createDiv({cls: 'setting-item'});
-        promptDiv.createEl('label', {text: 'Enhancement Prompt'});
-        this.promptTextArea = promptDiv.createEl('textarea', {
-            cls: 'text-input',
-            attr: {
-                rows: '8',
-                placeholder: 'Enter your enhancement prompt...'
-            }
-        });
-        // Pre-populate with the enhancement prompt template
-        const enhancementPrompt = this.promptsService.getEnhanceTemplate(this.selectedText);
-        this.promptTextArea.value = enhancementPrompt;
-
-        // Buttons container
-        const buttonsDiv = form.createDiv({cls: 'setting-item'});
-        buttonsDiv.style.display = 'flex';
-        buttonsDiv.style.gap = '10px';
-        buttonsDiv.style.flexWrap = 'wrap';
-        
-        // Enhance button
-        this.enhanceButton = buttonsDiv.createEl('button', {
-            text: 'Enhance Text',
-            cls: 'mod-cta'
-        });
-        this.enhanceButton.onclick = async (e) => {
-            e.preventDefault();
-            await this.enhanceText();
-        };
-        
-        // Close button
-        const closeButton = buttonsDiv.createEl('button', {
+        // ----- Footer -----
+        const footer = contentEl.createDiv({ cls: 'text-enhancement-modal__footer' });
+        const cancelBtn = footer.createEl('button', {
             text: 'Cancel',
-            cls: 'mod-cta'
+            cls: 'text-enhancement-modal__button',
         });
-        closeButton.onclick = (e) => {
-            e.preventDefault();
-            this.close();
-        };
+        cancelBtn.addEventListener('click', () => this.close());
+
+        this.enhanceBtn = footer.createEl('button', {
+            text: 'Enhance Text',
+            cls: 'text-enhancement-modal__button mod-cta',
+        });
+        this.enhanceBtn.addEventListener('click', () => void this.onSubmit());
+
+        setTimeout(() => promptTextarea.focus(), 50);
     }
 
-    private async enhanceText(): Promise<void> {
+    private async onSubmit(): Promise<void> {
+        const trimmed = this.prompt.trim();
+        if (!trimmed) {
+            new Notice('Please enter an enhancement prompt.');
+            return;
+        }
+
         try {
-            this.enhanceButton.disabled = true;
-            this.enhanceButton.textContent = 'Enhancing...';
-            
-            // Use the editable prompt from the textarea
-            const enhancementPrompt = this.promptTextArea.value;
-            
-            // Close the modal immediately so user can see the streaming content
+            this.enhanceBtn.disabled = true;
+            this.enhanceBtn.textContent = 'Enhancing…';
+
             this.close();
-            
-            // Insert a new line before the enhanced text to make it clear what's new
-            const currentPosition = this.editor.getCursor();
-            this.editor.replaceRange('\n\n', currentPosition);
-            
-            // Call Perplexity service directly with the real editor, always streaming
+
+            const cursor = this.editor.getCursor();
+            this.editor.replaceRange('\n\n', cursor);
+
             await this.perplexityService.queryPerplexity(
-                enhancementPrompt,
-                'sonar-pro', // Use default model
-                true, // Always stream
+                trimmed,
+                'sonar-pro',
+                true,
                 this.editor,
                 {
                     return_citations: true,
                     return_images: false,
-                    return_related_questions: false
+                    return_related_questions: false,
                 }
             );
-            
-            new Notice('Text enhancement completed!');
-            
+
+            new Notice('Text enhancement completed.');
         } catch (error) {
             console.error('Error enhancing text:', error);
             new Notice('Failed to enhance text. Check console for details.');
         } finally {
-            this.enhanceButton.disabled = false;
-            this.enhanceButton.textContent = 'Enhance Text';
+            if (this.enhanceBtn) {
+                this.enhanceBtn.disabled = false;
+                this.enhanceBtn.textContent = 'Enhance Text';
+            }
         }
     }
 
-    onClose() {
-        const {contentEl} = this;
-        contentEl.empty();
+    onClose(): void {
+        this.contentEl.empty();
     }
 }

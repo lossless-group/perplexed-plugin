@@ -1,12 +1,193 @@
-/* LMStudioModal Styles */
+/* ============================================================
+   LM Studio Modal — local LLM query composer
+   Built on Obsidian's native Setting components for theming
+   parity, with custom textareas for the question + system prompt.
+   ============================================================ */
 
-.lmstudio-modal .text-input {
-    width: 100%;
-    margin: 8px 0;
-    padding: 12px;
+.lmstudio-modal {
+    width: 90vw;
+    max-width: 640px;
 }
 
-.lmstudio-modal .system-prompt-input {
+.lmstudio-modal .modal-content {
+    padding: 0;
+}
+
+/* ----- Header ----- */
+
+.lmstudio-modal__header {
+    padding: 24px 28px 16px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.lmstudio-modal__title {
+    margin: 0 0 6px;
+    font-size: 1.5em;
+    font-weight: 600;
+    color: var(--text-normal);
+    letter-spacing: -0.01em;
+}
+
+.lmstudio-modal__subtitle {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
+/* ----- Sections ----- */
+
+.lmstudio-modal__section {
+    padding: 18px 28px 4px;
+}
+
+.lmstudio-modal__section + .lmstudio-modal__section {
+    border-top: 1px solid var(--background-modifier-border-hover);
+    margin-top: 4px;
+}
+
+.lmstudio-modal__section-title {
+    margin: 0 0 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.lmstudio-modal__section .setting-item {
+    padding: 10px 0;
+    border-top: none;
+}
+
+.lmstudio-modal__section .setting-item + .setting-item {
+    border-top: 1px solid var(--background-modifier-border-hover);
+}
+
+/* ----- Inline hint paragraph ----- */
+
+.lmstudio-modal__hint {
+    margin: -4px 0 8px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
+/* ----- Question label + textareas ----- */
+
+.lmstudio-modal__label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.lmstudio-modal__textarea {
     width: 100%;
-    min-height: 60px;
-} 
+    min-height: 120px;
+    padding: 12px 14px;
+    font-family: var(--font-text);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-normal);
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    resize: vertical;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+}
+
+.lmstudio-modal__textarea:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 3px var(--interactive-accent-hover);
+}
+
+.lmstudio-modal__textarea::placeholder {
+    color: var(--text-faint);
+}
+
+/* System-prompt textarea is shorter than the main question textarea */
+.lmstudio-modal__textarea--system {
+    min-height: 72px;
+    font-family: var(--font-monospace);
+    font-size: 13px;
+}
+
+/* ----- Footer / actions ----- */
+
+.lmstudio-modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 28px 24px;
+    margin-top: 12px;
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+    border-bottom-left-radius: var(--modal-radius, 8px);
+    border-bottom-right-radius: var(--modal-radius, 8px);
+}
+
+.lmstudio-modal__button {
+    padding: 8px 18px;
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+}
+
+.lmstudio-modal__button:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.lmstudio-modal__button:active {
+    transform: translateY(1px);
+}
+
+.lmstudio-modal__button.mod-cta {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
+}
+
+.lmstudio-modal__button.mod-cta:hover {
+    background-color: var(--interactive-accent-hover);
+    border-color: var(--interactive-accent-hover);
+}
+
+.lmstudio-modal__button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ----- Responsive ----- */
+
+@media (max-width: 600px) {
+    .lmstudio-modal {
+        width: 95vw;
+        max-width: none;
+    }
+
+    .lmstudio-modal__header,
+    .lmstudio-modal__section,
+    .lmstudio-modal__footer {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .lmstudio-modal__footer {
+        flex-direction: column-reverse;
+    }
+
+    .lmstudio-modal__button {
+        width: 100%;
+    }
+}

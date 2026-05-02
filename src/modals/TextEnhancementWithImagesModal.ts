@@ -8,120 +8,144 @@ export class TextEnhancementWithImagesModal extends Modal {
     protected perplexityService: PerplexityService;
     protected promptsService: PromptsService;
     protected selectedText: string;
-    protected promptTextArea!: HTMLTextAreaElement;
-    protected enhanceButton!: HTMLButtonElement;
 
-    constructor(app: App, editor: Editor, perplexityService: PerplexityService, promptsService: PromptsService, selectedText: string) {
+    private prompt: string;
+    private fetchBtn!: HTMLButtonElement;
+
+    constructor(
+        app: App,
+        editor: Editor,
+        perplexityService: PerplexityService,
+        promptsService: PromptsService,
+        selectedText: string
+    ) {
         super(app);
         this.editor = editor;
         this.perplexityService = perplexityService;
         this.promptsService = promptsService;
         this.selectedText = selectedText;
+        this.prompt = this.promptsService.getEnhanceWithImagesTemplate(this.selectedText);
     }
-    
-    onOpen() {
-        const {contentEl} = this;
-        contentEl.addClass('get-related-images-modal');
-        contentEl.createEl('h2', {text: 'Get Related Images'});
-        
-        const form = contentEl.createEl('form');
-        
-        // Original text display
-        const originalTextDiv = form.createDiv({cls: 'setting-item'});
-        originalTextDiv.createEl('label', {text: 'Selected Text'});
-        const originalTextArea = originalTextDiv.createEl('textarea', {
-            cls: 'text-input',
-            attr: {
-                rows: '8',
-                readonly: 'readonly'
-            }
-        });
-        originalTextArea.value = this.selectedText;
-        originalTextArea.style.backgroundColor = 'var(--background-secondary)';
-        originalTextArea.style.color = 'var(--text-muted)';
 
-        // Editable prompt
-        const promptDiv = form.createDiv({cls: 'setting-item'});
-        promptDiv.createEl('label', {text: 'Image Request Prompt'});
-        this.promptTextArea = promptDiv.createEl('textarea', {
-            cls: 'text-input',
-            attr: {
-                rows: '8',
-                placeholder: 'Enter your image request prompt...'
-            }
-        });
-        // Pre-populate with the image request prompt template
-        const imageRequestPrompt = this.promptsService.getEnhanceWithImagesTemplate(this.selectedText);
-        this.promptTextArea.value = imageRequestPrompt;
+    onOpen(): void {
+        const { contentEl, modalEl } = this;
+        modalEl.addClass('text-enhancement-with-images-modal');
+        contentEl.empty();
 
-        // Buttons container
-        const buttonsDiv = form.createDiv({cls: 'setting-item'});
-        buttonsDiv.style.display = 'flex';
-        buttonsDiv.style.gap = '10px';
-        buttonsDiv.style.flexWrap = 'wrap';
-        
-        // Enhance button
-        this.enhanceButton = buttonsDiv.createEl('button', {
+        // ----- Header -----
+        const header = contentEl.createDiv({ cls: 'text-enhancement-with-images-modal__header' });
+        header.createEl('h2', {
             text: 'Get Related Images',
-            cls: 'mod-cta'
+            cls: 'text-enhancement-with-images-modal__title',
         });
-        this.enhanceButton.onclick = async (e) => {
-            e.preventDefault();
-            await this.enhanceTextWithImages();
-        };
-        
-        // Close button
-        const closeButton = buttonsDiv.createEl('button', {
+        header.createEl('p', {
+            cls: 'text-enhancement-with-images-modal__subtitle',
+            text: 'Find images related to selected text via Perplexity (sonar-pro). Streams image markers into the active note at the cursor.',
+        });
+
+        // ----- Selected Text (read-only) -----
+        const selectedSection = contentEl.createDiv({ cls: 'text-enhancement-with-images-modal__section' });
+        selectedSection.createEl('label', {
+            text: 'Selected Text',
+            cls: 'text-enhancement-with-images-modal__label',
+        });
+        const selectedTextarea = selectedSection.createEl('textarea', {
+            cls: 'text-enhancement-with-images-modal__textarea text-enhancement-with-images-modal__textarea--readonly',
+            attr: {
+                rows: '6',
+                readonly: 'readonly',
+            },
+        });
+        selectedTextarea.value = this.selectedText;
+
+        // ----- Image Request Prompt (editable) -----
+        const promptSection = contentEl.createDiv({ cls: 'text-enhancement-with-images-modal__section' });
+        promptSection.createEl('label', {
+            text: 'Image Request Prompt',
+            cls: 'text-enhancement-with-images-modal__label',
+            attr: { for: 'text-enhancement-with-images-modal-prompt' },
+        });
+        promptSection.createEl('p', {
+            cls: 'text-enhancement-with-images-modal__hint',
+            text: 'Pre-filled from the plugin template — edit to refine which kinds of images to surface.',
+        });
+        const promptTextarea = promptSection.createEl('textarea', {
+            cls: 'text-enhancement-with-images-modal__textarea',
+            attr: {
+                id: 'text-enhancement-with-images-modal-prompt',
+                rows: '8',
+                placeholder: 'Enter your image request prompt…',
+            },
+        });
+        promptTextarea.value = this.prompt;
+        promptTextarea.addEventListener('input', () => {
+            this.prompt = promptTextarea.value;
+        });
+        promptTextarea.addEventListener('keydown', (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                void this.onSubmit();
+            }
+        });
+
+        // ----- Footer -----
+        const footer = contentEl.createDiv({ cls: 'text-enhancement-with-images-modal__footer' });
+        const cancelBtn = footer.createEl('button', {
             text: 'Cancel',
-            cls: 'mod-cta'
+            cls: 'text-enhancement-with-images-modal__button',
         });
-        closeButton.onclick = (e) => {
-            e.preventDefault();
-            this.close();
-        };
+        cancelBtn.addEventListener('click', () => this.close());
+
+        this.fetchBtn = footer.createEl('button', {
+            text: 'Get Related Images',
+            cls: 'text-enhancement-with-images-modal__button mod-cta',
+        });
+        this.fetchBtn.addEventListener('click', () => void this.onSubmit());
+
+        setTimeout(() => promptTextarea.focus(), 50);
     }
 
-    private async enhanceTextWithImages(): Promise<void> {
+    private async onSubmit(): Promise<void> {
+        const trimmed = this.prompt.trim();
+        if (!trimmed) {
+            new Notice('Please enter an image request prompt.');
+            return;
+        }
+
         try {
-            this.enhanceButton.disabled = true;
-            this.enhanceButton.textContent = 'Getting Related Images...';
-            
-            // Use the editable prompt from the textarea
-            const imagePrompt = this.promptTextArea.value;
-            
-            // Close the modal immediately so user can see the streaming content
+            this.fetchBtn.disabled = true;
+            this.fetchBtn.textContent = 'Getting Related Images…';
+
             this.close();
-            
-            // Insert a new line before the images to make it clear what's new
-            const currentPosition = this.editor.getCursor();
-            this.editor.replaceRange('\n\n', currentPosition);
-            
-            // Call Perplexity service directly with the real editor, always streaming and with images enabled
+
+            const cursor = this.editor.getCursor();
+            this.editor.replaceRange('\n\n', cursor);
+
             await this.perplexityService.queryPerplexity(
-                imagePrompt,
-                'sonar-pro', // Use default model
-                true, // Always stream
+                trimmed,
+                'sonar-pro',
+                true,
                 this.editor,
                 {
-                    return_citations: false, // No citations needed for image-only response
-                    return_images: true, // Enable images for this enhancement
-                    return_related_questions: false
+                    return_citations: false,
+                    return_images: true,
+                    return_related_questions: false,
                 }
             );
-            
-            new Notice('Related images added successfully!');
-            
+
+            new Notice('Related images added successfully.');
         } catch (error) {
             console.error('Error getting related images:', error);
             new Notice('Failed to get related images. Check console for details.');
         } finally {
-            this.enhanceButton.disabled = false;
-            this.enhanceButton.textContent = 'Get Related Images';
+            if (this.fetchBtn) {
+                this.fetchBtn.disabled = false;
+                this.fetchBtn.textContent = 'Get Related Images';
+            }
         }
     }
 
-    onClose() {
-        const {contentEl} = this;
-        contentEl.empty();
+    onClose(): void {
+        this.contentEl.empty();
     }
 }
