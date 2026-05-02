@@ -630,19 +630,39 @@ export class PerplexityService {
         if (!reader) throw new Error('No response body');
         
         console.log(`🔄 Starting streaming response handler [${requestId || 'unknown'}]`);
-        
+
+        // Hoist decoder out of the loop so the {stream: true} flag carries
+        // partial multi-byte UTF-8 state across chunk boundaries.
+        const decoder = new TextDecoder();
         let buffer = '';
         const currentPos = { ...responseCursor };
         let finalResponseData: PerplexityStreamChunk | null = null;
+
+        // Race each read against an idle timer — if no chunk arrives within
+        // STREAM_IDLE_TIMEOUT_MS, throw so the catch surfaces a visible
+        // "Streaming Error" instead of leaving reader.read() blocked forever
+        // on a dropped/idle SSE socket.
+        const STREAM_IDLE_TIMEOUT_MS = 90_000;
+        const readWithIdleTimeout = (): Promise<ReadableStreamReadResult<Uint8Array>> => {
+            let timer: number | undefined;
+            const timeout = new Promise<never>((_, reject) => {
+                timer = window.setTimeout(() => {
+                    reject(new Error(`stream went idle for ${STREAM_IDLE_TIMEOUT_MS / 1000}s (likely API stall, rate limit, or socket close)`));
+                }, STREAM_IDLE_TIMEOUT_MS);
+            });
+            return Promise.race([reader.read(), timeout]).finally(() => {
+                if (timer !== undefined) window.clearTimeout(timer);
+            });
+        };
 
         console.log(`📍 Initial currentPos:`, currentPos);
 
         try {
             while (true) {
-                const { done, value } = await reader.read();
+                const { done, value } = await readWithIdleTimeout();
                 if (done) break;
 
-                const chunk = new TextDecoder().decode(value, { stream: true });
+                const chunk = decoder.decode(value, { stream: true });
                 buffer += chunk;
 
                 const lines = buffer.split('\n');
