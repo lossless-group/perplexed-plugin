@@ -21,5 +21,10 @@ main.js
 # obsidian
 data.json
 
+# Logs (Obsidian dev console exports often contain plaintext API keys
+# from the loaded data.json — never commit these)
+.logs/
+*.log
+
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store

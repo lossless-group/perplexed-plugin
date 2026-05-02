@@ -1,151 +1,254 @@
-import { App, Editor, Notice } from 'obsidian';
-import { PerplexityService, PerplexityOptions } from '../services/perplexityService';
-import { PerplexityModal } from './PerplexityModal';
-import { PromptsService } from '../services/promptsService';
+import { App, Modal, Notice, Setting } from 'obsidian';
+import type { Editor } from 'obsidian';
+import type { PerplexityService, PerplexityOptions } from '../services/perplexityService';
+import type { PromptsService } from '../services/promptsService';
 
-export class ArticleGeneratorModal extends PerplexityModal {
-    private termInput!: HTMLInputElement;
+const PERPLEXITY_MODELS: Array<{ value: string; label: string; tagline?: string }> = [
+    { value: 'sonar-deep-research', label: 'sonar-deep-research', tagline: 'Recommended — exhaustive multi-source article research; takes 30–60 seconds' },
+    { value: 'sonar-pro', label: 'sonar-pro', tagline: 'Faster, less detail' },
+    { value: 'sonar-small', label: 'sonar-small', tagline: 'Cheapest, briefest' },
+    { value: 'llama-3.1-sonar-small-128k-online', label: 'llama-3.1-sonar-small-128k-online', tagline: 'Llama 3.1 small, 128k context, online' },
+    { value: 'llama-3.1-sonar-large-128k-online', label: 'llama-3.1-sonar-large-128k-online', tagline: 'Llama 3.1 large, 128k context, online' },
+];
 
-    constructor(app: App, editor: Editor, perplexityService: PerplexityService, promptsService: PromptsService) {
-        super(app, editor, perplexityService, promptsService);
-    }
-    
-    onOpen() {
-        const {contentEl} = this;
-        contentEl.addClass('article-generator-modal');
-        contentEl.createEl('h2', {text: 'Generate One-Page Article'});
-        
-        const form = contentEl.createEl('form');
-        
-        // Term input
-        const termDiv = form.createDiv({cls: 'setting-item'});
-        termDiv.createEl('label', {text: 'Vocabulary Term'});
-        this.termInput = termDiv.createEl('input', {
-            cls: 'text-input',
-            attr: {
-                placeholder: this.promptsService.getArticleTermPlaceholder()
-            }
-        });
-        
-        // Set default value to the current file name (without extension)
+const DEFAULT_MODEL = 'sonar-deep-research';
+
+const RECENCY_OPTIONS: Array<{ value: string; label: string }> = [
+    { value: '', label: 'No filter — search all content' },
+    { value: 'day', label: 'Past day' },
+    { value: 'week', label: 'Past week' },
+    { value: 'month', label: 'Past month' },
+    { value: 'year', label: 'Past year' },
+    { value: '2years', label: 'Past 2+ years (falls back to "year")' },
+    { value: '3years', label: 'Past 3+ years (falls back to "year")' },
+    { value: '5years', label: 'Past 5+ years (falls back to "year")' },
+];
+
+export class ArticleGeneratorModal extends Modal {
+    private editor: Editor;
+    private perplexityService: PerplexityService;
+    private promptsService: PromptsService;
+
+    private term = '';
+    private model: string = DEFAULT_MODEL;
+    private recencyFilter = '';
+    private citations = true;
+    private images = true;
+    private relatedQuestions = false;
+    private stream = true;
+
+    // Live-updated DOM bits
+    private modelDescEl: HTMLElement | null = null;
+    private compatibilityWarningEl: HTMLElement | null = null;
+    private loadingInterval: number | null = null;
+
+    constructor(
+        app: App,
+        editor: Editor,
+        perplexityService: PerplexityService,
+        promptsService: PromptsService
+    ) {
+        super(app);
+        this.editor = editor;
+        this.perplexityService = perplexityService;
+        this.promptsService = promptsService;
+
+        // Default the term to the active file's basename (preserves prior UX)
         const currentFile = this.app.workspace.getActiveFile();
         if (currentFile) {
-            const fileName = currentFile.basename; // This gets the filename without extension
-            this.termInput.value = fileName;
+            this.term = currentFile.basename;
         }
-        
-        // Add description for term input below the input
-        const termDesc = termDiv.createDiv({cls: 'setting-item-description term-description'});
-        termDesc.textContent = this.promptsService.getArticleTermDescription();
-        
-        // Call parent onOpen to add the rest of the form elements
-        super.onOpen();
-        
-        // Override the query input to be hidden since we'll generate it from the term
-        if (this.queryInput) {
-            this.queryInput.addClass('hidden-input');
-            const queryLabel = this.queryInput.previousElementSibling as HTMLElement;
-            if (queryLabel) {
-                queryLabel.addClass('hidden-input');
-            }
-        }
-        
-        // Set default model to sonar-deep-research for article generation
-        if (this.modelSelect) {
-            this.modelSelect.value = 'sonar-deep-research';
-            // Trigger the onchange event to update the description
-            this.modelSelect.dispatchEvent(new Event('change'));
-        }
-        
-        // Ensure streaming is enabled for article generation
-        if (this.streamToggle) {
-            this.streamToggle.checked = true;
-            // Add a description to explain why streaming is recommended for articles
-            const streamDiv = this.streamToggle.closest('.setting-item');
-            if (streamDiv) {
-                const streamDesc = streamDiv.createDiv({cls: 'setting-item-description'});
-                streamDesc.textContent = 'Streaming is recommended for article generation to see content as it\'s being created. Note: Deep Research with streaming may not support images.';
-            }
-        }
-        
-        // Add warning if images and Deep Research are enabled together
-        if (this.imagesToggle && this.modelSelect) {
-            const checkCompatibility = () => {
-                if (this.imagesToggle.checked && this.modelSelect.value === 'sonar-deep-research') {
-                    // Show a notice about the limitation
-                    const imagesDiv = this.imagesToggle.closest('.setting-item');
-                    if (imagesDiv) {
-                        // Remove any existing warning
-                        const existingWarning = imagesDiv.querySelector('.compatibility-warning');
-                        if (existingWarning) {
-                            existingWarning.remove();
-                        }
-                        
-                        // Add new warning
-                        const warning = imagesDiv.createDiv({cls: 'setting-item-description compatibility-warning'});
-                        warning.style.color = '#ff6b6b';
-                        warning.style.fontWeight = 'bold';
-                        warning.textContent = '⚠️ Warning: Images are very unstable in Deep Research mode. Consider using a different model for reliable image support.';
-                    }
-                } else {
-                    // Remove warning if conditions are not met
-                    const imagesDiv = this.imagesToggle.closest('.setting-item');
-                    if (imagesDiv) {
-                        const existingWarning = imagesDiv.querySelector('.compatibility-warning');
-                        if (existingWarning) {
-                            existingWarning.remove();
-                        }
-                    }
-                }
-            };
-            
-            // Check on initial load
-            checkCompatibility();
-            
-            // Add event listeners to check when settings change
-            this.imagesToggle.addEventListener('change', checkCompatibility);
-            this.modelSelect.addEventListener('change', checkCompatibility);
-        }
-        
-        // Update the submit button text
-        const submitButton = contentEl.querySelector('button.mod-cta') as HTMLButtonElement;
-        if (submitButton) {
-            submitButton.textContent = 'Generate Article';
-        }
-        
-        // Focus on the term input instead of query input
-        setTimeout(() => this.termInput.focus(), 100);
     }
-    
+
+    onOpen(): void {
+        const { contentEl, modalEl } = this;
+        modalEl.addClass('article-generator-modal');
+        contentEl.empty();
+
+        // ----- Header -----
+        const header = contentEl.createDiv({ cls: 'article-generator-modal__header' });
+        header.createEl('h2', { text: 'Generate One-Page Article', cls: 'article-generator-modal__title' });
+        header.createEl('p', {
+            cls: 'article-generator-modal__subtitle',
+            text: 'Generates a structured article from a single vocabulary term. Streams into the active note.',
+        });
+
+        // ----- Term -----
+        const termSection = contentEl.createDiv({ cls: 'article-generator-modal__section' });
+        termSection.createEl('label', {
+            text: 'Vocabulary Term',
+            cls: 'article-generator-modal__label',
+            attr: { for: 'article-generator-modal-term' },
+        });
+        const termInput = termSection.createEl('input', {
+            cls: 'article-generator-modal__input',
+            attr: {
+                id: 'article-generator-modal-term',
+                type: 'text',
+                placeholder: this.promptsService.getArticleTermPlaceholder(),
+            },
+        });
+        termInput.value = this.term;
+        termInput.addEventListener('input', () => {
+            this.term = termInput.value;
+        });
+        termInput.addEventListener('keydown', (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                void this.onSubmit();
+            }
+        });
+        termSection.createEl('p', {
+            cls: 'article-generator-modal__hint',
+            text: this.promptsService.getArticleTermDescription(),
+        });
+
+        // ----- Model -----
+        const modelSection = contentEl.createDiv({ cls: 'article-generator-modal__section' });
+        modelSection.createEl('h3', { text: 'Model', cls: 'article-generator-modal__section-title' });
+
+        new Setting(modelSection)
+            .setName('Model')
+            .setDesc(this.modelTagline(this.model))
+            .addDropdown(dd => {
+                PERPLEXITY_MODELS.forEach(({ value, label }) => dd.addOption(value, label));
+                dd.setValue(this.model);
+                dd.onChange((value) => {
+                    this.model = value;
+                    this.applyModelChange(value);
+                    this.updateCompatibilityWarning();
+                });
+            });
+        this.modelDescEl = modelSection.querySelector('.setting-item-description');
+        // Apply initial deep-research description if default is sonar-deep-research
+        this.applyModelChange(this.model);
+
+        new Setting(modelSection)
+            .setName('Recency Filter')
+            .setDesc('Restrict search to recent content. Multi-year options fall back to "year" (the API ceiling).')
+            .addDropdown(dd => {
+                RECENCY_OPTIONS.forEach(({ value, label }) => dd.addOption(value, label));
+                dd.setValue(this.recencyFilter);
+                dd.onChange((value) => {
+                    this.recencyFilter = value;
+                });
+            });
+
+        // ----- Returns -----
+        const returnsSection = contentEl.createDiv({ cls: 'article-generator-modal__section' });
+        returnsSection.createEl('h3', { text: 'Include in response', cls: 'article-generator-modal__section-title' });
+
+        new Setting(returnsSection)
+            .setName('Citations')
+            .setDesc('Append a Citations section with source links — recommended for research articles.')
+            .addToggle(t => t
+                .setValue(this.citations)
+                .onChange(v => { this.citations = v; }));
+
+        const imagesSetting = new Setting(returnsSection)
+            .setName('Images')
+            .setDesc(this.promptsService.getImagesToggleDescription())
+            .addToggle(t => t
+                .setValue(this.images)
+                .onChange(v => {
+                    this.images = v;
+                    this.updateCompatibilityWarning();
+                }));
+        // Slot for the live compatibility warning under the Images row
+        this.compatibilityWarningEl = imagesSetting.settingEl.createDiv({
+            cls: 'article-generator-modal__warning',
+        });
+        this.updateCompatibilityWarning();
+
+        new Setting(returnsSection)
+            .setName('Related Questions')
+            .setDesc('Surface follow-up questions Perplexity suggests at the end of the response.')
+            .addToggle(t => t
+                .setValue(this.relatedQuestions)
+                .onChange(v => { this.relatedQuestions = v; }));
+
+        // ----- Behavior -----
+        const behaviorSection = contentEl.createDiv({ cls: 'article-generator-modal__section' });
+        behaviorSection.createEl('h3', { text: 'Behavior', cls: 'article-generator-modal__section-title' });
+
+        new Setting(behaviorSection)
+            .setName('Stream Response')
+            .setDesc('Recommended for articles — see content as it generates. Note: Deep Research with streaming may not support images.')
+            .addToggle(t => t
+                .setValue(this.stream)
+                .onChange(v => { this.stream = v; }));
+
+        // ----- Footer -----
+        const footer = contentEl.createDiv({ cls: 'article-generator-modal__footer' });
+        const cancelBtn = footer.createEl('button', {
+            text: 'Cancel',
+            cls: 'article-generator-modal__button',
+        });
+        cancelBtn.addEventListener('click', () => this.close());
+
+        const generateBtn = footer.createEl('button', {
+            text: 'Generate Article',
+            cls: 'article-generator-modal__button mod-cta',
+        });
+        generateBtn.addEventListener('click', () => void this.onSubmit());
+
+        setTimeout(() => termInput.focus(), 50);
+    }
+
+    private modelTagline(value: string): string {
+        const found = PERPLEXITY_MODELS.find(m => m.value === value);
+        return found?.tagline ?? '';
+    }
+
+    private applyModelChange(value: string): void {
+        if (!this.modelDescEl) return;
+        if (value === 'sonar-deep-research') {
+            const baseTagline = this.modelTagline(value);
+            const deepDesc = this.promptsService.getDeepResearchDescription();
+            this.modelDescEl.textContent = deepDesc
+                ? `${baseTagline} — ${deepDesc}`
+                : baseTagline;
+        } else {
+            this.modelDescEl.textContent = this.modelTagline(value);
+        }
+    }
+
+    /**
+     * Show a warning when both Images and sonar-deep-research are on — they don't
+     * combine reliably (preserves the prior modal's compatibility check).
+     */
+    private updateCompatibilityWarning(): void {
+        if (!this.compatibilityWarningEl) return;
+        const incompatible = this.images && this.model === 'sonar-deep-research';
+        if (incompatible) {
+            this.compatibilityWarningEl.textContent =
+                '⚠ Images are unstable in Deep Research mode. Consider a different model for reliable image support.';
+            this.compatibilityWarningEl.addClass('is-active');
+        } else {
+            this.compatibilityWarningEl.textContent = '';
+            this.compatibilityWarningEl.removeClass('is-active');
+        }
+    }
+
+    /**
+     * Insert an animated "🔍 Deep Research Loading..." line at the cursor and
+     * keep it ticking until PerplexityService clears it. Preserves the prior UX.
+     */
     private async showDeepResearchLoading(): Promise<void> {
-        console.log('🎬 Initializing Deep Research loading animation...');
-        const loadingText = "🔍 Deep Research Loading...";
+        const loadingText = '🔍 Deep Research Loading...';
         const cursor = this.editor.getCursor();
-        
-        console.log('📍 Inserting loading text at cursor position:', cursor);
-        // Insert loading text at cursor position
         this.editor.replaceRange(loadingText, cursor);
-        
-        // Animate the loading text with dots
+
         let dots = 0;
         const maxDots = 3;
-        let animationCount = 0;
-        
-        console.log('🔄 Starting loading animation interval...');
-        const animationInterval = setInterval(() => {
-            animationCount++;
+        this.loadingInterval = window.setInterval(() => {
             dots = (dots + 1) % (maxDots + 1);
-            const animatedText = "🔍 Deep Research Loading" + ".".repeat(dots);
-            
-            console.log(`🎬 Animation frame ${animationCount}: ${animatedText}`);
-            
-            // Update the loading text
+            const animatedText = '🔍 Deep Research Loading' + '.'.repeat(dots);
             const currentPos = this.editor.getCursor();
             const loadingLine = currentPos.line;
             const lineContent = this.editor.getLine(loadingLine);
-            
-            if (lineContent.includes("🔍 Deep Research Loading")) {
-                const startCh = lineContent.indexOf("🔍 Deep Research Loading");
+            if (lineContent.includes('🔍 Deep Research Loading')) {
+                const startCh = lineContent.indexOf('🔍 Deep Research Loading');
                 const endCh = lineContent.length;
                 this.editor.replaceRange(
                     animatedText,
@@ -153,86 +256,65 @@ export class ArticleGeneratorModal extends PerplexityModal {
                     { line: loadingLine, ch: endCh }
                 );
             }
-        }, 500); // Update every 500ms
-        
-        // Store the interval ID so we can clear it when streaming starts
-        (this as any).loadingInterval = animationInterval;
-        
-        console.log('⏳ Setting up loading promise...');
-        // Return a promise that resolves when streaming starts
+        }, 500);
+
+        // Resolve quickly so the API request can start; PerplexityService clears
+        // the text + interval when the first content chunk arrives.
         return new Promise((resolve) => {
-            console.log('✅ Loading promise setup complete, resolving immediately');
-            // Store the resolve function so we can call it when streaming starts
-            (this as any).loadingResolve = resolve;
-            
-            // For now, resolve immediately to avoid blocking the request
-            // We'll let the PerplexityService handle clearing the loading text
-            setTimeout(() => {
-                console.log('🚀 Resolving loading promise to continue with API request');
-                resolve();
-            }, 100); // Small delay to show the loading text briefly
+            setTimeout(() => resolve(), 100);
         });
     }
-    
-    async onSubmit() {
-        const term = this.termInput.value.trim();
-        if (!term) {
+
+    async onSubmit(): Promise<void> {
+        const trimmedTerm = this.term.trim();
+        if (!trimmedTerm) {
             new Notice(this.promptsService.getEnterTermNotice());
             return;
         }
 
-        // Generate the query using the appropriate prompt template based on the selected model
-        const isDeepResearch = this.modelSelect.value === 'sonar-deep-research';
-        let query = isDeepResearch 
-            ? this.promptsService.getDeepResearchArticleTemplate(term)
-            : this.promptsService.getArticleGeneratorTemplate(term);
+        const isDeepResearch = this.model === 'sonar-deep-research';
+        let query = isDeepResearch
+            ? this.promptsService.getDeepResearchArticleTemplate(trimmedTerm)
+            : this.promptsService.getArticleGeneratorTemplate(trimmedTerm);
 
-        // If images are enabled, add the configurable image references prompt
-        if (this.imagesToggle.checked) {
+        if (this.images) {
             query = `${query}\n\n${this.promptsService.getImageReferencesPrompt()}`;
         }
 
         const options: PerplexityOptions = {
-            return_citations: this.citationsToggle.checked,
-            return_images: this.imagesToggle.checked,
-            return_related_questions: this.relatedQuestionsToggle.checked,
-            search_recency_filter: this.recencyFilterSelect.value
+            return_citations: this.citations,
+            return_images: this.images,
+            return_related_questions: this.relatedQuestions,
+            search_recency_filter: this.recencyFilter,
         };
 
         this.close();
-        
-        // Show loading animation for Deep Research
-        if (this.modelSelect.value === 'sonar-deep-research') {
-            console.log('🚀 Starting Deep Research loading animation...');
+
+        if (isDeepResearch) {
             await this.showDeepResearchLoading();
-            console.log('✅ Deep Research loading animation completed');
         }
-        
-        console.log('🚀 Making Perplexity API request...');
-        console.log('📊 Request details:', {
-            model: this.modelSelect.value,
-            stream: this.streamToggle.checked,
-            options: options,
-            queryLength: query.length
-        });
-        
+
         try {
             await this.perplexityService.queryPerplexity(
-                query, 
-                this.modelSelect.value, 
-                this.streamToggle.checked, 
-                this.editor, 
+                query,
+                this.model,
+                this.stream,
+                this.editor,
                 options
             );
-            
-            console.log('✅ Perplexity API request completed');
         } finally {
-            // Clear the loading animation interval if it exists
-            if ((this as any).loadingInterval) {
-                console.log('🛑 Clearing loading animation interval from modal');
-                clearInterval((this as any).loadingInterval);
-                (this as any).loadingInterval = null;
+            if (this.loadingInterval !== null) {
+                window.clearInterval(this.loadingInterval);
+                this.loadingInterval = null;
             }
         }
     }
-} 
+
+    onClose(): void {
+        if (this.loadingInterval !== null) {
+            window.clearInterval(this.loadingInterval);
+            this.loadingInterval = null;
+        }
+        this.contentEl.empty();
+    }
+}

@@ -78,7 +78,15 @@ export class ClaudeService {
 
         const tools: Anthropic.Messages.ToolUnion[] = [];
         if (options?.enableWebSearch !== false) {
-            tools.push({ type: 'web_search_20260209', name: 'web_search' });
+            // Use web_search_20250305 (older tool, no dynamic filtering) instead of
+            // web_search_20260209. The newer tool's dynamic-filtering pass post-processes
+            // search results in a code-execution sandbox, and per-claim
+            // web_search_result_location citations don't survive that round-trip — text
+            // blocks come back with citations: null. The 20250305 tool reliably attaches
+            // per-claim citations to text blocks, which is what gives us inline [N] markers
+            // in the rendered prose. Trade-off: more tokens consumed (no result filtering),
+            // but traceable per-claim citations are the whole point of this plugin.
+            tools.push({ type: 'web_search_20250305', name: 'web_search' });
         }
 
         const requestParams: Anthropic.Messages.MessageStreamParams = {

@@ -116,7 +116,7 @@ export class ClaudeModal extends Modal {
 
         new Setting(togglesSection)
             .setName('Enable Web Search')
-            .setDesc('Server-side web_search_20260209 tool. Returns citations automatically.')
+            .setDesc('Server-side web_search_20250305 tool. Returns per-claim citations attached to text blocks.')
             .addToggle(t => t
                 .setValue(this.webSearch)
                 .onChange(v => { this.webSearch = v; }));
