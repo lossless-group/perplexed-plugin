@@ -1,8 +1,12 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
+import type { TFile } from 'obsidian';
 
 declare module 'obsidian' {
+  interface CommandsApi {
+    commands: Record<string, unknown>;
+  }
+
   interface App {
-    commands: any;
+    commands: CommandsApi;
   }
   
   interface Editor {

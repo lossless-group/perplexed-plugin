@@ -1,5 +1,5 @@
-import { App, Modal, Notice, Setting } from 'obsidian';
-import type { Editor } from 'obsidian';
+import { Modal, Notice, Setting } from 'obsidian';
+import type { Editor , App} from 'obsidian';
 import type { ClaudeService, ClaudeOptions } from '../services/claudeService';
 import type { PromptsService } from '../services/promptsService';
 

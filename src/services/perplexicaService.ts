@@ -1,10 +1,12 @@
-import { Editor, Notice } from 'obsidian';
+import type { Editor} from 'obsidian';
+import { Notice } from 'obsidian';
+import type { PromptsService } from './promptsService';
 
 export interface PerplexicaSettings {
     perplexicaEndpoint: string;
     localLLMPath: string;
     defaultModel: string;
-    promptsService?: any; // Will be PromptsService type
+    promptsService?: PromptsService;
     requestTemplate?: string;
 }
 
@@ -12,9 +14,37 @@ export interface PerplexicaOptions {
     return_images?: boolean;
 }
 
+interface PerplexicaModelRef {
+    provider: string;
+    name: string;
+}
+
+interface PerplexicaHistoryEntry {
+    role: string;
+    content: string;
+}
+
+interface PerplexicaPayload {
+    chatModel: PerplexicaModelRef;
+    embeddingModel: PerplexicaModelRef;
+    optimizationMode: string;
+    focusMode: string;
+    query: string;
+    history: PerplexicaHistoryEntry[];
+    systemInstructions: string;
+    stream: boolean;
+    maxTokens?: number;
+    temperature?: number;
+}
+
+interface PerplexicaStreamEvent {
+    type?: string;
+    data?: string;
+}
+
 export class PerplexicaService {
     private settings: PerplexicaSettings;
-    private promptsService: any;
+    private promptsService: PromptsService | undefined;
 
     constructor(settings: PerplexicaSettings) {
         this.settings = settings;
@@ -73,40 +103,28 @@ export class PerplexicaService {
             
             for (const endpoint of endpoints) {
                 try {
-                    // Use template if available, otherwise construct payload manually
-                    let payload: any;
+                    let payload: PerplexicaPayload;
                     if (this.settings.requestTemplate) {
                         try {
                             const processedTemplate = this.promptsService?.processTemplate(this.settings.requestTemplate) || this.settings.requestTemplate;
-                            
-                            // Strip JavaScript-style comments that would break JSON parsing
+
                             const cleanedTemplate = processedTemplate
-                                .replace(/\/\*[\s\S]*?\*\//g, '') // Remove /* */ comments
-                                .replace(/\/\/.*$/gm, '') // Remove // comments
-                                .replace(/^\s*$/gm, '') // Remove empty lines
+                                .replace(/\/\*[\s\S]*?\*\//g, '')
+                                .replace(/\/\/.*$/gm, '')
+                                .replace(/^\s*$/gm, '')
                                 .trim();
-                            
-                            payload = JSON.parse(cleanedTemplate);
-                            // Override with current parameters
-                            payload.chatModel = {
-                                provider: "ollama",
-                                name: this.settings.defaultModel
+
+                            JSON.parse(cleanedTemplate);
+                            payload = {
+                                chatModel: { provider: "ollama", name: this.settings.defaultModel },
+                                embeddingModel: { provider: "ollama", name: this.settings.defaultModel },
+                                optimizationMode,
+                                focusMode,
+                                query,
+                                history: [{ role: "user", content: query }],
+                                systemInstructions: this.promptsService?.getPerplexicaSystemPrompt() || "You are a helpful AI assistant. Provide clear, concise, and accurate information.",
+                                stream,
                             };
-                            payload.embeddingModel = {
-                                provider: "ollama",
-                                name: this.settings.defaultModel
-                            };
-                            payload.optimizationMode = optimizationMode;
-                            payload.focusMode = focusMode;
-                            payload.query = query;
-                            payload.history = [
-                                {
-                                    role: "user",
-                                    content: query
-                                }
-                            ];
-                            payload.systemInstructions = this.promptsService?.getPerplexicaSystemPrompt() || "You are a helpful AI assistant. Provide clear, concise, and accurate information.";
-                            payload.stream = stream;
                         } catch (error) {
                             console.warn('Failed to parse request template, using default payload:', error);
                             payload = {
@@ -211,31 +229,27 @@ export class PerplexicaService {
             
             for (const line of lines) {
                 try {
-                    const parsed = JSON.parse(line);
-                                            if (parsed.type === 'response' && parsed.data) {
-                            let content = parsed.data;
-                            
-                            // Process images if enabled
-                            if (options?.return_images) {
-                                content = this.processContentWithImages(content);
-                            }
-                            
-                            editor.replaceRange(content, currentPos);
-                            // Update cursor position
-                            const lines = content.split('\n');
-                            if (lines.length === 1) {
-                                currentPos = { line: currentPos.line, ch: currentPos.ch + content.length };
-                            } else {
-                                currentPos = { 
-                                    line: currentPos.line + lines.length - 1, 
-                                    ch: lines[lines.length - 1]?.length || 0
-                                };
-                            }
-                            // Scroll to follow the new content
-                            editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
-                            // Small delay to make scrolling smoother
-                            await new Promise(resolve => setTimeout(resolve, 10));
+                    const parsed = JSON.parse(line) as PerplexicaStreamEvent;
+                    if (parsed.type === 'response' && typeof parsed.data === 'string') {
+                        let content: string = parsed.data;
+
+                        if (options?.return_images) {
+                            content = this.processContentWithImages(content);
                         }
+
+                        editor.replaceRange(content, currentPos);
+                        const splitLines = content.split('\n');
+                        if (splitLines.length === 1) {
+                            currentPos = { line: currentPos.line, ch: currentPos.ch + content.length };
+                        } else {
+                            currentPos = {
+                                line: currentPos.line + splitLines.length - 1,
+                                ch: splitLines[splitLines.length - 1]?.length || 0
+                            };
+                        }
+                        editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
                 } catch (e) {
                     // Ignore JSON parse errors
                 }

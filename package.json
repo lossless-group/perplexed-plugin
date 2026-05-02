@@ -1,11 +1,12 @@
 {
 	"name": "perplexed",
-	"version": "0.0.0.6",
+	"version": "0.1.0",
 	"description": "A plugin for Obsidian that allows you to generate source-cited content using AI using Perplexity and Perplexica.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"build": "eslint . --report-unused-disable-directives && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"lint": "eslint . --report-unused-disable-directives",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [
@@ -37,9 +38,6 @@
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.92.0",
-		"@modelcontextprotocol/sdk": "^1.29.0",
-		"dotenv": "^17.4.2",
-		"fastify": "^5.8.5",
-		"zod": "^4.4.2"
+		"dotenv": "^17.4.2"
 	}
 }

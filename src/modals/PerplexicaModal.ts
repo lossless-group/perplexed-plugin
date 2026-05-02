@@ -1,6 +1,7 @@
-import { App, Modal, Notice, Editor } from 'obsidian';
-import { PerplexicaService, PerplexicaOptions } from '../services/perplexicaService';
-import { PromptsService } from '../services/promptsService';
+import type { App, Editor } from 'obsidian';
+import { Modal, Notice } from 'obsidian';
+import type { PerplexicaService, PerplexicaOptions } from '../services/perplexicaService';
+import type { PromptsService } from '../services/promptsService';
 
 export class PerplexicaModal extends Modal {
     private editor: Editor;
@@ -81,7 +82,7 @@ export class PerplexicaModal extends Modal {
         
         form.onsubmit = (e) => {
             e.preventDefault();
-            this.onSubmit();
+            void this.onSubmit();
         };
         
         askButton.onclick = () => this.onSubmit();

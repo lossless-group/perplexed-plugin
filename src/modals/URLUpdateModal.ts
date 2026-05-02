@@ -1,4 +1,5 @@
-import { App, Modal, Notice } from 'obsidian';
+import type { App} from 'obsidian';
+import { Modal, Notice } from 'obsidian';
 
 export interface URLUpdateModalConfig {
     title: string;
@@ -44,7 +45,7 @@ export class URLUpdateModal extends Modal {
 
         form.onsubmit = (e) => {
             e.preventDefault();
-            this.onSubmit();
+            void this.onSubmit();
         };
 
         saveButton.onclick = () => this.onSubmit();

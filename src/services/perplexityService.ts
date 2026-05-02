@@ -1,4 +1,6 @@
-import { Editor, Notice, request } from 'obsidian';
+import type { Editor} from 'obsidian';
+import { Notice, request } from 'obsidian';
+import type { PromptsService } from './promptsService';
 import { formatCitationDate, getMostRecentDate, formatPublicationInfo } from '../utils/formatDate';
 
 export interface PerplexityOptions {
@@ -11,14 +13,62 @@ export interface PerplexityOptions {
 export interface PerplexitySettings {
     perplexityApiKey: string;
     perplexityEndpoint: string;
-    promptsService?: any; // Will be PromptsService type
+    promptsService?: PromptsService;
     requestTemplate?: string;
     headerPosition?: 'top' | 'bottom';
 }
 
+export interface PerplexityImage {
+    image_url?: string;
+    origin_url?: string;
+}
+
+export interface PerplexitySource {
+    title?: string;
+    url?: string;
+    date?: string;
+    last_updated?: string;
+}
+
+interface PerplexityMessage {
+    role: string;
+    content: string;
+}
+
+interface PerplexityPayload {
+    model: string;
+    messages: PerplexityMessage[];
+    stream: boolean;
+    return_citations: boolean;
+    return_images: boolean;
+    return_related_questions: boolean;
+    search_recency_filter?: string;
+}
+
+interface PerplexityChoice {
+    message?: { content?: string };
+    delta?: { content?: string };
+    finish_reason?: string;
+}
+
+interface PerplexityResponse {
+    choices?: PerplexityChoice[];
+    images?: PerplexityImage[];
+    search_results?: PerplexitySource[];
+    citations?: (string | PerplexitySource)[];
+}
+
+interface PerplexityStreamChunk {
+    choices?: PerplexityChoice[];
+    images?: PerplexityImage[];
+    search_results?: PerplexitySource[];
+    citations?: (string | PerplexitySource)[];
+}
+
 export class PerplexityService {
     private settings: PerplexitySettings;
-    private promptsService: any;
+    private promptsService: PromptsService | undefined;
+    private loadingInterval: ReturnType<typeof setInterval> | null = null;
 
     constructor(settings: PerplexitySettings) {
         this.settings = settings;
@@ -48,7 +98,7 @@ export class PerplexityService {
         return 'month';
     }
 
-    private processContentWithImages(content: string, images: any[]): string {
+    private processContentWithImages(content: string, images: PerplexityImage[]): string {
         if (!images || images.length === 0) return content;
         
         console.log(`🖼️ Processing ${images.length} images for content replacement`);
@@ -221,15 +271,14 @@ export class PerplexityService {
     }
 
     private clearLoadingAnimation(): void {
-        // Clear the animation interval if it exists
-        if ((this as any).loadingInterval) {
+        if (this.loadingInterval) {
             console.log('🛑 Clearing loading animation interval');
-            clearInterval((this as any).loadingInterval);
-            (this as any).loadingInterval = null;
+            clearInterval(this.loadingInterval);
+            this.loadingInterval = null;
         }
     }
 
-    private addCitations(editor: Editor, sources: any[]): void {
+    private addCitations(editor: Editor, sources: (string | PerplexitySource)[]): void {
         if (!sources || sources.length === 0) return;
 
         console.log(`📚 Processing ${sources.length} sources for citations`);
@@ -393,79 +442,65 @@ export class PerplexityService {
         try {
             const convertedFilter = this.convertRecencyFilter(options?.search_recency_filter ?? "month");
             
-            // Use template if available, otherwise construct payload manually
-            let payload: any;
+            let payload: PerplexityPayload;
             if (this.settings.requestTemplate) {
                 try {
                     const processedTemplate = this.promptsService?.processTemplate(this.settings.requestTemplate) || this.settings.requestTemplate;
-                    
-                    // Strip JavaScript-style comments that would break JSON parsing
+
                     let cleanedTemplate = processedTemplate
-                        .replace(/\/\*[\s\S]*?\*\//g, '') // Remove /* */ comments
-                        .replace(/\/\/.*$/gm, '') // Remove // comments
-                        .replace(/^\s*$/gm, '') // Remove empty lines
+                        .replace(/\/\*[\s\S]*?\*\//g, '')
+                        .replace(/\/\/.*$/gm, '')
+                        .replace(/^\s*$/gm, '')
                         .trim();
-                    
-                    // Check if template contains JavaScript code instead of JSON
+
                     if (cleanedTemplate.includes('const ') || cleanedTemplate.includes('fetch(') || cleanedTemplate.includes('await ')) {
                         console.warn('⚠️ Template contains JavaScript code, not JSON. Extracting payload object...');
-                        
-                        // Try to extract JSON payload from JavaScript code
+
                         const payloadMatch = cleanedTemplate.match(/payload\s*=\s*({[\s\S]*?});/);
                         if (payloadMatch) {
                             let jsObject = payloadMatch[1];
                             console.log('🔍 Extracted payload from JavaScript:', jsObject);
-                            
-                            // Convert JavaScript object syntax to valid JSON
-                            // Replace unquoted property names with quoted ones
-                            jsObject = jsObject.replace(/(\w+):/g, '"$1":');
-                            // Fix single quotes to double quotes
-                            jsObject = jsObject.replace(/'/g, '"');
-                            
-                            cleanedTemplate = jsObject;
+
+                            jsObject = jsObject?.replace(/(\w+):/g, '"$1":').replace(/'/g, '"');
+
+                            cleanedTemplate = jsObject ?? cleanedTemplate;
                         } else {
                             throw new Error('Template contains JavaScript code but no valid payload object found. Please use JSON format only.');
                         }
                     }
-                    
+
                     console.log('🧹 Final cleaned template:', cleanedTemplate);
-                    payload = JSON.parse(cleanedTemplate);
-                    // Override with current query and options
-                    payload.model = model;
-                    payload.messages = [
-                        { role: 'user', content: query }
-                    ];
-                    payload.stream = useStreaming;
-                    payload.return_citations = options?.return_citations ?? true;
-                    payload.return_images = options?.return_images ?? true;
-                    payload.return_related_questions = options?.return_related_questions ?? false;
+                    JSON.parse(cleanedTemplate);
+                    payload = {
+                        model,
+                        messages: [{ role: 'user', content: query }],
+                        stream: useStreaming,
+                        return_citations: options?.return_citations ?? true,
+                        return_images: options?.return_images ?? true,
+                        return_related_questions: options?.return_related_questions ?? false,
+                    };
                 } catch (error) {
                     console.warn('Failed to parse request template, using default payload:', error);
                     payload = {
                         model,
-                        messages: [
-                            { role: 'user', content: query }
-                        ],
+                        messages: [{ role: 'user', content: query }],
                         stream: useStreaming,
                         return_citations: options?.return_citations ?? true,
                         return_images: options?.return_images ?? true,
-                        return_related_questions: options?.return_related_questions ?? false
+                        return_related_questions: options?.return_related_questions ?? false,
                     };
                 }
             } else {
                 payload = {
                     model,
-                    messages: [
-                        { role: 'user', content: query }
-                    ],
+                    messages: [{ role: 'user', content: query }],
                     stream: useStreaming,
                     return_citations: options?.return_citations ?? true,
                     return_images: options?.return_images ?? true,
-                    return_related_questions: options?.return_related_questions ?? false
+                    return_related_questions: options?.return_related_questions ?? false,
                 };
             }
-            
-            // Only include search_recency_filter if we have a filter value
+
             if (convertedFilter !== undefined) {
                 payload.search_recency_filter = convertedFilter;
             }
@@ -516,33 +551,25 @@ export class PerplexityService {
                     });
 
                     console.log('✅ Non-streaming response received');
-                    // Parse the response
-                    const data = JSON.parse(response);
+                    const data = JSON.parse(response) as PerplexityResponse;
 
                     console.log('📊 Response data structure:', Object.keys(data));
-                    // Process the response
                     if (data.choices && data.choices.length > 0) {
-                        let content = data.choices[0].message.content;
-                        
-                        // Process think blocks first
+                        let content = data.choices[0]?.message?.content ?? '';
+
                         content = this.processThinkBlocks(content);
-                        
-                        // Process images if available
+
                         if (options?.return_images && data.images && data.images.length > 0) {
                             console.log('🖼️ Processing images in non-streaming response:', data.images.length, 'images found');
                             content = this.processContentWithImages(content, data.images);
                         }
-                        
-                        // Insert the response at the cursor position
+
                         editor.replaceRange(content, responseCursor);
-                        
-                        // Add citations if available
+
                         if (options?.return_citations) {
                             if (data.search_results && data.search_results.length > 0) {
-                                // Use search_results for detailed info (preferred for Perplexity)
                                 this.addCitations(editor, data.search_results);
                             } else if (data.citations && data.citations.length > 0) {
-                                // Fallback to citations array (could be URLs or other format)
                                 this.addCitations(editor, data.citations);
                             }
                         }
@@ -605,43 +632,39 @@ export class PerplexityService {
         console.log(`🔄 Starting streaming response handler [${requestId || 'unknown'}]`);
         
         let buffer = '';
-        let currentPos = { ...responseCursor };
-        let finalResponseData: any = null;
-        
+        const currentPos = { ...responseCursor };
+        let finalResponseData: PerplexityStreamChunk | null = null;
+
         console.log(`📍 Initial currentPos:`, currentPos);
-        
+
         try {
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                
+
                 const chunk = new TextDecoder().decode(value, { stream: true });
                 buffer += chunk;
-                
-                // Process complete lines from buffer
+
                 const lines = buffer.split('\n');
-                buffer = lines.pop() || ''; // Keep incomplete line in buffer
-                
+                buffer = lines.pop() || '';
+
                 for (const line of lines) {
                     if (line.trim() === '') continue;
-                    
+
                     try {
                         if (line.startsWith('data: ')) {
                             const data = line.replace('data: ', '').trim();
                             if (data === '[DONE]') continue;
-                            
-                            const parsed = JSON.parse(data);
-                            
-                            // Capture the latest metadata across chunks. Perplexity typically
-                            // sends citations/search_results in earlier chunks; the final chunk
-                            // often carries only finish_reason. Merge so nothing is lost.
+
+                            const parsed = JSON.parse(data) as PerplexityStreamChunk;
+
                             if (parsed.citations || parsed.images || parsed.search_results) {
                                 finalResponseData = {
                                     ...(finalResponseData || {}),
                                     ...parsed,
                                 };
                             }
-                            
+
                             if (parsed.choices?.[0]?.delta?.content) {
                                 const content = parsed.choices[0].delta.content;
                                 if (content) {
@@ -654,13 +677,12 @@ export class PerplexityService {
                                     
                                     // console.log(`📝 Inserting content at position:`, currentPos, `Content:`, content.substring(0, 50) + '...');
                                     editor.replaceRange(content, currentPos);
-                                    // Update cursor position after insertion
                                     const contentLines = content.split('\n');
                                     if (contentLines.length === 1) {
                                         currentPos.ch += content.length;
                                     } else {
                                         currentPos.line += contentLines.length - 1;
-                                        currentPos.ch = contentLines[contentLines.length - 1].length;
+                                        currentPos.ch = contentLines[contentLines.length - 1]?.length ?? 0;
                                     }
                                     // Scroll to follow the new content
                                     editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
@@ -704,7 +726,7 @@ export class PerplexityService {
     }
 
     private async processStreamingMetadata(
-        finalResponseData: any, 
+        finalResponseData: PerplexityStreamChunk,
         editor: Editor,
         headerText?: string
     ): Promise<void> {
@@ -758,7 +780,7 @@ export class PerplexityService {
                     
                     // Insert images inline after the query header
                     let imagesSection = '\n\n';
-                    finalResponseData.images.forEach((image: any, index: number) => {
+                    finalResponseData.images.forEach((image: PerplexityImage, index: number) => {
                         if (image.image_url) {
                             imagesSection += `![Image ${index + 1}](${image.image_url})\n\n`;
                         }
@@ -774,7 +796,7 @@ export class PerplexityService {
                 } else {
                     // Fallback: add images at the end if no markers found
                     let imagesSection = '\n\n## Images\n\n';
-                    finalResponseData.images.forEach((image: any, index: number) => {
+                    finalResponseData.images.forEach((image: PerplexityImage, index: number) => {
                         if (image.image_url) {
                             imagesSection += `![Image ${index + 1}](${image.image_url})\n`;
                             if (image.origin_url) {

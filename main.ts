@@ -1,4 +1,5 @@
-import { App, Editor, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import type { App, Editor} from 'obsidian';
+import { Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import * as dotenv from 'dotenv';
 
 // Import services

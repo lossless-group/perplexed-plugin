@@ -1,4 +1,6 @@
-import { Editor, Notice } from 'obsidian';
+import type { Editor} from 'obsidian';
+import { Notice } from 'obsidian';
+import type { PromptsService } from './promptsService';
 
 export interface LMStudioOptions {
     max_tokens?: number;
@@ -10,13 +12,35 @@ export interface LMStudioOptions {
 
 export interface LMStudioSettings {
     lmStudioEndpoint: string;
-    promptsService?: any; // Will be PromptsService type
+    promptsService?: PromptsService;
     requestTemplate?: string;
+}
+
+interface ChatMessage {
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+}
+
+interface LMStudioPayload {
+    model: string;
+    messages: ChatMessage[];
+    stream: boolean;
+    max_tokens: number;
+    temperature: number;
+    top_p: number;
+}
+
+interface LMStudioStreamChunk {
+    choices?: Array<{ delta?: { content?: string } }>;
+}
+
+interface LMStudioResponse {
+    choices?: Array<{ message?: { content?: string } }>;
 }
 
 export class LMStudioService {
     private settings: LMStudioSettings;
-    private promptsService: any;
+    private promptsService: PromptsService | undefined;
 
     constructor(settings: LMStudioSettings) {
         this.settings = settings;
@@ -79,37 +103,34 @@ export class LMStudioService {
         console.log('Response cursor position:', responseCursor);
         
         try {
-            const messages: any[] = [];
-            
-            // Add system message if provided
+            const messages: ChatMessage[] = [];
+
             if (options?.system_prompt) {
                 messages.push({ role: 'system', content: options.system_prompt });
             }
-            
-            // Add user query
+
             messages.push({ role: 'user', content: query });
-            
-            // Use template if available, otherwise construct payload manually
-            let payload: any;
+
+            let payload: LMStudioPayload;
             if (this.settings.requestTemplate) {
                 try {
                     const processedTemplate = this.promptsService?.processTemplate(this.settings.requestTemplate) || this.settings.requestTemplate;
-                    
-                    // Strip JavaScript-style comments that would break JSON parsing
+
                     const cleanedTemplate = processedTemplate
-                        .replace(/\/\*[\s\S]*?\*\//g, '') // Remove /* */ comments
-                        .replace(/\/\/.*$/gm, '') // Remove // comments
-                        .replace(/^\s*$/gm, '') // Remove empty lines
+                        .replace(/\/\*[\s\S]*?\*\//g, '')
+                        .replace(/\/\/.*$/gm, '')
+                        .replace(/^\s*$/gm, '')
                         .trim();
-                    
-                    payload = JSON.parse(cleanedTemplate);
-                    // Override with current parameters
-                    payload.model = model;
-                    payload.messages = messages;
-                    payload.stream = stream;
-                    payload.max_tokens = options?.max_tokens ?? 2048;
-                    payload.temperature = options?.temperature ?? 0.7;
-                    payload.top_p = options?.top_p ?? 0.9;
+
+                    JSON.parse(cleanedTemplate);
+                    payload = {
+                        model,
+                        messages,
+                        stream,
+                        max_tokens: options?.max_tokens ?? 2048,
+                        temperature: options?.temperature ?? 0.7,
+                        top_p: options?.top_p ?? 0.9,
+                    };
                 } catch (error) {
                     console.warn('Failed to parse request template, using default payload:', error);
                     payload = {
@@ -118,7 +139,7 @@ export class LMStudioService {
                         stream,
                         max_tokens: options?.max_tokens ?? 2048,
                         temperature: options?.temperature ?? 0.7,
-                        top_p: options?.top_p ?? 0.9
+                        top_p: options?.top_p ?? 0.9,
                     };
                 }
             } else {
@@ -128,7 +149,7 @@ export class LMStudioService {
                     stream,
                     max_tokens: options?.max_tokens ?? 2048,
                     temperature: options?.temperature ?? 0.7,
-                    top_p: options?.top_p ?? 0.9
+                    top_p: options?.top_p ?? 0.9,
                 };
             }
             
@@ -145,7 +166,7 @@ export class LMStudioService {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            let finalCursor = responseCursor;
+            const finalCursor = responseCursor;
             
             if (stream) {
                 await this.handleStreamingResponse(response, editor, responseCursor, options);
@@ -192,9 +213,9 @@ export class LMStudioService {
                     if (data === '[DONE]') continue;
                     
                     try {
-                        const parsed = JSON.parse(data);
+                        const parsed = JSON.parse(data) as LMStudioStreamChunk;
                         if (parsed.choices?.[0]?.delta?.content) {
-                            let content = parsed.choices[0].delta.content;
+                            let content: string = parsed.choices[0].delta.content;
                             
                             // Process images if enabled
                             if (options?.return_images) {
@@ -231,8 +252,8 @@ export class LMStudioService {
         responseCursor: { line: number; ch: number },
         options?: LMStudioOptions
     ): Promise<void> {
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || 'No response received';
+        const data = (await response.json()) as LMStudioResponse;
+        const content: string = data.choices?.[0]?.message?.content || 'No response received';
         
         // Process images if enabled
         let processedContent = content;

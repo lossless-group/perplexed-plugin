@@ -4,7 +4,7 @@ import globals from "globals";
 
 export default tseslint.config(
 	{
-		ignores: ["node_modules/", "main.js"],
+		ignores: ["node_modules/", "main.js", "**/*.mjs"],
 	},
 	js.configs.recommended,
 	...tseslint.configs.recommended,
@@ -22,11 +22,14 @@ export default tseslint.config(
 		},
 		rules: {
 			"no-unused-vars": "off",
-			"@typescript-eslint/no-unused-vars": ["error", { args: "none" }],
+			"@typescript-eslint/no-unused-vars": ["error", { args: "none", caughtErrors: "none" }],
 			"@typescript-eslint/ban-ts-comment": "off",
 			"no-prototype-builtins": "off",
 			"@typescript-eslint/no-empty-function": "off",
-			"@typescript-eslint/no-explicit-any": "warn",
+			"@typescript-eslint/no-explicit-any": "error",
+			"@typescript-eslint/no-unnecessary-type-assertion": "error",
+			"@typescript-eslint/no-floating-promises": "error",
+			"@typescript-eslint/no-base-to-string": "error",
 			"@typescript-eslint/explicit-module-boundary-types": "off",
 			"@typescript-eslint/no-non-null-assertion": "off",
 			"@typescript-eslint/consistent-type-imports": "error",

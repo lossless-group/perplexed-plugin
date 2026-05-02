@@ -1,6 +1,7 @@
-import { App, Modal, Notice, Editor } from 'obsidian';
-import { PerplexityService } from '../services/perplexityService';
-import { PromptsService } from '../services/promptsService';
+import type { App, Editor } from 'obsidian';
+import { Modal, Notice } from 'obsidian';
+import type { PerplexityService } from '../services/perplexityService';
+import type { PromptsService } from '../services/promptsService';
 
 export class TextEnhancementWithImagesModal extends Modal {
     protected editor: Editor;

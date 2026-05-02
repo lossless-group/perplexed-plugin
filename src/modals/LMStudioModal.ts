@@ -1,6 +1,7 @@
-import { App, Modal, Notice, Editor } from 'obsidian';
-import { LMStudioService, LMStudioOptions } from '../services/lmStudioService';
-import { PromptsService } from '../services/promptsService';
+import type { App, Editor } from 'obsidian';
+import { Modal, Notice } from 'obsidian';
+import type { LMStudioService, LMStudioOptions } from '../services/lmStudioService';
+import type { PromptsService } from '../services/promptsService';
 
 export class LMStudioModal extends Modal {
     private editor: Editor;
@@ -109,7 +110,7 @@ export class LMStudioModal extends Modal {
         
         form.onsubmit = (e) => {
             e.preventDefault();
-            this.onSubmit();
+            void this.onSubmit();
         };
         
         askButton.onclick = () => this.onSubmit();
