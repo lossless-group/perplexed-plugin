@@ -5,12 +5,14 @@ import * as dotenv from 'dotenv';
 import { PerplexityService } from './src/services/perplexityService';
 import { PerplexicaService } from './src/services/perplexicaService';
 import { LMStudioService } from './src/services/lmStudioService';
+import { ClaudeService } from './src/services/claudeService';
 import { PromptsService } from './src/services/promptsService';
 
 // Import modals
 import { PerplexityModal } from './src/modals/PerplexityModal';
 import { PerplexicaModal } from './src/modals/PerplexicaModal';
 import { LMStudioModal } from './src/modals/LMStudioModal';
+import { ClaudeModal } from './src/modals/ClaudeModal';
 import { URLUpdateModal } from './src/modals/URLUpdateModal';
 import { ArticleGeneratorModal } from './src/modals/ArticleGeneratorModal';
 import { TextEnhancementModal } from './src/modals/TextEnhancementModal';
@@ -29,6 +31,8 @@ interface PerplexedPluginSettings {
     perplexityEndpoint: string;
     lmStudioEndpoint: string;
     lmStudioRequestTemplate: string;
+    anthropicApiKey: string;
+    claudeDefaultModel: string;
     defaultModel: string;
     defaultOptimizationMode: string;
     defaultFocusMode: string;
@@ -100,6 +104,8 @@ const DEFAULT_SETTINGS: PerplexedPluginSettings = {
   "temperature": 0.7
 }`,
     perplexityApiKey: process.env.PERPLEXITY_API_KEY || '',
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+    claudeDefaultModel: 'claude-opus-4-7',
     perplexityRequestTemplate: `{
   "model": "llama-3.1-sonar-small-128k-online",
   "messages": [
@@ -283,6 +289,7 @@ export default class PerplexedPlugin extends Plugin {
     private perplexityService!: PerplexityService | null;
     private perplexicaService!: PerplexicaService | null;
     private lmStudioService!: LMStudioService | null;
+    private claudeService!: ClaudeService | null;
     private promptsService!: PromptsService | null;
 
     async onload(): Promise<void> {
@@ -346,11 +353,25 @@ export default class PerplexedPlugin extends Plugin {
                     new Notice('Failed to initialize LMStudioService');
                     this.lmStudioService = null;
                 }
+
+                try {
+                    this.claudeService = new ClaudeService({
+                        anthropicApiKey: this.settings.anthropicApiKey,
+                        promptsService: this.promptsService,
+                        headerPosition: this.settings.headerPosition,
+                    });
+                    console.log('Perplexed Plugin: ClaudeService initialized successfully');
+                } catch (error) {
+                    console.error('Perplexed Plugin: Failed to initialize ClaudeService:', error);
+                    new Notice('Failed to initialize ClaudeService');
+                    this.claudeService = null;
+                }
             } else {
                 // If promptsService failed, set all other services to null
                 this.perplexityService = null;
                 this.perplexicaService = null;
                 this.lmStudioService = null;
+                this.claudeService = null;
                 console.log('Perplexed Plugin: Skipping service initialization due to PromptsService failure');
             }
             
@@ -383,7 +404,14 @@ export default class PerplexedPlugin extends Plugin {
             } catch (error) {
                 console.error('Perplexed Plugin: Failed to register LM Studio commands:', error);
             }
-            
+
+            try {
+                this.registerClaudeCommands();
+                console.log('Perplexed Plugin: Claude commands registered successfully');
+            } catch (error) {
+                console.error('Perplexed Plugin: Failed to register Claude commands:', error);
+            }
+
             try {
                 this.registerArticleGeneratorCommands();
                 console.log('Perplexed Plugin: Article generator commands registered successfully');
@@ -650,6 +678,38 @@ export default class PerplexedPlugin extends Plugin {
         }
     }
 
+    private registerClaudeCommands(): void {
+        this.addCommand({
+            id: 'ask-claude',
+            name: 'Ask Claude',
+            editorCallback: (editor: Editor) => {
+                if (!this.claudeService) {
+                    new Notice('Claude service not initialized. Set ANTHROPIC_API_KEY in .env or settings, then reinitialize services.');
+                    return;
+                }
+                if (!this.promptsService) {
+                    new Notice('Prompts service not initialized.');
+                    return;
+                }
+                new ClaudeModal(this.app, editor, this.claudeService, this.promptsService).open();
+            },
+        });
+
+        this.addCommand({
+            id: 'claude-service-status',
+            name: 'Check Claude Service Status',
+            callback: () => {
+                if (this.claudeService && this.settings.anthropicApiKey) {
+                    new Notice('Claude service is initialized and an API key is configured.');
+                } else if (this.claudeService) {
+                    new Notice('Claude service is initialized but no API key is set.');
+                } else {
+                    new Notice('Claude service is NOT initialized.');
+                }
+            },
+        });
+    }
+
     private registerLMStudioCommands(): void {
         // Command to update LM Studio URL
         this.addCommand({
@@ -911,11 +971,24 @@ export default class PerplexedPlugin extends Plugin {
                     console.error('Perplexed Plugin: Failed to reinitialize LMStudioService:', error);
                     this.lmStudioService = null;
                 }
+
+                try {
+                    this.claudeService = new ClaudeService({
+                        anthropicApiKey: this.settings.anthropicApiKey,
+                        promptsService: this.promptsService,
+                        headerPosition: this.settings.headerPosition,
+                    });
+                    console.log('Perplexed Plugin: ClaudeService reinitialized successfully');
+                } catch (error) {
+                    console.error('Perplexed Plugin: Failed to reinitialize ClaudeService:', error);
+                    this.claudeService = null;
+                }
             } else {
                 // If promptsService failed, set all other services to null
                 this.perplexityService = null;
                 this.perplexicaService = null;
                 this.lmStudioService = null;
+                this.claudeService = null;
                 console.log('Perplexed Plugin: Skipping service reinitialization due to PromptsService failure');
             }
             
@@ -1029,6 +1102,39 @@ class PerplexedSettingTab extends PluginSettingTab {
         
         // Add the textarea to the setting
         perplexityJsonSetting.settingEl.appendChild(perplexityTextArea);
+
+        // Claude (Anthropic) Section
+        const claudeHeader = containerEl.createEl('h3', { text: 'Claude (Anthropic)' });
+        claudeHeader.style.color = 'var(--text-accent)';
+        containerEl.createEl('p', {
+            text: 'Configure Claude API access. Web-search citations supported in this iteration; document-grounded citations are deferred.',
+            cls: 'setting-item-description'
+        });
+
+        new Setting(containerEl)
+            .setName('Anthropic API Key')
+            .setDesc('Your Anthropic API key. Read from ANTHROPIC_API_KEY in .env if set; can be overridden here.')
+            .addText(text => text
+                .setPlaceholder('sk-ant-...')
+                .setValue(this.plugin.settings.anthropicApiKey)
+                .onChange(async (value) => {
+                    this.plugin.settings.anthropicApiKey = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Default Claude Model')
+            .setDesc('Default model used by the Ask Claude command. Recommended: claude-opus-4-7.')
+            .addDropdown(dropdown => dropdown
+                .addOption('claude-opus-4-7', 'claude-opus-4-7 (recommended)')
+                .addOption('claude-opus-4-6', 'claude-opus-4-6')
+                .addOption('claude-sonnet-4-6', 'claude-sonnet-4-6')
+                .addOption('claude-haiku-4-5', 'claude-haiku-4-5')
+                .setValue(this.plugin.settings.claudeDefaultModel)
+                .onChange(async (value) => {
+                    this.plugin.settings.claudeDefaultModel = value;
+                    await this.plugin.saveSettings();
+                }));
 
         // Perplexica Section
         const perplexicaHeader = containerEl.createEl('h3', { text: 'Perplexica (Self-Hosted)' });

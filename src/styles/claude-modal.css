@@ -1,0 +1,179 @@
+/* ============================================================
+   Claude Modal — research query composer
+   Built on Obsidian's native Setting components for theming
+   parity, with a custom textarea + footer for feel.
+   ============================================================ */
+
+.claude-modal {
+    /* Modal container — wider and breathier than default */
+    width: 90vw;
+    max-width: 640px;
+}
+
+.claude-modal .modal-content {
+    padding: 0;
+}
+
+/* ----- Header ----- */
+
+.claude-modal__header {
+    padding: 24px 28px 16px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.claude-modal__title {
+    margin: 0 0 6px;
+    font-size: 1.5em;
+    font-weight: 600;
+    color: var(--text-normal);
+    letter-spacing: -0.01em;
+}
+
+.claude-modal__subtitle {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
+/* ----- Sections ----- */
+
+.claude-modal__section {
+    padding: 18px 28px 4px;
+}
+
+.claude-modal__section + .claude-modal__section {
+    border-top: 1px solid var(--background-modifier-border-hover);
+    margin-top: 4px;
+}
+
+.claude-modal__section-title {
+    margin: 0 0 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+/* Tighten the native Setting spacing inside our sections */
+.claude-modal__section .setting-item {
+    padding: 10px 0;
+    border-top: none;
+}
+
+.claude-modal__section .setting-item + .setting-item {
+    border-top: 1px solid var(--background-modifier-border-hover);
+}
+
+/* ----- Question label + textarea ----- */
+
+.claude-modal__label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.claude-modal__textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 12px 14px;
+    font-family: var(--font-text);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-normal);
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    resize: vertical;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+}
+
+.claude-modal__textarea:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 3px var(--interactive-accent-hover);
+}
+
+.claude-modal__textarea::placeholder {
+    color: var(--text-faint);
+}
+
+/* ----- Footer / actions ----- */
+
+.claude-modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 28px 24px;
+    margin-top: 12px;
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+    border-bottom-left-radius: var(--modal-radius, 8px);
+    border-bottom-right-radius: var(--modal-radius, 8px);
+}
+
+.claude-modal__button {
+    padding: 8px 18px;
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+}
+
+.claude-modal__button:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.claude-modal__button:active {
+    transform: translateY(1px);
+}
+
+.claude-modal__button.mod-cta {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
+}
+
+.claude-modal__button.mod-cta:hover {
+    background-color: var(--interactive-accent-hover);
+    border-color: var(--interactive-accent-hover);
+}
+
+.claude-modal__button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ----- Responsive ----- */
+
+@media (max-width: 600px) {
+    .claude-modal {
+        width: 95vw;
+        max-width: none;
+    }
+
+    .claude-modal__header,
+    .claude-modal__section,
+    .claude-modal__footer {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .claude-modal__footer {
+        flex-direction: column-reverse;
+    }
+
+    .claude-modal__button {
+        width: 100%;
+    }
+}

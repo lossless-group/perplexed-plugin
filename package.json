@@ -36,6 +36,7 @@
 		"typescript-eslint": "^8.59.1"
 	},
 	"dependencies": {
+		"@anthropic-ai/sdk": "^0.92.0",
 		"@modelcontextprotocol/sdk": "^1.29.0",
 		"dotenv": "^17.4.2",
 		"fastify": "^5.8.5",
