@@ -57,10 +57,10 @@ export class PerplexicaModal extends Modal {
 
         // ----- Header -----
         const header = contentEl.createDiv({ cls: 'perplexica-modal__header' });
-        header.createEl('h2', { text: 'Ask Perplexica', cls: 'perplexica-modal__title' });
+        header.createEl('h2', { text: 'Ask Perplexica / Vane', cls: 'perplexica-modal__title' });
         header.createEl('p', {
             cls: 'perplexica-modal__subtitle',
-            text: 'Self-hosted, source-grounded answers via your local Perplexica instance. Streams into the active note at the cursor.',
+            text: 'Self-hosted, source-grounded answers via your local Perplexica / Vane instance. Streams into the active note at the cursor.',
         });
 
         // ----- Question -----
@@ -151,7 +151,7 @@ export class PerplexicaModal extends Modal {
         cancelBtn.addEventListener('click', () => this.close());
 
         const askBtn = footer.createEl('button', {
-            text: 'Ask Perplexica',
+            text: 'Ask Perplexica / Vane',
             cls: 'perplexica-modal__button mod-cta',
         });
         askBtn.addEventListener('click', () => void this.onSubmit());

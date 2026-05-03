@@ -91,7 +91,7 @@ export class PerplexicaService {
         // Process query to handle multi-line content in callout
         const processedQuery = query.split('\n').map(line => `> ${line}`).join('\n');
         
-        editor.replaceRange(`\n\n***\n> [!info] **Perplexica Query** (${timestamp})\n> **Question:**\n${processedQuery}\n> **Focus:** ${focusMode}\n> **Optimization:** ${optimizationMode}\n> \n> ### **Response from Perplexica**:\n\n`, cursor);
+        editor.replaceRange(`\n\n***\n> [!info] **Perplexica / Vane Query** (${timestamp})\n> **Question:**\n${processedQuery}\n> **Focus:** ${focusMode}\n> **Optimization:** ${optimizationMode}\n> \n> ### **Response from Perplexica / Vane**:\n\n`, cursor);
         
         // Get cursor position after header for response content
         const responseCursor = editor.getCursor();
@@ -210,7 +210,7 @@ export class PerplexicaService {
             
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            new Notice(`Perplexica Error: ${errorMsg}`);
+            new Notice(`Perplexica / Vane Error: ${errorMsg}`);
             editor.replaceRange(`\n**Error:** ${errorMsg}\n\n***\n`, editor.getCursor());
         }
     }

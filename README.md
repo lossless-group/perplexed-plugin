@@ -1,7 +1,7 @@
-![Perplexed: An Obsidian Plugin for Perplexity and Perplexica](https://i.imgur.com/MVOK3rk.png)
+![Perplexed: An Obsidian Plugin for Perplexity and Perplexica / Vane](https://i.imgur.com/MVOK3rk.png)
 # Perplexed: AI Content Generation for Obsidian
 
-**Perplexed** is an Obsidian plugin that enables AI-powered content generation with source citations using [Perplexity](https://www.perplexity.ai/) and [Perplexica](https://perplexica.io/). This plugin brings research-grade AI capabilities directly into your Obsidian workspace, allowing you to generate well-cited content for your notes.
+**Perplexed** is an Obsidian plugin that enables AI-powered content generation with source citations using [Perplexity](https://www.perplexity.ai/), [Anthropic Claude](https://www.anthropic.com/), and [Perplexica / Vane](https://github.com/ItzCrazyKns/Vane) (self-hosted). This plugin brings research-grade AI capabilities directly into your Obsidian workspace, allowing you to generate well-cited content for your notes.
 
 ## 🎯 Key Features
 
@@ -15,7 +15,7 @@
 [2]: 2025, Jun 16. [Governance, risk and compliance (GRC): Definitions and resources](https://www.diligent.com/resources/guides/grc). Published: 2025-05-27 | Updated: 2025-06-16
    > ```
 
-- **Multiple AI Providers**: Support for Perplexity, Anthropic Claude, Perplexica (self-hosted), and LM Studio (local)
+- **Multiple AI Providers**: Support for Perplexity, Anthropic Claude, Perplexica / Vane (self-hosted), and LM Studio (local)
 - **Streaming Responses**: Real-time streaming of AI responses for better UX
 - **Flexible Configuration**: Customizable endpoints, models, and parameters
 - **Deep Research Mode**: Comprehensive research across hundreds of sources
@@ -32,7 +32,7 @@ explicitly selected when invoking selection-based commands.
 |---|---|---|---|
 | Perplexity | `https://api.perplexity.ai/chat/completions` | Required | Required (paid) |
 | Anthropic Claude | `https://api.anthropic.com/v1/messages` | Required | Required (paid) |
-| Perplexica | `http://localhost:3030/api/search` (default; user-configurable) | Not required | Not required (self-hosted) |
+| Perplexica / Vane ([install required](https://github.com/ItzCrazyKns/Vane)) | `http://localhost:3030/api/search` (default; user-configurable) | Not required | Not required (self-hosted, runs locally) |
 | LM Studio | `http://localhost:1234/v1/chat/completions` (default; user-configurable) | Not required | Not required (runs locally) |
 
 The plugin does not collect telemetry, ship vault content anywhere else,
@@ -45,7 +45,7 @@ plugin directory.
   - [Installation](#installation)
   - [Initial Setup](#initial-setup)
   - [Using Perplexity](#using-perplexity)
-  - [Using Perplexica](#using-perplexica)
+  - [Using Perplexica / Vane](#using-perplexica--vane)
   - [Using LM Studio](#using-lm-studio)
   - [Command Reference](#command-reference)
 - [Developer Onboarding](#developer-onboarding)
@@ -87,18 +87,39 @@ Perplexity is a commercial AI service that provides high-quality, source-cited r
    - Enter your Perplexity API key
    - The default endpoint should work: `https://api.perplexity.ai/chat/completions`
 
-### 2. Configure Perplexica (Self-hosted alternative)
+### 2. Configure Perplexica / Vane (self-hosted — requires local install)
 
-Perplexica is a free, open-source alternative that you can host yourself.
+Perplexica / Vane is a free, open-source AI search engine that you run
+**locally on your own machine**. This plugin does not bundle the server
+or proxy to a hosted instance — you must install and run it yourself
+before the "Ask Perplexica / Vane" command will work.
 
-1. **Set up Perplexica Server**:
-   - Follow the [Perplexica setup guide](https://perplexica.io/)
-   - Ensure your server is running and accessible
+> **Note on naming:** The maintainer (`ItzCrazyKns`) renamed the
+> open-source self-hosted repo from **Perplexica** to **Vane** on
+> 2026-03-09 (commit `feat(app): rename to 'vane'`). The old GitHub URL
+> `ItzCrazyKns/Perplexica` redirects to `ItzCrazyKns/Vane`. A hosted
+> service at [perplexica.io](https://perplexica.io/) remains live under
+> the Perplexica name — that's a separate hosted product, not what you
+> self-install for use with this plugin. The local API surface this
+> plugin talks to (`/api/search`, focus modes, optimization modes) is
+> unchanged across the rename.
 
-2. **Configure in Plugin**:
-   - Open plugin settings
-   - Set the Perplexica endpoint (e.g., `http://localhost:3030/api/search`)
-   - Configure your preferred model and settings
+1. **Install Perplexica / Vane locally**:
+   - Repo and full installation docs:
+     [github.com/ItzCrazyKns/Vane](https://github.com/ItzCrazyKns/Vane)
+   - Docker is the recommended install path; the repo's README walks
+     through `docker-compose` setup, configuring SearXNG, and choosing
+     your local LLM provider (Ollama, LM Studio, OpenAI-compatible
+     endpoints, etc.).
+   - Confirm the server is running and reachable, e.g.:
+     `curl http://localhost:3030/api/search`
+
+2. **Configure in this plugin**:
+   - Open Obsidian Settings → Community Plugins → Perplexed
+   - Set the Perplexica / Vane endpoint to where your local server is
+     listening (default: `http://localhost:3030/api/search`)
+   - Pick a focus mode, optimization mode, and the local model you've
+     configured the server to use
 
 ### 3. Configure LM Studio (Optional)
 
@@ -195,12 +216,12 @@ AI is changing how we work.
 Artificial Intelligence (AI) is fundamentally transforming how we work across various industries and sectors. From automating routine tasks to enabling more sophisticated decision-making processes, AI technologies are reshaping traditional workflows and creating new opportunities for productivity and innovation.
 ```
 
-## Using Perplexica
+## Using Perplexica / Vane
 
 ### Quick Start
 
 1. **Open Command Palette**: `Ctrl/Cmd + Shift + P`
-2. **Run Command**: Type "Ask Perplexica" and select it
+2. **Run Command**: Type "Ask Perplexica / Vane" and select it
 3. **Enter Your Question**: Type your research question
 4. **Configure Options**:
    - **Focus Mode**: Choose search specialization
@@ -280,13 +301,13 @@ System Prompt: "You are a technical expert who explains complex concepts clearly
 | `Update Perplexity URL` | Change Perplexity API endpoint | Settings command |
 | `Show Perplexity Settings` | Display current Perplexity configuration | Debug command |
 
-### Perplexica Commands
+### Perplexica / Vane Commands
 
 | Command | Description | Usage |
 |---------|-------------|-------|
-| `Ask Perplexica` | Query Perplexica with focus and optimization modes | Editor command with modal interface |
-| `Update Perplexica URL` | Change Perplexica API endpoint | Settings command |
-| `Show Perplexica Settings` | Display current Perplexica configuration | Debug command |
+| `Ask Perplexica / Vane` | Query Perplexica / Vane with focus and optimization modes | Editor command with modal interface |
+| `Update Perplexica / Vane URL` | Change Perplexica / Vane API endpoint | Settings command |
+| `Show Perplexica / Vane Settings` | Display current Perplexica / Vane configuration | Debug command |
 
 ### LM Studio Commands
 

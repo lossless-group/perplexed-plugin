@@ -158,7 +158,7 @@ const DEFAULT_SETTINGS: PerplexedPluginSettings = {
         
         // Placeholder text
         perplexityQueryPlaceholder: "What would you like to ask Perplexity?",
-        perplexicaQueryPlaceholder: "What would you like to ask Perplexica?",
+        perplexicaQueryPlaceholder: "What would you like to ask Perplexica / Vane?",
         lmStudioQueryPlaceholder: "What would you like to ask?",
         lmStudioSystemPromptPlaceholder: "You are a helpful AI assistant...",
         articleTermPlaceholder: "e.g., AI Copilots, AI Studios, Machine Learning, etc.",
@@ -549,11 +549,11 @@ export default class PerplexedPlugin extends Plugin {
         // Command to update Perplexica URL
         this.addCommand({
             id: 'update-perplexica-url',
-            name: 'Update Perplexica URL',
+            name: 'Update Perplexica / Vane URL',
             callback: () => {
                 const modal = new URLUpdateModal(this.app, {
-                    title: 'Update Perplexica API URL',
-                    label: 'Perplexica API URL',
+                    title: 'Update Perplexica / Vane API URL',
+                    label: 'Perplexica / Vane API URL',
                     placeholder: 'http://localhost:3030/api/search',
                     currentValue: this.settings.perplexicaEndpoint,
                     onSave: async (newUrl: string) => {
@@ -568,9 +568,9 @@ export default class PerplexedPlugin extends Plugin {
         // Command to show current settings
         this.addCommand({
             id: 'show-perplexica-settings',
-            name: 'Show Perplexica Settings',
+            name: 'Show Perplexica / Vane Settings',
             callback: () => {
-                new Notice(`Current Perplexica URL: ${this.settings.perplexicaEndpoint}`);
+                new Notice(`Current Perplexica / Vane URL: ${this.settings.perplexicaEndpoint}`);
                 console.log('Perplexica Settings:', this.settings);
             }
         });
@@ -578,11 +578,11 @@ export default class PerplexedPlugin extends Plugin {
         // Command to ask Perplexica
         this.addCommand({
             id: 'ask-perplexica',
-            name: 'Ask Perplexica',
+            name: 'Ask Perplexica / Vane',
             editorCallback: (editor: Editor) => {
                 try {
                     if (!this.perplexicaService) {
-                        new Notice('Perplexica service not initialized. Please check console for errors and try the debug command.');
+                        new Notice('Perplexica / Vane service not initialized. Please check console for errors and try the debug command.');
                         console.error('Perplexica service is not initialized');
                         return;
                     }
@@ -595,7 +595,7 @@ export default class PerplexedPlugin extends Plugin {
                     modal.open();
                 } catch (error) {
                     console.error('Error opening Perplexica modal:', error);
-                    new Notice('Failed to open Perplexica modal. Check console for details.');
+                    new Notice('Failed to open Perplexica / Vane modal. Check console for details.');
                 }
             }
         });
@@ -1135,17 +1135,17 @@ class PerplexedSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
-        // Perplexica Section
-        const perplexicaHeader = containerEl.createEl('h3', { text: 'Perplexica (Self-Hosted)' });
+        // Perplexica / Vane Section
+        const perplexicaHeader = containerEl.createEl('h3', { text: 'Perplexica / Vane (self-hosted)' });
         perplexicaHeader.style.color = 'var(--text-accent)';
         containerEl.createEl('p', {
-            text: 'Configure settings for your local Perplexica installation',
+            text: 'Configure settings for your local Perplexica / Vane installation',
             cls: 'setting-item-description'
         });
 
         new Setting(containerEl)
             .setName('Endpoint')
-            .setDesc('API endpoint for your local Perplexica instance')
+            .setDesc('API endpoint for your local Perplexica / Vane instance')
             .addText(text => text
                 .setPlaceholder('http://localhost:3030/api/search')
                 .setValue(this.plugin.settings.perplexicaEndpoint)
@@ -1169,7 +1169,7 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Default Model')
-            .setDesc('Default AI model for Perplexica to use')
+            .setDesc('Default AI model for Perplexica / Vane to use')
             .addText(text => text
                 .setPlaceholder('llama3.2:latest')
                 .setValue(this.plugin.settings.defaultModel)
@@ -1182,7 +1182,7 @@ class PerplexedSettingTab extends PluginSettingTab {
         // Perplexica Request Template
         const perplexicaJsonSetting = new Setting(containerEl)
             .setName('Request Body Template')
-            .setDesc('JSON template for Perplexica API requests');
+            .setDesc('JSON template for Perplexica / Vane API requests');
             
         // Create a textarea element for Perplexica
         const perplexicaTextArea = document.createElement('textarea');
@@ -1307,10 +1307,10 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('Perplexica System Prompt')
-            .setDesc('System prompt used for Perplexica requests')
+            .setName('Perplexica / Vane System Prompt')
+            .setDesc('System prompt used for Perplexica / Vane requests')
             .addTextArea(text => text
-                .setPlaceholder('Enter system prompt for Perplexica...')
+                .setPlaceholder('Enter system prompt for Perplexica / Vane...')
                 .setValue(this.plugin.settings.prompts.perplexicaSystemPrompt)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.perplexicaSystemPrompt = value;
@@ -1358,8 +1358,8 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('Perplexica Query Placeholder')
-            .setDesc('Placeholder text for Perplexica query input')
+            .setName('Perplexica / Vane Query Placeholder')
+            .setDesc('Placeholder text for Perplexica / Vane query input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
                 .setValue(this.plugin.settings.prompts.perplexicaQueryPlaceholder)
