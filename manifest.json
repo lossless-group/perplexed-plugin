@@ -3,9 +3,8 @@
 	"name": "Perplexed",
 	"version": "0.1.0",
 	"minAppVersion": "0.15.0",
-	"description": "A plugin for Obsidian that allows you to generate source-cited content using AI using Perplexity and Perplexica.",
+	"description": "Generate source-cited research content from Perplexity, Anthropic Claude, Perplexica, or local LM Studio — directly into your notes.",
 	"author": "The Lossless Group",
 	"authorUrl": "https://lossless.group",
-	"fundingUrl": "https://lossless.group",
 	"isDesktopOnly": true
 }

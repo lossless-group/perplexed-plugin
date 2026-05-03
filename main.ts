@@ -436,7 +436,7 @@ export default class PerplexedPlugin extends Plugin {
             
             // Add debug command to check command status
             this.addCommand({
-                id: 'perplexed-debug-commands',
+                id: 'debug-commands',
                 name: 'Debug: Check Perplexed Commands',
                 callback: () => {
                     this.debugCommands();
@@ -445,7 +445,7 @@ export default class PerplexedPlugin extends Plugin {
             
             // Add command to reset prompts to defaults
             this.addCommand({
-                id: 'perplexed-reset-prompts',
+                id: 'reset-prompts',
                 name: 'Reset Prompts to Default',
                 callback: async () => {
                     await this.resetPromptsToDefault();
@@ -454,7 +454,7 @@ export default class PerplexedPlugin extends Plugin {
             
             // Add command to reinitialize services
             this.addCommand({
-                id: 'perplexed-reinitialize-services',
+                id: 'reinitialize-services',
                 name: 'Reinitialize Perplexed Services',
                 callback: async () => {
                     await this.reinitializeServices();
@@ -1022,8 +1022,6 @@ class PerplexedSettingTab extends PluginSettingTab {
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
-
-        containerEl.createEl('h2', { text: 'Perplexed Plugin Settings' });
 
         // Perplexity Section
         const perplexityHeader = containerEl.createEl('h3', { text: 'Perplexity (Remote Service)' });

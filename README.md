@@ -15,11 +15,29 @@
 [2]: 2025, Jun 16. [Governance, risk and compliance (GRC): Definitions and resources](https://www.diligent.com/resources/guides/grc). Published: 2025-05-27 | Updated: 2025-06-16
    > ```
 
-- **Multiple AI Providers**: Support for Perplexity (commercial) and Perplexica (self-hosted)
+- **Multiple AI Providers**: Support for Perplexity, Anthropic Claude, Perplexica (self-hosted), and LM Studio (local)
 - **Streaming Responses**: Real-time streaming of AI responses for better UX
 - **Flexible Configuration**: Customizable endpoints, models, and parameters
 - **Deep Research Mode**: Comprehensive research across hundreds of sources
 - **Local LLM Support**: Integration with LM Studio for local AI processing
+
+## Network use and accounts
+
+Perplexed contacts these remote services on your behalf when you invoke
+their respective commands. Nothing is sent automatically — only the
+prompts you submit through a command modal, and any text you have
+explicitly selected when invoking selection-based commands.
+
+| Provider | Endpoint | Account | API key |
+|---|---|---|---|
+| Perplexity | `https://api.perplexity.ai/chat/completions` | Required | Required (paid) |
+| Anthropic Claude | `https://api.anthropic.com/v1/messages` | Required | Required (paid) |
+| Perplexica | `http://localhost:3030/api/search` (default; user-configurable) | Not required | Not required (self-hosted) |
+| LM Studio | `http://localhost:1234/v1/chat/completions` (default; user-configurable) | Not required | Not required (runs locally) |
+
+The plugin does not collect telemetry, ship vault content anywhere else,
+or update itself — Obsidian handles plugin updates through the community
+plugin directory.
 
 ## 📋 Table of Contents
 
@@ -315,7 +333,7 @@ perplexed-plugin/
 
 1. **Clone the Repository**:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/lossless-group/perplexed-plugin.git
    cd perplexed-plugin
    ```
 
@@ -604,8 +622,8 @@ Enable debug logging by checking the browser console:
 
 ### Getting Help
 
-- Check the [Issues](https://github.com/your-repo/issues) page
-- Review the [Discussions](https://github.com/your-repo/discussions) forum
+- Check the [Issues](https://github.com/lossless-group/perplexed-plugin/issues) page
+- Review the [Discussions](https://github.com/lossless-group/perplexed-plugin/discussions) forum
 - Contact the development team
 
 ---
@@ -619,6 +637,5 @@ We are committed to playing on the frontiers of technology and staying curious a
 ---
 
 **License**: MIT  
-**Version**: 0.0.0.1  
 **Author**: The Lossless Group  
-**Support**: [GitHub Issues](https://github.com/your-repo/issues)
+**Support**: [GitHub Issues](https://github.com/lossless-group/perplexed-plugin/issues)
