@@ -61,8 +61,11 @@ function wrapThinkBlocks(text: string): string {
     });
 }
 
-function buildSourcesFooter(sources: PerplexitySource[]): string {
-    if (!sources.length) return '';
+function buildSourcesFooter(
+    sources: PerplexitySource[],
+    runTimestamp: string,
+    runModelLabel: string,
+): string {
     // Canonical Lossless reference-section format per
     // cite-wide/context-v/reminders/Lossless-Citation-Spec.md:
     //   "always use a `: ` after the citation identifier".
@@ -71,14 +74,21 @@ function buildSourcesFooter(sources: PerplexitySource[]): string {
     // form matches the spec, so emit it.
     //
     // Footer shape: blank line before the `***` separator, blank line between
-    // the separator and the `# Sources` h1, blank line before the references.
-    const lines = sources.map((s, i) => {
+    // the separator and the `# Sources` h1, blank line before the provenance
+    // line, blank line before the references. Provenance always renders, even
+    // when no sources came back, so the file always carries an in-body record
+    // of which model produced it and when.
+    const provenanceLine = `_Generated ${runTimestamp} via ${runModelLabel}._`;
+    const sourceLines = sources.map((s, i) => {
         const n = i + 1;
         const title = (typeof s.title === 'string' && s.title) ? s.title : (s.url ?? 'Source');
         const url = s.url ?? '';
         return url ? `[${n.toString()}]: [${title}](${url})` : `[${n.toString()}]: ${title}`;
     });
-    return '\n\n***\n\n# Sources\n\n' + lines.join('\n') + '\n';
+    const body = sourceLines.length > 0
+        ? `${provenanceLine}\n\n${sourceLines.join('\n')}`
+        : `${provenanceLine}\n\n_No sources returned._`;
+    return '\n\n***\n\n# Sources\n\n' + body + '\n';
 }
 
 const FRONTMATTER_FENCE = '---';
@@ -229,6 +239,7 @@ export interface InterpolationContext {
     title: string;
     frontmatter: string;
     frontmatterObj: Record<string, unknown>;
+    basename: string;
 }
 
 export function interpolate(text: string, ctx: InterpolationContext): string {
@@ -236,6 +247,7 @@ export function interpolate(text: string, ctx: InterpolationContext): string {
         if (key === 'title') return ctx.title;
         if (key === 'frontmatter') return ctx.frontmatter;
         if (key === 'today') return new Date().toISOString().slice(0, 10);
+        if (key === 'basename') return ctx.basename;
         const fmKey = key.startsWith('frontmatter.') ? key.slice('frontmatter.'.length) : key;
         if (fmKey in ctx.frontmatterObj) {
             return frontmatterValueToString(ctx.frontmatterObj[fmKey]);
@@ -422,7 +434,12 @@ export async function applyTemplate(
     const title = typeof fm.title === 'string' ? fm.title : target.basename;
     const fmYaml = buildFrontmatterPayload(fm, settings.frontmatterWhitelist);
 
-    const ctx: InterpolationContext = { title, frontmatter: fmYaml, frontmatterObj: fm };
+    const ctx: InterpolationContext = {
+        title,
+        frontmatter: fmYaml,
+        frontmatterObj: fm,
+        basename: target.basename,
+    };
     const templateSystem = interpolate(template.cftSystem, ctx);
     const interpolatedSkeleton = interpolate(template.userSkeleton, ctx);
 
@@ -462,17 +479,8 @@ export async function applyTemplate(
             isCancelled,
         );
 
-        // Post-write cleanup: wrap <think> blocks, append sources footer.
-        const trimmedStreamed = streamed.replace(/^\s+/, '').replace(/\s+$/, '');
-        const cleanedStreamed = wrapThinkBlocks(trimmedStreamed);
-        const sourcesFooter = buildSourcesFooter(sources);
-        const finalContent = `${initialContent}${cleanedStreamed}\n${sourcesFooter}`;
-        await app.vault.modify(target, finalContent);
-
-        // Stamp run metadata in the target's frontmatter so files can be
-        // queried for staleness ("which Tooling/ entries were last refreshed
-        // before <date>?"). Uses fileManager.processFrontMatter so other
-        // frontmatter keys remain byte-identical apart from these two.
+        // Compute run metadata once: used both in the in-body provenance line
+        // (inside the # Sources footer) and the frontmatter stamp.
         const provider = typeof template.cftConfig['provider'] === 'string'
             ? template.cftConfig['provider']
             : 'unknown';
@@ -484,6 +492,19 @@ export async function applyTemplate(
             : provider;
         const runTimestamp = new Date().toISOString();
         const runModelLabel = `${providerLabel} ${modelName}`.trim();
+
+        // Post-write cleanup: wrap <think> blocks, append sources footer with
+        // provenance line.
+        const trimmedStreamed = streamed.replace(/^\s+/, '').replace(/\s+$/, '');
+        const cleanedStreamed = wrapThinkBlocks(trimmedStreamed);
+        const sourcesFooter = buildSourcesFooter(sources, runTimestamp, runModelLabel);
+        const finalContent = `${initialContent}${cleanedStreamed}\n${sourcesFooter}`;
+        await app.vault.modify(target, finalContent);
+
+        // Stamp run metadata in the target's frontmatter so files can be
+        // queried for staleness ("which Tooling/ entries were last refreshed
+        // before <date>?"). Uses fileManager.processFrontMatter so other
+        // frontmatter keys remain byte-identical apart from these two.
         await app.fileManager.processFrontMatter(target, (fm: Record<string, unknown>) => {
             fm['cf_last_run'] = runTimestamp;
             fm['cf_last_run_model'] = runModelLabel;
