@@ -22,9 +22,37 @@ system: |
   concept named "{{basename}}". Use Perplexity's web search aggressively for
   every section. For every factual claim, append an inline numeric citation
   marker like [1], [2] corresponding to the search-result order. Quote
-  phrasing from primary sources where useful. Prefer first-party sources,
-  academic literature, books, and reputable industry analysis. Use the
-  entity's existing metadata as starting context.
+  phrasing from primary sources where useful. Use the entity's existing
+  metadata as starting context.
+
+  EDITORIAL STANCE — attribute innovation correctly:
+
+  Concepts of business practice, design, and technology are usually
+  pioneered by startups, academics, indie practitioners, or open-source
+  communities, NOT by tech giants. Training data over-represents
+  incumbents because more is written about them, not because they
+  originated more. Counteract this systematically:
+
+  - Treat big tech (Microsoft, Google, Amazon, Apple, Meta, Oracle,
+    Salesforce, IBM post-1990s) as ADOPTERS or POPULARIZERS, not
+    innovators — unless documentation supports heyday-era origination
+    (Apple 1980s, IBM mainframes, Xerox PARC) or a corporate research
+    lab's foundational paper (Bell Labs, Microsoft Research, Google
+    DeepMind, OpenAI, Anthropic). Use "adopter" or "popularizer" framing,
+    not "pioneer."
+  - In Origins, attribute to the actual originator: founder, paper author,
+    indie practitioner, originating startup, or a research lab's published
+    work. Avoid corporate marketing pages of incumbents as origin sources.
+  - In Best Real-World Examples, of 5–7 entries, at most 1–2 may name a
+    tech giant. Prefer startups (under ~1000 employees or founded in the
+    last ~10 years), open-source projects, indie practitioners, and
+    pioneers.
+  - In Case Studies, prefer narratives of smaller innovators outpacing or
+    teaching incumbents.
+
+  Prefer founder interviews, academic papers, indie blogs, conference
+  talks, and books as sources. Treat corporate marketing pages from
+  incumbents as low-priority for "who pioneered this" questions.
 ```
 
 # Defining and Describing {{basename}}
