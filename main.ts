@@ -31,6 +31,8 @@ import {
 } from './src/services/directoryTemplateService';
 import type { DirectoryTemplateSettings, ParsedTemplate } from './src/services/directoryTemplateService';
 import type { TFile } from 'obsidian';
+import { findImagesForSelection } from './src/services/findImagesService';
+import type { FindImagesSettings } from './src/services/findImagesService';
 
 
 interface PerplexedPluginSettings {
@@ -87,6 +89,9 @@ interface PerplexedPluginSettings {
     directoryTemplatesRoot: string;
     directoryTemplatesFrontmatterWhitelist: string[];
     directoryTemplatesRequestTimeoutMs: number;
+
+    // Find images for selection
+    findImagesMaxImages: number;
 }
 
 const DEFAULT_SETTINGS: PerplexedPluginSettings = {
@@ -299,7 +304,10 @@ Structure the article as follows:
     // Directory templates (v0.1 spike defaults)
     directoryTemplatesRoot: 'zz-cf-lib/templates',
     directoryTemplatesFrontmatterWhitelist: ['title', 'og_description', 'tags', 'og_image'],
-    directoryTemplatesRequestTimeoutMs: 300000
+    directoryTemplatesRequestTimeoutMs: 300000,
+
+    // Find images for selection
+    findImagesMaxImages: 3
 };
 
 export default class PerplexedPlugin extends Plugin {
@@ -509,6 +517,27 @@ export default class PerplexedPlugin extends Plugin {
                 callback: () => {
                     this.batchCancelled = true;
                     new Notice('Stop requested — finishing current file then halting.');
+                }
+            });
+
+            // Find images for the current selection — anchors search on the
+            // selection's content + the active file's url/site_name frontmatter
+            // and distributes returned images between paragraphs.
+            this.addCommand({
+                id: 'find-images-for-selection',
+                name: 'Find images for selection',
+                editorCallback: (editor: Editor) => {
+                    const file = this.app.workspace.getActiveFile();
+                    if (!file) {
+                        new Notice('No active file.');
+                        return;
+                    }
+                    const findSettings: FindImagesSettings = {
+                        perplexityApiKey: this.settings.perplexityApiKey,
+                        perplexityEndpoint: this.settings.perplexityEndpoint,
+                        maxImages: this.settings.findImagesMaxImages,
+                    };
+                    void findImagesForSelection(this.app, findSettings, file, editor);
                 }
             });
             
@@ -1762,6 +1791,28 @@ class PerplexedSettingTab extends PluginSettingTab {
                     const n = parseInt(value, 10);
                     if (!isNaN(n) && n > 0) {
                         this.plugin.settings.directoryTemplatesRequestTimeoutMs = n;
+                        await this.plugin.saveSettings();
+                    }
+                })
+            );
+
+        // Find images for selection
+        new Setting(containerEl).setName('Find images for selection').setHeading();
+        containerEl.createEl('p', {
+            text: 'Highlight a passage, run "find images for selection". The plugin asks Perplexity for screenshots that visually illustrate the passage, prefers images on the entity\'s domain (frontmatter URL), and embeds them between paragraphs.',
+            cls: 'setting-item-description'
+        });
+
+        new Setting(containerEl)
+            .setName('Max images')
+            .setDesc('Maximum number of images to embed per invocation.')
+            .addText(text => text
+                .setPlaceholder('3')
+                .setValue(String(this.plugin.settings.findImagesMaxImages))
+                .onChange(async (value: string) => {
+                    const n = parseInt(value, 10);
+                    if (!isNaN(n) && n > 0) {
+                        this.plugin.settings.findImagesMaxImages = n;
                         await this.plugin.saveSettings();
                     }
                 })
