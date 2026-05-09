@@ -1,5 +1,5 @@
 import type { App, TFile } from 'obsidian';
-import { Notice, parseYaml, request, stringifyYaml } from 'obsidian';
+import { Notice, parseYaml, stringifyYaml } from 'obsidian';
 
 export interface DirectoryTemplateSettings {
     perplexityApiKey: string;
@@ -24,14 +24,6 @@ export interface ParsedTemplate {
     userSkeleton: string;
 }
 
-interface PerplexityChoice {
-    message?: { content?: string };
-}
-
-interface PerplexityResponseShape {
-    choices?: PerplexityChoice[];
-}
-
 interface PerplexityPayload {
     model: string;
     messages: { role: string; content: string }[];
@@ -40,6 +32,45 @@ interface PerplexityPayload {
     return_images: boolean;
     return_related_questions: boolean;
     search_recency_filter?: string;
+}
+
+export interface PerplexitySource {
+    title?: string;
+    url?: string;
+    date?: string;
+    last_updated?: string;
+}
+
+const INLINE_CITATION_DIRECTIVE = "When you make any factual claim that comes from a web search result, append a numeric citation marker like [1], [2], etc. immediately after the claim. The numbers MUST correspond 1:1 to the order of the search results returned by the search tool (first result = [1], second = [2], and so on). You may cite the same source multiple times. Do not list the sources at the end — only inline markers. Do not invent sources; only cite results actually used.";
+
+function buildResearchFraming(title: string, fmYaml: string): string {
+    return `Research the entity "${title}" using web search. Use the metadata below as context, then produce a structured profile that follows the markdown skeleton at the end of this prompt. Every factual claim in your output must be immediately followed by an inline [N] citation marker corresponding to a returned search result. Quote phrasing from sources where useful.
+
+Metadata for "${title}":
+${fmYaml}
+
+Skeleton (follow this structure; bullets under each heading describe what the section requires):
+
+`;
+}
+
+function wrapThinkBlocks(text: string): string {
+    return text.replace(/<think>([\s\S]*?)<\/think>/gi, (_match, inner: string) => {
+        const trimmed = inner.replace(/^\s+/, '').replace(/\s+$/, '');
+        return '```think-output\n' + trimmed + '\n```';
+    });
+}
+
+function buildSourcesFooter(sources: PerplexitySource[]): string {
+    if (!sources.length) return '';
+    const lines = sources.map((s, i) => {
+        const n = i + 1;
+        const title = (typeof s.title === 'string' && s.title) ? s.title : (s.url ?? 'Source');
+        const url = s.url ?? '';
+        const date = (typeof s.date === 'string' && s.date) ? ` (${s.date})` : '';
+        return url ? `${n}. [${title}](${url})${date}` : `${n}. ${title}${date}`;
+    });
+    return '\n\n## Sources\n\n' + lines.join('\n') + '\n';
 }
 
 const FRONTMATTER_FENCE = '---';
@@ -233,41 +264,126 @@ function buildPayload(
     return payload;
 }
 
-async function callPerplexity(
+async function streamPerplexityToFile(
+    app: App,
     apiKey: string,
     endpoint: string,
     payload: PerplexityPayload,
     timeoutMs: number,
-): Promise<string> {
-    const requestPromise = request({
-        url: endpoint,
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        },
-        body: JSON.stringify(payload),
-    });
+    file: TFile,
+    initialContent: string,
+    isCancelled: () => boolean,
+): Promise<{ streamed: string; sources: PerplexitySource[] }> {
+    payload.stream = true;
+    const controller = new AbortController();
+    const timer = activeWindow.setTimeout(() => controller.abort(), timeoutMs);
 
-    const timeoutPromise = new Promise<never>((_, reject) => {
-        activeWindow.setTimeout(() => reject(new Error(`Request timed out after ${timeoutMs}ms`)), timeoutMs);
-    });
+    let response: Response;
+    try {
+        // eslint-disable-next-line no-restricted-globals
+        response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+            cache: 'no-store',
+        });
+    } catch (err) {
+        activeWindow.clearTimeout(timer);
+        throw err;
+    }
 
-    const response = await Promise.race([requestPromise, timeoutPromise]);
-    const data = JSON.parse(response) as PerplexityResponseShape;
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error('Perplexity returned no content.');
-    return content;
+    if (!response.ok) {
+        activeWindow.clearTimeout(timer);
+        throw new Error(`Perplexity HTTP ${response.status.toString()}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+        activeWindow.clearTimeout(timer);
+        throw new Error('Perplexity returned no response body');
+    }
+
+    const decoder = new TextDecoder();
+    let sseBuffer = '';
+    let streamed = '';
+    let sources: PerplexitySource[] = [];
+    let lastFlush = 0;
+    const FLUSH_MS = 500;
+
+    try {
+        while (true) {
+            if (isCancelled()) {
+                controller.abort();
+                break;
+            }
+            const { value, done } = await reader.read();
+            if (done) break;
+            sseBuffer += decoder.decode(value, { stream: true });
+
+            const lines = sseBuffer.split('\n');
+            sseBuffer = lines.pop() ?? '';
+            for (const rawLine of lines) {
+                const line = rawLine.trim();
+                if (!line.startsWith('data:')) continue;
+                const data = line.slice(5).trim();
+                if (!data || data === '[DONE]') continue;
+                try {
+                    const parsed: unknown = JSON.parse(data);
+                    if (typeof parsed !== 'object' || parsed === null) continue;
+                    const obj = parsed as Record<string, unknown>;
+                    const choices = obj['choices'];
+                    if (Array.isArray(choices) && choices.length > 0) {
+                        const first = choices[0] as Record<string, unknown> | undefined;
+                        const delta = first?.['delta'] as Record<string, unknown> | undefined;
+                        const content = delta?.['content'];
+                        if (typeof content === 'string') {
+                            streamed += content;
+                        }
+                    }
+                    const sr = obj['search_results'];
+                    if (Array.isArray(sr)) {
+                        sources = sr.filter((x): x is PerplexitySource =>
+                            typeof x === 'object' && x !== null);
+                    }
+                } catch {
+                    // partial JSON; skip
+                }
+            }
+
+            const now = Date.now();
+            if (now - lastFlush >= FLUSH_MS) {
+                await app.vault.modify(file, initialContent + streamed);
+                lastFlush = now;
+            }
+        }
+    } finally {
+        activeWindow.clearTimeout(timer);
+        try {
+            reader.releaseLock();
+        } catch {
+            // already released
+        }
+    }
+
+    // Final flush of raw stream content before post-processing
+    await app.vault.modify(file, initialContent + streamed);
+
+    return { streamed, sources };
 }
 
 export type ApplyOutcome =
-    | { status: 'applied'; mode: 'fill' | 'append' }
+    | { status: 'applied'; mode: 'fill' | 'append'; sourceCount: number }
     | { status: 'skipped'; reason: string }
     | { status: 'error'; error: string };
 
 export interface ApplyOptions {
     quiet?: boolean;
+    isCancelled?: () => boolean;
 }
 
 export async function applyTemplate(
@@ -278,6 +394,7 @@ export async function applyTemplate(
     options: ApplyOptions = {},
 ): Promise<ApplyOutcome> {
     const quiet = options.quiet === true;
+    const isCancelled = options.isCancelled ?? (() => false);
 
     if (!settings.perplexityApiKey) {
         if (!quiet) new Notice('Perplexity API key is not set.');
@@ -290,46 +407,65 @@ export async function applyTemplate(
 
     const targetContent = await app.vault.read(target);
     const { frontmatter: fmRaw, body } = splitFrontmatter(targetContent);
-    const existingBody = body.trim();
-    const mode: 'fill' | 'append' = existingBody.length === 0 ? 'fill' : 'append';
+    const existingBody = body.replace(/\s+$/, '');
+    const mode: 'fill' | 'append' = existingBody.trim().length === 0 ? 'fill' : 'append';
 
     const fm = safeParseYaml(fmRaw);
     const title = typeof fm.title === 'string' ? fm.title : target.basename;
     const fmYaml = buildFrontmatterPayload(fm, settings.frontmatterWhitelist);
 
     const ctx: InterpolationContext = { title, frontmatter: fmYaml, frontmatterObj: fm };
-    const systemPrompt = interpolate(template.cftSystem, ctx);
-    const userPrompt = interpolate(template.userSkeleton, ctx);
+    const templateSystem = interpolate(template.cftSystem, ctx);
+    const interpolatedSkeleton = interpolate(template.userSkeleton, ctx);
+
+    // Combined system prompt: citation-enforcement directive first, then template's role framing.
+    const systemPrompt = templateSystem
+        ? `${INLINE_CITATION_DIRECTIVE}\n\n${templateSystem}`
+        : INLINE_CITATION_DIRECTIVE;
+
+    // User prompt: research framing prepended to the skeleton so the model treats this as a
+    // research task, not a writing brief.
+    const userPrompt = buildResearchFraming(title, fmYaml) + interpolatedSkeleton;
+
+    // Initial file content the stream will append to.
+    const fmBlock = fmRaw.length > 0 ? `---\n${fmRaw}\n---\n` : '';
+    const initialContent = mode === 'fill'
+        ? `${fmBlock}\n`
+        : `${fmBlock}\n${existingBody}\n\n`;
 
     const payload = buildPayload(template, systemPrompt, userPrompt);
 
     let loadingNotice: Notice | null = null;
     if (!quiet) {
-        loadingNotice = new Notice('Applying template via Perplexity deep research…', 0);
+        loadingNotice = new Notice('Streaming Perplexity deep research…', 0);
     }
     try {
-        const content = await callPerplexity(
+        // Set initial state before streaming begins.
+        await app.vault.modify(target, initialContent);
+
+        const { streamed, sources } = await streamPerplexityToFile(
+            app,
             settings.perplexityApiKey,
             settings.perplexityEndpoint,
             payload,
             settings.requestTimeoutMs,
+            target,
+            initialContent,
+            isCancelled,
         );
-        const trimmedResponse = content.replace(/^\s+/, '').replace(/\s+$/, '');
-        const fmBlock = fmRaw.length > 0 ? `---\n${fmRaw}\n---\n` : '';
 
-        let newFile: string;
-        if (mode === 'fill') {
-            newFile = `${fmBlock}\n${trimmedResponse}\n`;
-        } else {
-            const existing = body.replace(/\s+$/, '');
-            newFile = `${fmBlock}\n${existing}\n\n${trimmedResponse}\n`;
-        }
-        await app.vault.modify(target, newFile);
+        // Post-write cleanup: wrap <think> blocks, append sources footer.
+        const trimmedStreamed = streamed.replace(/^\s+/, '').replace(/\s+$/, '');
+        const cleanedStreamed = wrapThinkBlocks(trimmedStreamed);
+        const sourcesFooter = buildSourcesFooter(sources);
+        const finalContent = `${initialContent}${cleanedStreamed}\n${sourcesFooter}`;
+        await app.vault.modify(target, finalContent);
+
         if (!quiet) {
             const verb = mode === 'fill' ? 'Filled' : 'Appended to';
-            new Notice(`${verb} "${target.basename}" using ${template.file.basename}`);
+            new Notice(`${verb} "${target.basename}" using ${template.file.basename} (${sources.length.toString()} sources)`);
         }
-        return { status: 'applied', mode };
+        return { status: 'applied', mode, sourceCount: sources.length };
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (!quiet) new Notice(`Perplexity error: ${msg}`);
