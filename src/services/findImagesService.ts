@@ -107,21 +107,31 @@ export async function findImagesForSelection(
     const N = Math.max(1, settings.maxImages);
     const numberedParagraphs = paragraphs.map((p, i) => `[${(i + 1).toString()}] ${p}`).join('\n\n');
 
-    const prompt = `You are a visual editor. The passage below is divided into ${paragraphs.length.toString()} numbered paragraphs. Find ${N.toString()} screenshot, product, or feature images that visually illustrate the specific content of this passage.
+    const prompt = `You are a visual editor. The passage below is divided into ${paragraphs.length.toString()} numbered paragraphs. Find up to ${N.toString()} screenshot, product, or feature images that visually illustrate the specific content of this passage.
 
-Entity: "${entityName}"${entityUrl ? ' at ' + entityUrl : ''}.${entityDomain ? ` Strongly prefer images hosted on ${entityDomain} or its subdomains. Fall back to other web sources only when on-domain images are not available.` : ''}
+${entityDomain ? `You are restricted to images on ${entityDomain}. Your search has already been domain-filtered to this site. Do NOT reference images from other domains.` : ''} Entity: "${entityName}"${entityUrl ? ' at ' + entityUrl : ''}.
 
 For each image you select, output one line in this exact form, with no other prose:
 
 [AFTER {paragraph_number}] [IMAGE {n}: <specific description of what the image shows>]
 
-Where paragraph_number is the number of the paragraph the image best illustrates, and n is 1-indexed across your selected images. The description must be specific to the image (e.g., "ZAPI dashboard showing API discovery interface"), not generic. Do not return logos, generic company photos, or stock images. Return only the placement lines, one per image, nothing else.
+Where paragraph_number is the number of the paragraph the image best illustrates, and n is 1-indexed across your selected images. The description must be specific to the image (e.g., "ZAPI dashboard showing API discovery interface"), not generic. Do not return logos, favicons, or icons. If you cannot find ${N.toString()} on-domain images that genuinely illustrate the passage, return fewer images (or none) — never substitute generic stock images. Return only the placement lines, one per image, nothing else.
 
 Passage:
 
 ${numberedParagraphs}`;
 
-    const payload = {
+    interface PerplexityImagePayload {
+        model: string;
+        messages: { role: string; content: string }[];
+        stream: boolean;
+        return_citations: boolean;
+        return_images: boolean;
+        return_related_questions: boolean;
+        search_domain_filter?: string[];
+    }
+
+    const payload: PerplexityImagePayload = {
         model: 'sonar',
         messages: [{ role: 'user', content: prompt }],
         stream: false,
@@ -129,6 +139,11 @@ ${numberedParagraphs}`;
         return_images: true,
         return_related_questions: false,
     };
+    if (entityDomain) {
+        // Constrain Perplexity's search itself to the entity's domain so the
+        // model can only consider on-site pages and their images.
+        payload.search_domain_filter = [entityDomain];
+    }
 
     const loadingNotice = new Notice('Searching for images…', 0);
     try {
@@ -154,29 +169,39 @@ ${numberedParagraphs}`;
 
         const placements = parsePlacementMarkers(responseText);
 
-        // Domain-prefer ordering of returned images, used as fallback when
-        // model didn't emit placement markers for an image.
-        const orderedImages = [...images];
-        if (entityDomain) {
-            orderedImages.sort((a, b) => {
-                const aOrigin = extractDomain(a.origin_url ?? a.image_url ?? '');
-                const bOrigin = extractDomain(b.origin_url ?? b.image_url ?? '');
-                const aMatch = aOrigin.endsWith(entityDomain);
-                const bMatch = bOrigin.endsWith(entityDomain);
-                if (aMatch && !bMatch) return -1;
-                if (!aMatch && bMatch) return 1;
-                return 0;
-            });
+        // Strict client-side domain filter. If we know the entity's domain,
+        // reject every image whose origin or image URL is off-domain. Better to
+        // surface "no on-domain images" than to silently insert third-party
+        // stock illustrations.
+        const onDomain = (img: PerplexityImage): boolean => {
+            if (!entityDomain) return true;
+            const originDomain = extractDomain(img.origin_url ?? '');
+            const imageDomain = extractDomain(img.image_url ?? '');
+            return (
+                originDomain.endsWith(entityDomain) ||
+                imageDomain.endsWith(entityDomain)
+            );
+        };
+        const filteredImages = images.filter(onDomain);
+
+        if (entityDomain && filteredImages.length === 0) {
+            new Notice(`No on-domain images found for ${entityDomain}. Search did not return images hosted on the entity's site.`);
+            return;
         }
+        const orderedImages = filteredImages;
 
         // Build per-paragraph image queue.
         const perParagraphImages: Map<number, string[]> = new Map();
         const usedImageIndices = new Set<number>();
 
         for (const placement of placements.slice(0, N)) {
+            // Placement marker indexes into the FULL images array (the model
+            // sees all returned images). Resolve, then enforce the on-domain
+            // filter — drop placements that point to off-domain images.
             const imgIdx = placement.imageNumber - 1;
             const img = images[imgIdx];
             if (!img?.image_url) continue;
+            if (!onDomain(img)) continue;
             if (placement.paragraphIndex < 1 || placement.paragraphIndex > paragraphs.length) continue;
             const embed = `![${placement.description}](${img.image_url})`;
             const list = perParagraphImages.get(placement.paragraphIndex) ?? [];
