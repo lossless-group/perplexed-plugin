@@ -1,5 +1,5 @@
 ---
-title: Tooling Profile (Company / Service / App)
+title: Toolkit Profile (Company / Service / App)
 applies-to-paths:
   - "Tooling/**"
 description: Generates a structured profile for a company / service / app / open-source repo.
