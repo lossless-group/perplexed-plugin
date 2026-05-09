@@ -69,13 +69,16 @@ function buildSourcesFooter(sources: PerplexitySource[]): string {
     // cite-wide's parser (REFDEF_NUM_RE, line 91 of llmCitationParserService.ts)
     // accepts both `[N]` and `[N]:` thanks to the `(:?)` group, but the colon
     // form matches the spec, so emit it.
+    //
+    // Footer shape: blank line before the `***` separator, blank line between
+    // the separator and the `# Sources` h1, blank line before the references.
     const lines = sources.map((s, i) => {
         const n = i + 1;
         const title = (typeof s.title === 'string' && s.title) ? s.title : (s.url ?? 'Source');
         const url = s.url ?? '';
         return url ? `[${n.toString()}]: [${title}](${url})` : `[${n.toString()}]: ${title}`;
     });
-    return '\n\n## Sources\n\n' + lines.join('\n') + '\n';
+    return '\n\n***\n\n# Sources\n\n' + lines.join('\n') + '\n';
 }
 
 const FRONTMATTER_FENCE = '---';
