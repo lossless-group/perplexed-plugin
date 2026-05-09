@@ -469,6 +469,26 @@ export async function applyTemplate(
         const finalContent = `${initialContent}${cleanedStreamed}\n${sourcesFooter}`;
         await app.vault.modify(target, finalContent);
 
+        // Stamp run metadata in the target's frontmatter so files can be
+        // queried for staleness ("which Tooling/ entries were last refreshed
+        // before <date>?"). Uses fileManager.processFrontMatter so other
+        // frontmatter keys remain byte-identical apart from these two.
+        const provider = typeof template.cftConfig['provider'] === 'string'
+            ? template.cftConfig['provider']
+            : 'unknown';
+        const modelName = typeof template.cftConfig['model'] === 'string'
+            ? template.cftConfig['model']
+            : 'unknown';
+        const providerLabel = provider.length > 0
+            ? provider.charAt(0).toUpperCase() + provider.slice(1)
+            : provider;
+        const runTimestamp = new Date().toISOString();
+        const runModelLabel = `${providerLabel} ${modelName}`.trim();
+        await app.fileManager.processFrontMatter(target, (fm: Record<string, unknown>) => {
+            fm['cf_last_run'] = runTimestamp;
+            fm['cf_last_run_model'] = runModelLabel;
+        });
+
         if (!quiet) {
             const verb = mode === 'fill' ? 'Filled' : 'Appended to';
             new Notice(`${verb} "${target.basename}" using ${template.file.basename} (${sources.length.toString()} sources)`);
