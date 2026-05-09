@@ -19,36 +19,56 @@ export class URLUpdateModal extends Modal {
     }
 
     onOpen() {
-        const {contentEl} = this;
-        contentEl.addClass('url-update-modal');
-        contentEl.createEl('h2', {text: this.config.title});
-        const form = contentEl.createEl('form');
-        const div = form.createDiv({cls: 'setting-item'});
+        const {contentEl, modalEl} = this;
+        modalEl.addClass('url-update-modal');
+        contentEl.empty();
 
-        div.createEl('label', {
+        // Header
+        const header = contentEl.createDiv({cls: 'url-update-modal__header'});
+        header.createEl('h2', {text: this.config.title, cls: 'url-update-modal__title'});
+
+        const form = contentEl.createEl('form');
+        
+        // Body section
+        const section = form.createDiv({cls: 'url-update-modal__section'});
+        
+        section.createEl('label', {
             text: this.config.label,
+            cls: 'url-update-modal__label',
             attr: {for: 'url-input'}
         });
 
-        this.urlInput = div.createEl('input', {
+        this.urlInput = section.createEl('input', {
             type: 'text',
             value: this.config.currentValue,
-            cls: 'text-input',
+            cls: 'url-update-modal__input',
             attr: {id: 'url-input', placeholder: this.config.placeholder}
         });
 
-        const buttonDiv = contentEl.createDiv({cls: 'setting-item'});
-        const saveButton = buttonDiv.createEl('button', {
-            text: 'Save',
-            cls: 'mod-cta'
+        // Footer
+        const footer = contentEl.createDiv({cls: 'url-update-modal__footer'});
+        const cancelBtn = footer.createEl('button', {
+            type: 'button',
+            text: 'Cancel',
+            cls: 'url-update-modal__button'
         });
+        const saveButton = footer.createEl('button', {
+            type: 'submit',
+            text: 'Save',
+            cls: 'url-update-modal__button mod-cta'
+        });
+
+        cancelBtn.onclick = () => this.close();
 
         form.onsubmit = (e) => {
             e.preventDefault();
             void this.onSubmit();
         };
 
-        saveButton.onclick = () => this.onSubmit();
+        saveButton.onclick = (e) => {
+            e.preventDefault();
+            void this.onSubmit();
+        };
     }
 
     async onSubmit() {

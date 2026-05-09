@@ -1,7 +1,125 @@
-/* URLUpdateModal Styles */
+/* ============================================================
+   URL Update Modal — light wide-modal pass
+   Used for simple configuration inputs (e.g. API URLs).
+   ============================================================ */
 
-.url-update-modal .text-input {
+.url-update-modal {
+    width: 90vw;
+    max-width: 500px;
+}
+
+.url-update-modal .modal-content {
+    padding: 0;
+}
+
+/* ----- Header ----- */
+.url-update-modal__header {
+    padding: 20px 24px 12px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.url-update-modal__title {
+    margin: 0;
+    font-size: 1.3em;
+    font-weight: 600;
+    color: var(--text-normal);
+}
+
+/* ----- Body / Section ----- */
+.url-update-modal__section {
+    padding: 18px 24px;
+}
+
+.url-update-modal__label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.url-update-modal__input {
     width: 100%;
-    margin: 8px 0;
-    padding: 12px;
-} 
+    padding: 10px 12px;
+    font-family: var(--font-text);
+    font-size: 14px;
+    color: var(--text-normal);
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+
+.url-update-modal__input:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 3px var(--interactive-accent-hover);
+}
+
+/* ----- Footer / Actions ----- */
+.url-update-modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+    border-bottom-left-radius: var(--modal-radius, 8px);
+    border-bottom-right-radius: var(--modal-radius, 8px);
+}
+
+.url-update-modal__button {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+}
+
+.url-update-modal__button:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.url-update-modal__button:active {
+    transform: translateY(1px);
+}
+
+.url-update-modal__button.mod-cta {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
+}
+
+.url-update-modal__button.mod-cta:hover {
+    background-color: var(--interactive-accent-hover);
+    border-color: var(--interactive-accent-hover);
+}
+
+/* ----- Responsive ----- */
+@media (max-width: 500px) {
+    .url-update-modal {
+        width: 95vw;
+        max-width: none;
+    }
+
+    .url-update-modal__header,
+    .url-update-modal__section,
+    .url-update-modal__footer {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .url-update-modal__footer {
+        flex-direction: column-reverse;
+    }
+
+    .url-update-modal__button {
+        width: 100%;
+    }
+}

@@ -441,7 +441,13 @@ export class PerplexityService {
         
         try {
             const convertedFilter = this.convertRecencyFilter(options?.search_recency_filter ?? "month");
-            
+
+            const inlineCitationInstruction = "When you make any factual claim that comes from a web search result, append a numeric citation marker like [1], [2], etc. immediately after the claim. The numbers MUST correspond 1:1 to the order of the search results returned by the search tool (first result = [1], second = [2], and so on). You may cite the same source multiple times. Do not list the sources at the end — only inline markers. Do not invent sources; only cite results actually used.";
+            const messagesWithSystem = [
+                { role: 'system', content: inlineCitationInstruction },
+                { role: 'user', content: query },
+            ];
+
             let payload: PerplexityPayload;
             if (this.settings.requestTemplate) {
                 try {
@@ -473,7 +479,7 @@ export class PerplexityService {
                     JSON.parse(cleanedTemplate);
                     payload = {
                         model,
-                        messages: [{ role: 'user', content: query }],
+                        messages: messagesWithSystem,
                         stream: useStreaming,
                         return_citations: options?.return_citations ?? true,
                         return_images: options?.return_images ?? true,
@@ -483,7 +489,7 @@ export class PerplexityService {
                     console.warn('Failed to parse request template, using default payload:', error);
                     payload = {
                         model,
-                        messages: [{ role: 'user', content: query }],
+                        messages: messagesWithSystem,
                         stream: useStreaming,
                         return_citations: options?.return_citations ?? true,
                         return_images: options?.return_images ?? true,
@@ -493,7 +499,7 @@ export class PerplexityService {
             } else {
                 payload = {
                     model,
-                    messages: [{ role: 'user', content: query }],
+                    messages: messagesWithSystem,
                     stream: useStreaming,
                     return_citations: options?.return_citations ?? true,
                     return_images: options?.return_images ?? true,
