@@ -34,16 +34,16 @@ export class TextEnhancementModal extends Modal {
 
         // ----- Header -----
         const header = contentEl.createDiv({ cls: 'text-enhancement-modal__header' });
-        header.createEl('h2', { text: 'Enhance Text with Perplexity', cls: 'text-enhancement-modal__title' });
+        header.createEl('h2', { text: 'Enhance text with Perplexity', cls: 'text-enhancement-modal__title' });
         header.createEl('p', {
             cls: 'text-enhancement-modal__subtitle',
-            text: 'Rewrite or expand selected text via Perplexity (sonar-pro). Streams into the active note at the cursor with Citations.',
+            text: 'Rewrite or expand selected text via Perplexity (Sonar-pro). Streams into the active note at the cursor with citations.',
         });
 
         // ----- Selected Text (read-only) -----
         const selectedSection = contentEl.createDiv({ cls: 'text-enhancement-modal__section' });
         selectedSection.createEl('label', {
-            text: 'Selected Text',
+            text: 'Selected text',
             cls: 'text-enhancement-modal__label',
         });
         const selectedTextarea = selectedSection.createEl('textarea', {
@@ -58,7 +58,7 @@ export class TextEnhancementModal extends Modal {
         // ----- Enhancement Prompt (editable) -----
         const promptSection = contentEl.createDiv({ cls: 'text-enhancement-modal__section' });
         promptSection.createEl('label', {
-            text: 'Enhancement Prompt',
+            text: 'Enhancement prompt',
             cls: 'text-enhancement-modal__label',
             attr: { for: 'text-enhancement-modal-prompt' },
         });
@@ -94,12 +94,12 @@ export class TextEnhancementModal extends Modal {
         cancelBtn.addEventListener('click', () => this.close());
 
         this.enhanceBtn = footer.createEl('button', {
-            text: 'Enhance Text',
+            text: 'Enhance text',
             cls: 'text-enhancement-modal__button mod-cta',
         });
         this.enhanceBtn.addEventListener('click', () => void this.onSubmit());
 
-        setTimeout(() => promptTextarea.focus(), 50);
+        activeWindow.setTimeout(() => promptTextarea.focus(), 50);
     }
 
     private async onSubmit(): Promise<void> {
@@ -137,7 +137,7 @@ export class TextEnhancementModal extends Modal {
         } finally {
             if (this.enhanceBtn) {
                 this.enhanceBtn.disabled = false;
-                this.enhanceBtn.textContent = 'Enhance Text';
+                this.enhanceBtn.textContent = 'Enhance text';
             }
         }
     }

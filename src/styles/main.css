@@ -9,6 +9,7 @@
 @import './text-enhancement-modal.css';
 @import './text-enhancement-with-images-modal.css';
 @import './claude-modal.css';
+@import './settings-tab.css';
 
 /* Custom callout styling for AI reasoning process */
 .callout[data-callout="brain"] {

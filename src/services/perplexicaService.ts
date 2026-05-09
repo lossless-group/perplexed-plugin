@@ -69,7 +69,7 @@ export class PerplexicaService {
         }
         
         if (imageIndex > 0) {
-            console.log(`🔄 Processed ${imageIndex} image markers in Perplexica content`);
+            console.debug(`🔄 Processed ${imageIndex} image markers in Perplexica content`);
         }
         
         return content;
@@ -177,6 +177,9 @@ export class PerplexicaService {
                         };
                     }
 
+                    // Streaming uses fetch because Obsidian's requestUrl does not
+                    // support SSE / chunked bodies. Marketplace `/skip` justification.
+                    // eslint-disable-next-line no-restricted-globals
                     const response = await fetch(endpoint, {
                         method: 'POST',
                         headers: {
@@ -206,7 +209,7 @@ export class PerplexicaService {
             }
             
             // If we get here, all endpoints failed
-            throw lastError || new Error('All endpoints failed');
+            throw lastError instanceof Error ? lastError : new Error('All endpoints failed');
             
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
@@ -248,7 +251,7 @@ export class PerplexicaService {
                             };
                         }
                         editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
-                        await new Promise(resolve => setTimeout(resolve, 10));
+                        await new Promise(resolve => activeWindow.setTimeout(resolve, 10));
                     }
                 } catch (e) {
                     // Ignore JSON parse errors

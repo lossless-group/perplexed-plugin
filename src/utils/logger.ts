@@ -41,7 +41,8 @@ export class FileLogger {
       const file = this.vault.getAbstractFileByPath(this.logFile);
       if (file instanceof TFile) {
         const content = await this.vault.read(file);
-        this.logEntries = JSON.parse(content);
+        const parsed: unknown = JSON.parse(content);
+        this.logEntries = Array.isArray(parsed) ? (parsed as LogEntry[]) : [];
       }
     } catch (error) {
       // File doesn't exist or is corrupted, start with empty logs
@@ -102,9 +103,19 @@ export class FileLogger {
       console.error('Failed to save log entry:', error);
     });
 
-    // Also log to console
-    const logMethod = console[level] || console.log;
-    logMethod(`[${entry.timestamp}] [${level.toUpperCase()}] ${message}`, details || '');
+    // Also log to console — only allow warn / error / debug per Obsidian
+    // marketplace rules; map info → debug, default → debug.
+    const formatted = `[${entry.timestamp}] [${level.toUpperCase()}] ${message}`;
+    switch (level) {
+      case 'error':
+        console.error(formatted, details ?? '');
+        break;
+      case 'warn':
+        console.warn(formatted, details ?? '');
+        break;
+      default:
+        console.debug(formatted, details ?? '');
+    }
   }
 
   error(message: string, details?: unknown): void {

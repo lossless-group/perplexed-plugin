@@ -89,7 +89,7 @@ export class LMStudioModal extends Modal {
             .setName('Model')
             .setDesc(this.modelTagline(this.model))
             .addDropdown(dd => {
-                LMSTUDIO_MODELS.forEach(({ value, label }) => dd.addOption(value, label));
+                LMSTUDIO_MODELS.forEach(({ value, label }) => { dd.addOption(value, label); });
                 dd.setValue(this.model);
                 dd.onChange((value) => {
                     this.model = value;
@@ -99,7 +99,7 @@ export class LMStudioModal extends Modal {
         this.modelDescEl = modelSetting.descEl;
 
         new Setting(modelSection)
-            .setName('Max Tokens')
+            .setName('Max tokens')
             .setDesc('Upper bound on response length. Local models cap lower than cloud — 2048 is a safe default.')
             .addText(t => t
                 .setValue(String(this.maxTokens))
@@ -119,7 +119,7 @@ export class LMStudioModal extends Modal {
 
         // ----- System Prompt (multi-line, doesn't fit a Setting row) -----
         const systemSection = contentEl.createDiv({ cls: 'lmstudio-modal__section' });
-        systemSection.createEl('h3', { text: 'System Prompt (Optional)', cls: 'lmstudio-modal__section-title' });
+        systemSection.createEl('h3', { text: 'System prompt (optional)', cls: 'lmstudio-modal__section-title' });
         systemSection.createEl('p', {
             cls: 'lmstudio-modal__hint',
             text: 'Override the default system prompt for this request. Leave blank to use the plugin default.',
@@ -152,7 +152,7 @@ export class LMStudioModal extends Modal {
         behaviorSection.createEl('h3', { text: 'Behavior', cls: 'lmstudio-modal__section-title' });
 
         new Setting(behaviorSection)
-            .setName('Stream Response')
+            .setName('Stream response')
             .setDesc('Write tokens into the note as they arrive — recommended for long answers and slow local models.')
             .addToggle(t => t
                 .setValue(this.stream)
@@ -172,7 +172,7 @@ export class LMStudioModal extends Modal {
         });
         askBtn.addEventListener('click', () => void this.onSubmit());
 
-        setTimeout(() => queryTextarea.focus(), 50);
+        activeWindow.setTimeout(() => queryTextarea.focus(), 50);
     }
 
     private modelTagline(value: string): string {

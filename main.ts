@@ -1,6 +1,5 @@
 import type { App, Editor} from 'obsidian';
 import { Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-import * as dotenv from 'dotenv';
 
 // Import services
 import { PerplexityService } from './src/services/perplexityService';
@@ -19,8 +18,6 @@ import { ArticleGeneratorModal } from './src/modals/ArticleGeneratorModal';
 import { TextEnhancementModal } from './src/modals/TextEnhancementModal';
 import { TextEnhancementWithImagesModal } from './src/modals/TextEnhancementWithImagesModal';
 
-// Load environment variables
-dotenv.config({ path: `${process.cwd()}/.env` });
 
 interface PerplexedPluginSettings {
     mySetting: string;
@@ -104,8 +101,8 @@ const DEFAULT_SETTINGS: PerplexedPluginSettings = {
   "maxTokens": 2048,
   "temperature": 0.7
 }`,
-    perplexityApiKey: process.env.PERPLEXITY_API_KEY || '',
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+    perplexityApiKey: '',
+    anthropicApiKey: '',
     claudeDefaultModel: 'claude-opus-4-7',
     perplexityRequestTemplate: `{
   "model": "llama-3.1-sonar-small-128k-online",
@@ -295,15 +292,15 @@ export default class PerplexedPlugin extends Plugin {
 
     async onload(): Promise<void> {
         try {
-            console.log('Perplexed Plugin: Starting initialization...');
+            console.debug('Perplexed Plugin: Starting initialization...');
             
             await this.loadSettings();
-            console.log('Perplexed Plugin: Settings loaded successfully');
+            console.debug('Perplexed Plugin: Settings loaded successfully');
             
             // Initialize prompts service first
             try {
                 this.promptsService = new PromptsService(this.settings.prompts);
-                console.log('Perplexed Plugin: PromptsService initialized successfully');
+                console.debug('Perplexed Plugin: PromptsService initialized successfully');
             } catch (error) {
                 console.error('Perplexed Plugin: Failed to initialize PromptsService:', error);
                 new Notice('Failed to initialize PromptsService');
@@ -320,7 +317,7 @@ export default class PerplexedPlugin extends Plugin {
                         requestTemplate: this.settings.perplexityRequestTemplate,
                         headerPosition: this.settings.headerPosition
                     });
-                    console.log('Perplexed Plugin: PerplexityService initialized successfully');
+                    console.debug('Perplexed Plugin: PerplexityService initialized successfully');
                 } catch (error) {
                     console.error('Perplexed Plugin: Failed to initialize PerplexityService:', error);
                     new Notice('Failed to initialize PerplexityService');
@@ -335,7 +332,7 @@ export default class PerplexedPlugin extends Plugin {
                         promptsService: this.promptsService,
                         requestTemplate: this.settings.requestBodyTemplate
                     });
-                    console.log('Perplexed Plugin: PerplexicaService initialized successfully');
+                    console.debug('Perplexed Plugin: PerplexicaService initialized successfully');
                 } catch (error) {
                     console.error('Perplexed Plugin: Failed to initialize PerplexicaService:', error);
                     new Notice('Failed to initialize PerplexicaService');
@@ -348,7 +345,7 @@ export default class PerplexedPlugin extends Plugin {
                         promptsService: this.promptsService,
                         requestTemplate: this.settings.lmStudioRequestTemplate
                     });
-                    console.log('Perplexed Plugin: LMStudioService initialized successfully');
+                    console.debug('Perplexed Plugin: LMStudioService initialized successfully');
                 } catch (error) {
                     console.error('Perplexed Plugin: Failed to initialize LMStudioService:', error);
                     new Notice('Failed to initialize LMStudioService');
@@ -361,7 +358,7 @@ export default class PerplexedPlugin extends Plugin {
                         promptsService: this.promptsService,
                         headerPosition: this.settings.headerPosition,
                     });
-                    console.log('Perplexed Plugin: ClaudeService initialized successfully');
+                    console.debug('Perplexed Plugin: ClaudeService initialized successfully');
                 } catch (error) {
                     console.error('Perplexed Plugin: Failed to initialize ClaudeService:', error);
                     new Notice('Failed to initialize ClaudeService');
@@ -373,71 +370,71 @@ export default class PerplexedPlugin extends Plugin {
                 this.perplexicaService = null;
                 this.lmStudioService = null;
                 this.claudeService = null;
-                console.log('Perplexed Plugin: Skipping service initialization due to PromptsService failure');
+                console.debug('Perplexed Plugin: Skipping service initialization due to PromptsService failure');
             }
             
             // Debug: Log current settings
-            console.log('Perplexed Plugin: Current Perplexica Path:', this.settings.perplexicaEndpoint);
-            console.log('Perplexed Plugin: Full settings:', JSON.stringify(this.settings, null, 2));
+            console.debug('Perplexed Plugin: Current Perplexica Path:', this.settings.perplexicaEndpoint);
+            console.debug('Perplexed Plugin: Full settings:', JSON.stringify(this.settings, null, 2));
 
             // This adds a settings tab so the user can configure various aspects of the plugin
             this.addSettingTab(new PerplexedSettingTab(this.app, this));
-            console.log('Perplexed Plugin: Settings tab added successfully');
+            console.debug('Perplexed Plugin: Settings tab added successfully');
             
             // Register commands with error handling
             try {
                 this.registerPerplexicaCommands();
-                console.log('Perplexed Plugin: Perplexica commands registered successfully');
+                console.debug('Perplexed Plugin: Perplexica commands registered successfully');
             } catch (error) {
                 console.error('Perplexed Plugin: Failed to register Perplexica commands:', error);
             }
             
             try {
                 this.registerPerplexityCommands();
-                console.log('Perplexed Plugin: Perplexity commands registered successfully');
+                console.debug('Perplexed Plugin: Perplexity commands registered successfully');
             } catch (error) {
                 console.error('Perplexed Plugin: Failed to register Perplexity commands:', error);
             }
             
             try {
                 this.registerLMStudioCommands();
-                console.log('Perplexed Plugin: LM Studio commands registered successfully');
+                console.debug('Perplexed Plugin: LM Studio commands registered successfully');
             } catch (error) {
                 console.error('Perplexed Plugin: Failed to register LM Studio commands:', error);
             }
 
             try {
                 this.registerClaudeCommands();
-                console.log('Perplexed Plugin: Claude commands registered successfully');
+                console.debug('Perplexed Plugin: Claude commands registered successfully');
             } catch (error) {
                 console.error('Perplexed Plugin: Failed to register Claude commands:', error);
             }
 
             try {
                 this.registerArticleGeneratorCommands();
-                console.log('Perplexed Plugin: Article generator commands registered successfully');
+                console.debug('Perplexed Plugin: Article generator commands registered successfully');
             } catch (error) {
                 console.error('Perplexed Plugin: Failed to register article generator commands:', error);
             }
             
             try {
                 this.registerTextEnhancementCommands();
-                console.log('Perplexed Plugin: Text enhancement commands registered successfully');
+                console.debug('Perplexed Plugin: Text enhancement commands registered successfully');
             } catch (error) {
                 console.error('Perplexed Plugin: Failed to register text enhancement commands:', error);
             }
             
             try {
                 this.registerTextEnhancementWithImagesCommands();
-                console.log('Perplexed Plugin: Get related images commands registered successfully');
+                console.debug('Perplexed Plugin: Get related images commands registered successfully');
             } catch (error) {
                 console.error('Perplexed Plugin: Failed to register get related images commands:', error);
             }
             
-            // Add debug command to check command status
+            // Diagnostic action: log registered commands to the console.
             this.addCommand({
-                id: 'debug-commands',
-                name: 'Debug: Check Perplexed Commands',
+                id: 'debug-status',
+                name: 'Debug: log registered actions',
                 callback: () => {
                     this.debugCommands();
                 }
@@ -446,27 +443,28 @@ export default class PerplexedPlugin extends Plugin {
             // Add command to reset prompts to defaults
             this.addCommand({
                 id: 'reset-prompts',
-                name: 'Reset Prompts to Default',
+                name: 'Reset prompts to default',
                 callback: async () => {
                     await this.resetPromptsToDefault();
                 }
             });
             
-            // Add command to reinitialize services
+            // Reinitialize all provider services (Perplexity / Perplexica /
+            // LM Studio / Claude). Useful after editing settings.
             this.addCommand({
                 id: 'reinitialize-services',
-                name: 'Reinitialize Perplexed Services',
+                name: 'Reinitialize provider services',
                 callback: async () => {
                     await this.reinitializeServices();
                 }
             });
             
-            console.log('Perplexed Plugin: Initialization completed successfully');
-            new Notice('Perplexed Plugin loaded successfully');
+            console.debug('Perplexed Plugin: Initialization completed successfully');
+            new Notice('Perplexed plugin loaded successfully');
             
         } catch (error) {
             console.error('Perplexed Plugin: Critical initialization error:', error);
-            new Notice('Perplexed Plugin failed to load properly');
+            new Notice('Perplexed plugin failed to load properly');
         }
     }
 
@@ -476,7 +474,7 @@ export default class PerplexedPlugin extends Plugin {
     }
 
     private async loadSettings() {
-        const savedData = await this.loadData();
+        const savedData: Partial<PerplexedPluginSettings> = (await this.loadData()) as Partial<PerplexedPluginSettings> ?? {};
         this.settings = Object.assign({}, DEFAULT_SETTINGS, savedData);
         
         // Ensure new fields are always present (migration for existing users)
@@ -568,10 +566,10 @@ export default class PerplexedPlugin extends Plugin {
         // Command to show current settings
         this.addCommand({
             id: 'show-perplexica-settings',
-            name: 'Show Perplexica / Vane Settings',
+            name: 'Show Perplexica / Vane settings',
             callback: () => {
                 new Notice(`Current Perplexica / Vane URL: ${this.settings.perplexicaEndpoint}`);
-                console.log('Perplexica Settings:', this.settings);
+                console.debug('Perplexica Settings:', this.settings);
             }
         });
 
@@ -625,10 +623,10 @@ export default class PerplexedPlugin extends Plugin {
             // Command to show current Perplexity settings
             this.addCommand({
                 id: 'show-perplexity-settings',
-                name: 'Show Perplexity Settings',
+                name: 'Show Perplexity settings',
                 callback: () => {
                     new Notice(`Current Perplexity URL: ${this.settings.perplexityEndpoint}`);
-                    console.log('Perplexity Settings:', this.settings);
+                    console.debug('Perplexity Settings:', this.settings);
                 }
             });
 
@@ -660,19 +658,19 @@ export default class PerplexedPlugin extends Plugin {
             // Add a fallback command that shows service status
             this.addCommand({
                 id: 'perplexity-service-status',
-                name: 'Check Perplexity Service Status',
+                name: 'Check Perplexity service status',
                 callback: () => {
                     if (this.perplexityService) {
                         new Notice('Perplexity service is initialized and ready');
-                        console.log('Perplexity service status: OK');
+                        console.debug('Perplexity service status: OK');
                     } else {
-                        new Notice('Perplexity service is NOT initialized. Check console for errors.');
+                        new Notice('Perplexity service is not initialized. Check console for errors.');
                         console.error('Perplexity service status: FAILED');
                     }
                 }
             });
             
-            console.log('Perplexed Plugin: Perplexity commands registered successfully');
+            console.debug('Perplexed Plugin: Perplexity commands registered successfully');
         } catch (error) {
             console.error('Perplexed Plugin: Error registering Perplexity commands:', error);
             throw error;
@@ -698,14 +696,14 @@ export default class PerplexedPlugin extends Plugin {
 
         this.addCommand({
             id: 'claude-service-status',
-            name: 'Check Claude Service Status',
+            name: 'Check Claude service status',
             callback: () => {
                 if (this.claudeService && this.settings.anthropicApiKey) {
                     new Notice('Claude service is initialized and an API key is configured.');
                 } else if (this.claudeService) {
                     new Notice('Claude service is initialized but no API key is set.');
                 } else {
-                    new Notice('Claude service is NOT initialized.');
+                    new Notice('Claude service is not initialized.');
                 }
             },
         });
@@ -734,10 +732,10 @@ export default class PerplexedPlugin extends Plugin {
         // Command to show current LM Studio settings
         this.addCommand({
             id: 'show-lmstudio-settings',
-            name: 'Show LM Studio Settings',
+            name: 'Show LM Studio settings',
             callback: () => {
                 new Notice(`Current LM Studio URL: ${this.settings.lmStudioEndpoint}`);
-                console.log('LM Studio Settings:', this.settings);
+                console.debug('LM Studio Settings:', this.settings);
             }
         });
 
@@ -771,7 +769,7 @@ export default class PerplexedPlugin extends Plugin {
         // Register Article Generator command
         this.addCommand({
             id: 'generate-article',
-            name: 'Generate One-Page Article',
+            name: 'Generate one-page article',
             editorCallback: (editor: Editor) => {
                 try {
                     if (!this.perplexityService) {
@@ -787,7 +785,7 @@ export default class PerplexedPlugin extends Plugin {
                     new ArticleGeneratorModal(this.app, editor, this.perplexityService, this.promptsService).open();
                 } catch (error) {
                     console.error('Error opening Article Generator modal:', error);
-                    new Notice('Failed to open Article Generator modal. Check console for details.');
+                    new Notice('Failed to open article generator modal. Check console for details.');
                 }
             }
         });
@@ -797,7 +795,7 @@ export default class PerplexedPlugin extends Plugin {
         // Register Text Enhancement command
         this.addCommand({
             id: 'enhance-text',
-            name: 'Enhance Selected Text with Perplexity',
+            name: 'Enhance selected text with Perplexity',
             editorCallback: (editor: Editor) => {
                 try {
                     const selectedText = editor.getSelection();
@@ -820,7 +818,7 @@ export default class PerplexedPlugin extends Plugin {
                     new TextEnhancementModal(this.app, editor, this.perplexityService, this.promptsService, selectedText).open();
                 } catch (error) {
                     console.error('Error opening Text Enhancement modal:', error);
-                    new Notice('Failed to open Text Enhancement modal. Check console for details.');
+                    new Notice('Failed to open text enhancement modal. Check console for details.');
                 }
             }
         });
@@ -830,7 +828,7 @@ export default class PerplexedPlugin extends Plugin {
         // Register Get Related Images command
         this.addCommand({
             id: 'enhance-text-with-images',
-            name: 'Get Related Images for Selected Text',
+            name: 'Get related images for selected text',
             editorCallback: (editor: Editor) => {
                 try {
                     const selectedText = editor.getSelection();
@@ -853,21 +851,21 @@ export default class PerplexedPlugin extends Plugin {
                     new TextEnhancementWithImagesModal(this.app, editor, this.perplexityService, this.promptsService, selectedText).open();
                 } catch (error) {
                     console.error('Error opening Get Related Images modal:', error);
-                    new Notice('Failed to open Get Related Images modal. Check console for details.');
+                    new Notice('Failed to open get related images modal. Check console for details.');
                 }
             }
         });
     }
 
     private debugCommands(): void {
-        console.log('=== Perplexed Plugin Debug Information ===');
-        console.log('Plugin instance:', this);
-        console.log('Settings:', this.settings);
-        console.log('Services status:');
-        console.log('- PromptsService:', this.promptsService ? 'Initialized' : 'NOT INITIALIZED');
-        console.log('- PerplexityService:', this.perplexityService ? 'Initialized' : 'NOT INITIALIZED');
-        console.log('- PerplexicaService:', this.perplexicaService ? 'Initialized' : 'NOT INITIALIZED');
-        console.log('- LMStudioService:', this.lmStudioService ? 'Initialized' : 'NOT INITIALIZED');
+        console.debug('=== Perplexed Plugin Debug Information ===');
+        console.debug('Plugin instance:', this);
+        console.debug('Settings:', this.settings);
+        console.debug('Services status:');
+        console.debug('- PromptsService:', this.promptsService ? 'Initialized' : 'NOT INITIALIZED');
+        console.debug('- PerplexityService:', this.perplexityService ? 'Initialized' : 'NOT INITIALIZED');
+        console.debug('- PerplexicaService:', this.perplexicaService ? 'Initialized' : 'NOT INITIALIZED');
+        console.debug('- LMStudioService:', this.lmStudioService ? 'Initialized' : 'NOT INITIALIZED');
         
         // Check if commands are registered in Obsidian
         const registeredCommands = this.app.commands.commands;
@@ -880,20 +878,20 @@ export default class PerplexedPlugin extends Plugin {
             cmd.includes('enhance-text')
         );
         
-        console.log('Registered Perplexed commands:', perplexedCommands);
+        console.debug('Registered Perplexed commands:', perplexedCommands);
         
         if (perplexedCommands.length === 0) {
-            new Notice('No Perplexed commands found! Check console for details.');
+            new Notice('No perplexed commands found! Check console for details.');
         } else {
             new Notice(`Found ${perplexedCommands.length} Perplexed commands. Check console for details.`);
         }
         
-        console.log('=== End Debug Information ===');
+        console.debug('=== End Debug Information ===');
     }
 
     private async resetPromptsToDefault(): Promise<void> {
         try {
-            console.log('Perplexed Plugin: Resetting prompts to default...');
+            console.debug('Perplexed Plugin: Resetting prompts to default...');
             new Notice('Resetting prompts to default values...');
             
             // Reset all prompt settings to default values
@@ -905,11 +903,11 @@ export default class PerplexedPlugin extends Plugin {
             // Reinitialize the prompts service with new settings
             if (this.promptsService) {
                 this.promptsService.updateSettings(this.settings.prompts);
-                console.log('Perplexed Plugin: PromptsService updated with default settings');
+                console.debug('Perplexed Plugin: PromptsService updated with default settings');
             }
             
             new Notice('✅ Prompts reset to default values successfully');
-            console.log('Perplexed Plugin: Prompts reset to default successfully');
+            console.debug('Perplexed Plugin: Prompts reset to default successfully');
             
         } catch (error) {
             console.error('Perplexed Plugin: Failed to reset prompts to default:', error);
@@ -919,13 +917,13 @@ export default class PerplexedPlugin extends Plugin {
 
     private async reinitializeServices(): Promise<void> {
         try {
-            console.log('Perplexed Plugin: Reinitializing services...');
-            new Notice('Reinitializing Perplexed services...');
+            console.debug('Perplexed Plugin: Reinitializing services...');
+            new Notice('Reinitializing perplexed services...');
             
             // Reinitialize prompts service first
             try {
                 this.promptsService = new PromptsService(this.settings.prompts);
-                console.log('Perplexed Plugin: PromptsService reinitialized successfully');
+                console.debug('Perplexed Plugin: PromptsService reinitialized successfully');
             } catch (error) {
                 console.error('Perplexed Plugin: Failed to reinitialize PromptsService:', error);
                 this.promptsService = null;
@@ -941,7 +939,7 @@ export default class PerplexedPlugin extends Plugin {
                         requestTemplate: this.settings.perplexityRequestTemplate,
                         headerPosition: this.settings.headerPosition
                     });
-                    console.log('Perplexed Plugin: PerplexityService reinitialized successfully');
+                    console.debug('Perplexed Plugin: PerplexityService reinitialized successfully');
                 } catch (error) {
                     console.error('Perplexed Plugin: Failed to reinitialize PerplexityService:', error);
                     this.perplexityService = null;
@@ -955,7 +953,7 @@ export default class PerplexedPlugin extends Plugin {
                         promptsService: this.promptsService,
                         requestTemplate: this.settings.requestBodyTemplate
                     });
-                    console.log('Perplexed Plugin: PerplexicaService reinitialized successfully');
+                    console.debug('Perplexed Plugin: PerplexicaService reinitialized successfully');
                 } catch (error) {
                     console.error('Perplexed Plugin: Failed to reinitialize PerplexicaService:', error);
                     this.perplexicaService = null;
@@ -967,7 +965,7 @@ export default class PerplexedPlugin extends Plugin {
                         promptsService: this.promptsService,
                         requestTemplate: this.settings.lmStudioRequestTemplate
                     });
-                    console.log('Perplexed Plugin: LMStudioService reinitialized successfully');
+                    console.debug('Perplexed Plugin: LMStudioService reinitialized successfully');
                 } catch (error) {
                     console.error('Perplexed Plugin: Failed to reinitialize LMStudioService:', error);
                     this.lmStudioService = null;
@@ -979,7 +977,7 @@ export default class PerplexedPlugin extends Plugin {
                         promptsService: this.promptsService,
                         headerPosition: this.settings.headerPosition,
                     });
-                    console.log('Perplexed Plugin: ClaudeService reinitialized successfully');
+                    console.debug('Perplexed Plugin: ClaudeService reinitialized successfully');
                 } catch (error) {
                     console.error('Perplexed Plugin: Failed to reinitialize ClaudeService:', error);
                     this.claudeService = null;
@@ -990,11 +988,11 @@ export default class PerplexedPlugin extends Plugin {
                 this.perplexicaService = null;
                 this.lmStudioService = null;
                 this.claudeService = null;
-                console.log('Perplexed Plugin: Skipping service reinitialization due to PromptsService failure');
+                console.debug('Perplexed Plugin: Skipping service reinitialization due to PromptsService failure');
             }
             
             new Notice('Services reinitialization completed. Check console for details.');
-            console.log('Perplexed Plugin: Services reinitialization completed');
+            console.debug('Perplexed Plugin: Services reinitialization completed');
             
         } catch (error) {
             console.error('Perplexed Plugin: Error during services reinitialization:', error);
@@ -1024,8 +1022,7 @@ class PerplexedSettingTab extends PluginSettingTab {
         containerEl.empty();
 
         // Perplexity Section
-        const perplexityHeader = containerEl.createEl('h3', { text: 'Perplexity (Remote Service)' });
-        perplexityHeader.style.color = 'var(--text-accent)';
+        new Setting(containerEl).setName("Perplexity (remote service)").setHeading();
         containerEl.createEl('p', {
             text: 'Configure settings for the hosted Perplexity AI service',
             cls: 'setting-item-description'
@@ -1035,7 +1032,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             .setName('Endpoint')
             .setDesc('API endpoint for Perplexity service')
             .addText(text => text
-                .setPlaceholder('https://api.perplexity.ai/chat/completions')
+                .setPlaceholder('HTTPS://API.Perplexity.ai/chat/completions')
                 .setValue(this.plugin.settings.perplexityEndpoint)
                 .onChange(async (value: string) => {
                     this.plugin.settings.perplexityEndpoint = value;
@@ -1044,10 +1041,10 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('API Key')
+            .setName('API key')
             .setDesc('Your Perplexity API key (required for remote service)')
             .addText(text => text
-                .setPlaceholder('pplx-xxxxxxxxxxxxxxxxxxxxx')
+                .setPlaceholder('Pplx-xxxxxxxxxxxxxxxxxxxxx')
                 .setValue(this.plugin.settings.perplexityApiKey)
                 .onChange(async (value: string) => {
                     this.plugin.settings.perplexityApiKey = value;
@@ -1056,7 +1053,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('Header Position')
+            .setName('Header position')
             .setDesc('Where to place the query header in generated articles')
             .addDropdown(dropdown => dropdown
                 .addOption('top', 'Top of article')
@@ -1070,22 +1067,20 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         // Perplexity Request Template
         const perplexityJsonSetting = new Setting(containerEl)
-            .setName('Request Body Template')
+            .setName('Request body template')
             .setDesc('JSON template for Perplexity API requests');
             
         // Create a textarea element for Perplexity
-        const perplexityTextArea = document.createElement('textarea');
+        const perplexityTextArea = activeDocument.createEl('textarea');
         perplexityTextArea.rows = 10;
         perplexityTextArea.cols = 50;
-        perplexityTextArea.style.width = '100%';
-        perplexityTextArea.style.minHeight = '300px';
-        perplexityTextArea.style.fontFamily = 'monospace';
+        perplexityTextArea.addClass('perplexed-json-textarea');
         perplexityTextArea.placeholder = 'Enter Perplexity JSON request template...';
         
         // Set initial value if it exists
         if (this.plugin.settings.perplexityRequestTemplate) {
             try {
-                const config = JSON.parse(this.plugin.settings.perplexityRequestTemplate);
+                const config: unknown = JSON.parse(this.plugin.settings.perplexityRequestTemplate);
                 perplexityTextArea.value = JSON.stringify(config, null, 2);
             } catch (e) {
                 // If not valid JSON, use as is
@@ -1094,27 +1089,26 @@ class PerplexedSettingTab extends PluginSettingTab {
         }
         
         // Add input event listener for Perplexity
-        perplexityTextArea.addEventListener('input', async () => {
+        perplexityTextArea.addEventListener('input', () => void (async () => {
             this.plugin.settings.perplexityRequestTemplate = perplexityTextArea.value;
             await this.plugin.saveSettings();
-        });
+        })());
         
         // Add the textarea to the setting
         perplexityJsonSetting.settingEl.appendChild(perplexityTextArea);
 
         // Claude (Anthropic) Section
-        const claudeHeader = containerEl.createEl('h3', { text: 'Claude (Anthropic)' });
-        claudeHeader.style.color = 'var(--text-accent)';
+        new Setting(containerEl).setName("Claude (Anthropic)").setHeading();
         containerEl.createEl('p', {
             text: 'Configure Claude API access. Web-search citations supported in this iteration; document-grounded citations are deferred.',
             cls: 'setting-item-description'
         });
 
         new Setting(containerEl)
-            .setName('Anthropic API Key')
+            .setName('Anthropic API key')
             .setDesc('Your Anthropic API key. Read from ANTHROPIC_API_KEY in .env if set; can be overridden here.')
             .addText(text => text
-                .setPlaceholder('sk-ant-...')
+                .setPlaceholder('Sk-ant-...')
                 .setValue(this.plugin.settings.anthropicApiKey)
                 .onChange(async (value) => {
                     this.plugin.settings.anthropicApiKey = value;
@@ -1122,13 +1116,13 @@ class PerplexedSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(containerEl)
-            .setName('Default Claude Model')
-            .setDesc('Default model used by the Ask Claude command. Recommended: claude-opus-4-7.')
+            .setName('Default Claude model')
+            .setDesc('Default model used by the ask Claude command. Recommended: Claude-opus-4-7.')
             .addDropdown(dropdown => dropdown
-                .addOption('claude-opus-4-7', 'claude-opus-4-7 (recommended)')
-                .addOption('claude-opus-4-6', 'claude-opus-4-6')
-                .addOption('claude-sonnet-4-6', 'claude-sonnet-4-6')
-                .addOption('claude-haiku-4-5', 'claude-haiku-4-5')
+                .addOption('claude-opus-4-7', 'Claude-opus-4-7 (recommended)')
+                .addOption('claude-opus-4-6', 'Claude-opus-4-6')
+                .addOption('claude-sonnet-4-6', 'Claude-sonnet-4-6')
+                .addOption('claude-haiku-4-5', 'Claude-haiku-4-5')
                 .setValue(this.plugin.settings.claudeDefaultModel)
                 .onChange(async (value) => {
                     this.plugin.settings.claudeDefaultModel = value;
@@ -1136,8 +1130,7 @@ class PerplexedSettingTab extends PluginSettingTab {
                 }));
 
         // Perplexica / Vane Section
-        const perplexicaHeader = containerEl.createEl('h3', { text: 'Perplexica / Vane (self-hosted)' });
-        perplexicaHeader.style.color = 'var(--text-accent)';
+        new Setting(containerEl).setName("Perplexica / Vane (self-hosted)").setHeading();
         containerEl.createEl('p', {
             text: 'Configure settings for your local Perplexica / Vane installation',
             cls: 'setting-item-description'
@@ -1147,7 +1140,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             .setName('Endpoint')
             .setDesc('API endpoint for your local Perplexica / Vane instance')
             .addText(text => text
-                .setPlaceholder('http://localhost:3030/api/search')
+                .setPlaceholder('HTTP://localhost:3030/API/search')
                 .setValue(this.plugin.settings.perplexicaEndpoint)
                 .onChange(async (value: string) => {
                     this.plugin.settings.perplexicaEndpoint = value;
@@ -1156,10 +1149,10 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
         
         new Setting(containerEl)
-            .setName('Fallback Container Path')
-            .setDesc('Alternative endpoint for Docker container setups')
+            .setName('Fallback container path')
+            .setDesc('Alternative endpoint for docker container setups')
             .addText(text => text
-                .setPlaceholder('http://host.docker.internal:3030/api/search')
+                .setPlaceholder('HTTP://host.docker.internal:3030/API/search')
                 .setValue(this.plugin.settings.localLLMPath)
                 .onChange(async (value: string) => {
                     this.plugin.settings.localLLMPath = value;
@@ -1168,10 +1161,10 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('Default Model')
+            .setName('Default model')
             .setDesc('Default AI model for Perplexica / Vane to use')
             .addText(text => text
-                .setPlaceholder('llama3.2:latest')
+                .setPlaceholder('Llama3.2:latest')
                 .setValue(this.plugin.settings.defaultModel)
                 .onChange(async (value: string) => {
                     this.plugin.settings.defaultModel = value;
@@ -1181,22 +1174,20 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         // Perplexica Request Template
         const perplexicaJsonSetting = new Setting(containerEl)
-            .setName('Request Body Template')
+            .setName('Request body template')
             .setDesc('JSON template for Perplexica / Vane API requests');
             
         // Create a textarea element for Perplexica
-        const perplexicaTextArea = document.createElement('textarea');
+        const perplexicaTextArea = activeDocument.createEl('textarea');
         perplexicaTextArea.rows = 10;
         perplexicaTextArea.cols = 50;
-        perplexicaTextArea.style.width = '100%';
-        perplexicaTextArea.style.minHeight = '300px';
-        perplexicaTextArea.style.fontFamily = 'monospace';
+        perplexicaTextArea.addClass('perplexed-json-textarea');
         perplexicaTextArea.placeholder = 'Enter Perplexica JSON request template...';
         
         // Set initial value if it exists
         if (this.plugin.settings.requestBodyTemplate) {
             try {
-                const config = JSON.parse(this.plugin.settings.requestBodyTemplate);
+                const config: unknown = JSON.parse(this.plugin.settings.requestBodyTemplate);
                 perplexicaTextArea.value = JSON.stringify(config, null, 2);
             } catch (e) {
                 // If not valid JSON, use as is
@@ -1205,17 +1196,16 @@ class PerplexedSettingTab extends PluginSettingTab {
         }
         
         // Add input event listener for Perplexica
-        perplexicaTextArea.addEventListener('input', async () => {
+        perplexicaTextArea.addEventListener('input', () => void (async () => {
             this.plugin.settings.requestBodyTemplate = perplexicaTextArea.value;
             await this.plugin.saveSettings();
-        });
+        })());
         
         // Add the textarea to the setting
         perplexicaJsonSetting.settingEl.appendChild(perplexicaTextArea);
 
         // LM Studio Section
-        const lmStudioHeader = containerEl.createEl('h3', { text: 'LM Studio (Local Models)' });
-        lmStudioHeader.style.color = 'var(--text-accent)';
+        new Setting(containerEl).setName("LM Studio (local models)").setHeading();
         containerEl.createEl('p', {
             text: 'Configure settings for your local LM Studio installation with loaded models',
             cls: 'setting-item-description'
@@ -1225,7 +1215,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             .setName('Endpoint')
             .setDesc('API endpoint for your local LM Studio instance')
             .addText(text => text
-                .setPlaceholder('http://localhost:1234/v1/chat/completions')
+                .setPlaceholder('HTTP://localhost:1234/v1/chat/completions')
                 .setValue(this.plugin.settings.lmStudioEndpoint)
                 .onChange(async (value: string) => {
                     this.plugin.settings.lmStudioEndpoint = value;
@@ -1234,10 +1224,10 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('Default Model')
+            .setName('Default model')
             .setDesc('Default model name for LM Studio to use')
             .addText(text => text
-                .setPlaceholder('ibm/granite-3.2-8b')
+                .setPlaceholder('Ibm/granite-3.2-8b')
                 .setValue(this.plugin.settings.defaultLMStudioModel)
                 .onChange(async (value: string) => {
                     this.plugin.settings.defaultLMStudioModel = value;
@@ -1247,22 +1237,20 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         // LM Studio Request Template
         const lmStudioJsonSetting = new Setting(containerEl)
-            .setName('Request Body Template')
+            .setName('Request body template')
             .setDesc('JSON template for LM Studio API requests');
             
         // Create a textarea element for LM Studio
-        const lmStudioTextArea = document.createElement('textarea');
+        const lmStudioTextArea = activeDocument.createEl('textarea');
         lmStudioTextArea.rows = 10;
         lmStudioTextArea.cols = 50;
-        lmStudioTextArea.style.width = '100%';
-        lmStudioTextArea.style.minHeight = '300px';
-        lmStudioTextArea.style.fontFamily = 'monospace';
+        lmStudioTextArea.addClass('perplexed-json-textarea');
         lmStudioTextArea.placeholder = 'Enter LM Studio JSON request template...';
         
         // Set initial value if it exists
         if (this.plugin.settings.lmStudioRequestTemplate) {
             try {
-                const config = JSON.parse(this.plugin.settings.lmStudioRequestTemplate);
+                const config: unknown = JSON.parse(this.plugin.settings.lmStudioRequestTemplate);
                 lmStudioTextArea.value = JSON.stringify(config, null, 2);
             } catch (e) {
                 // If not valid JSON, use as is
@@ -1271,27 +1259,26 @@ class PerplexedSettingTab extends PluginSettingTab {
         }
         
         // Add input event listener for LM Studio
-        lmStudioTextArea.addEventListener('input', async () => {
+        lmStudioTextArea.addEventListener('input', () => void (async () => {
             this.plugin.settings.lmStudioRequestTemplate = lmStudioTextArea.value;
             await this.plugin.saveSettings();
-        });
+        })());
         
         // Add the textarea to the setting
         lmStudioJsonSetting.settingEl.appendChild(lmStudioTextArea);
 
         // Prompts Section
-        const promptsHeader = containerEl.createEl('h3', { text: 'Prompts & Text Configuration' });
-        promptsHeader.style.color = 'var(--text-accent)';
+        new Setting(containerEl).setName("Prompts & text configuration").setHeading();
         containerEl.createEl('p', {
             text: 'Customize all prompts, placeholders, descriptions, and messages used throughout the plugin',
             cls: 'setting-item-description'
         });
 
         // System Prompts
-        containerEl.createEl('h4', { text: 'System Prompts' });
+        new Setting(containerEl).setName("System prompts").setHeading();
         
         new Setting(containerEl)
-            .setName('Perplexity System Prompt')
+            .setName('Perplexity system prompt')
             .setDesc('System prompt used for Perplexity AI requests')
             .addTextArea(text => text
                 .setPlaceholder('Enter system prompt for Perplexity...')
@@ -1307,7 +1294,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('Perplexica / Vane System Prompt')
+            .setName('Perplexica / Vane system prompt')
             .setDesc('System prompt used for Perplexica / Vane requests')
             .addTextArea(text => text
                 .setPlaceholder('Enter system prompt for Perplexica / Vane...')
@@ -1323,7 +1310,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('LM Studio Default System Prompt')
+            .setName('LM Studio default system prompt')
             .setDesc('Default system prompt used for LM Studio requests')
             .addTextArea(text => text
                 .setPlaceholder('Enter default system prompt for LM Studio...')
@@ -1339,10 +1326,10 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         // Placeholder Text
-        containerEl.createEl('h4', { text: 'Placeholder Text' });
+        new Setting(containerEl).setName("Placeholder text").setHeading();
         
         new Setting(containerEl)
-            .setName('Perplexity Query Placeholder')
+            .setName('Perplexity query placeholder')
             .setDesc('Placeholder text for Perplexity query input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
@@ -1358,7 +1345,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('Perplexica / Vane Query Placeholder')
+            .setName('Perplexica / Vane query placeholder')
             .setDesc('Placeholder text for Perplexica / Vane query input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
@@ -1374,7 +1361,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('LM Studio Query Placeholder')
+            .setName('LM Studio query placeholder')
             .setDesc('Placeholder text for LM Studio query input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
@@ -1390,7 +1377,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('LM Studio System Prompt Placeholder')
+            .setName('LM Studio system prompt placeholder')
             .setDesc('Placeholder text for LM Studio system prompt input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
@@ -1406,7 +1393,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('Article Term Placeholder')
+            .setName('Article term placeholder')
             .setDesc('Placeholder text for article generator term input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
@@ -1419,118 +1406,108 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         // Article Generator Template
-        containerEl.createEl('h4', { text: 'Article Generator Template' });
+        new Setting(containerEl).setName("Article generator template").setHeading();
         
         const articleTemplateSetting = new Setting(containerEl)
-            .setName('Article Generator Template')
+            .setName('Article generator template')
             .setDesc('Template for generating articles. Use {TERM} as placeholder for the term.');
             
-        const articleTemplateTextArea = document.createElement('textarea');
+        const articleTemplateTextArea = activeDocument.createEl('textarea');
         articleTemplateTextArea.rows = 15;
         articleTemplateTextArea.cols = 50;
-        articleTemplateTextArea.style.width = '100%';
-        articleTemplateTextArea.style.minHeight = '400px';
-        articleTemplateTextArea.style.fontFamily = 'monospace';
+        articleTemplateTextArea.addClass('perplexed-json-textarea is-tall');
         articleTemplateTextArea.placeholder = 'Enter article generator template...';
         articleTemplateTextArea.value = this.plugin.settings.prompts.articleGeneratorTemplate;
         
-        articleTemplateTextArea.addEventListener('input', async () => {
+        articleTemplateTextArea.addEventListener('input', () => void (async () => {
             this.plugin.settings.prompts.articleGeneratorTemplate = articleTemplateTextArea.value;
             this.updatePromptsService();
             await this.plugin.saveSettings();
-        });
+        })());
         
         articleTemplateSetting.settingEl.appendChild(articleTemplateTextArea);
 
         // Deep Research Article Generator Template
         const deepResearchTemplateSetting = new Setting(containerEl)
-            .setName('Deep Research Article Generator Template')
+            .setName('Deep research article generator template')
             .setDesc('Template for generating articles with Deep Research model. Use {TERM} as placeholder for the term.');
             
-        const deepResearchTemplateTextArea = document.createElement('textarea');
+        const deepResearchTemplateTextArea = activeDocument.createEl('textarea');
         deepResearchTemplateTextArea.rows = 20;
         deepResearchTemplateTextArea.cols = 50;
-        deepResearchTemplateTextArea.style.width = '100%';
-        deepResearchTemplateTextArea.style.minHeight = '500px';
-        deepResearchTemplateTextArea.style.fontFamily = 'monospace';
-        deepResearchTemplateTextArea.placeholder = 'Enter Deep Research article generator template...';
+        deepResearchTemplateTextArea.addClass('perplexed-json-textarea is-tall');
+        deepResearchTemplateTextArea.placeholder = 'Enter deep research article generator template...';
         deepResearchTemplateTextArea.value = this.plugin.settings.prompts.deepResearchArticleTemplate;
         
-        deepResearchTemplateTextArea.addEventListener('input', async () => {
+        deepResearchTemplateTextArea.addEventListener('input', () => void (async () => {
             this.plugin.settings.prompts.deepResearchArticleTemplate = deepResearchTemplateTextArea.value;
             this.updatePromptsService();
             await this.plugin.saveSettings();
-        });
+        })());
         
         deepResearchTemplateSetting.settingEl.appendChild(deepResearchTemplateTextArea);
 
         // Image Prompts
-        containerEl.createEl('h4', { text: 'Image Prompts' });
+        new Setting(containerEl).setName("Image prompts").setHeading();
         
         const imagePromptsSetting = new Setting(containerEl)
-            .setName('Image References Prompt')
+            .setName('Image references prompt')
             .setDesc('Prompt added to queries when images are enabled');
             
-        const imagePromptsTextArea = document.createElement('textarea');
+        const imagePromptsTextArea = activeDocument.createEl('textarea');
         imagePromptsTextArea.rows = 8;
         imagePromptsTextArea.cols = 50;
-        imagePromptsTextArea.style.width = '100%';
-        imagePromptsTextArea.style.minHeight = '200px';
-        imagePromptsTextArea.style.fontFamily = 'monospace';
+        imagePromptsTextArea.addClass('perplexed-json-textarea');
         imagePromptsTextArea.placeholder = 'Enter image references prompt...';
         imagePromptsTextArea.value = this.plugin.settings.prompts.imageReferencesPrompt;
         
-        imagePromptsTextArea.addEventListener('input', async () => {
+        imagePromptsTextArea.addEventListener('input', () => void (async () => {
             this.plugin.settings.prompts.imageReferencesPrompt = imagePromptsTextArea.value;
             this.updatePromptsService();
             await this.plugin.saveSettings();
-        });
+        })());
         
         imagePromptsSetting.settingEl.appendChild(imagePromptsTextArea);
 
         // Text Enhancement Prompt
-        containerEl.createEl('h4', { text: 'Text Enhancement' });
+        new Setting(containerEl).setName("Text enhancement").setHeading();
         
         const enhancePromptSetting = new Setting(containerEl)
-            .setName('Text Enhancement Prompt')
+            .setName('Text enhancement prompt')
             .setDesc('Template for enhancing selected text. Use {TEXT} as placeholder for the selected text.');
             
-        const enhancePromptTextArea = document.createElement('textarea');
+        const enhancePromptTextArea = activeDocument.createEl('textarea');
         enhancePromptTextArea.rows = 10;
         enhancePromptTextArea.cols = 50;
-        enhancePromptTextArea.style.width = '100%';
-        enhancePromptTextArea.style.minHeight = '250px';
-        enhancePromptTextArea.style.fontFamily = 'monospace';
+        enhancePromptTextArea.addClass('perplexed-json-textarea');
         enhancePromptTextArea.placeholder = 'Enter text enhancement prompt template...';
         enhancePromptTextArea.value = this.plugin.settings.prompts.enhancePrompt;
         
-        enhancePromptTextArea.addEventListener('input', async () => {
+        enhancePromptTextArea.addEventListener('input', () => void (async () => {
             this.plugin.settings.prompts.enhancePrompt = enhancePromptTextArea.value;
             this.updatePromptsService();
             await this.plugin.saveSettings();
-        });
+        })());
         
         enhancePromptSetting.settingEl.appendChild(enhancePromptTextArea);
 
         // Text Enhancement with Images Prompt
         const enhanceWithImagesPromptSetting = new Setting(containerEl)
-            .setName('Related Images Prompt')
+            .setName('Related images prompt')
             .setDesc('Template for requesting related images for selected text. Use {TEXT} as placeholder for the selected text.');
             
-        const enhanceWithImagesPromptTextArea = document.createElement('textarea');
+        const enhanceWithImagesPromptTextArea = activeDocument.createEl('textarea');
         enhanceWithImagesPromptTextArea.rows = 10;
         enhanceWithImagesPromptTextArea.cols = 50;
-        enhanceWithImagesPromptTextArea.style.width = '100%';
-        enhanceWithImagesPromptTextArea.style.minHeight = '250px';
-        enhanceWithImagesPromptTextArea.style.fontFamily = 'monospace';
+        enhanceWithImagesPromptTextArea.addClass('perplexed-json-textarea');
         enhanceWithImagesPromptTextArea.placeholder = 'Enter related images prompt template...';
         enhanceWithImagesPromptTextArea.value = this.plugin.settings.prompts.enhanceWithImagesPrompt;
         
-        enhanceWithImagesPromptTextArea.addEventListener('input', async () => {
+        enhanceWithImagesPromptTextArea.addEventListener('input', () => void (async () => {
             this.plugin.settings.prompts.enhanceWithImagesPrompt = enhanceWithImagesPromptTextArea.value;
             this.updatePromptsService();
             await this.plugin.saveSettings();
-        });
+        })());
         
         enhanceWithImagesPromptSetting.settingEl.appendChild(enhanceWithImagesPromptTextArea);
     }

@@ -68,7 +68,7 @@ interface PerplexityStreamChunk {
 export class PerplexityService {
     private settings: PerplexitySettings;
     private promptsService: PromptsService | undefined;
-    private loadingInterval: ReturnType<typeof setInterval> | null = null;
+    private loadingInterval: number | null = null;
 
     constructor(settings: PerplexitySettings) {
         this.settings = settings;
@@ -101,7 +101,7 @@ export class PerplexityService {
     private processContentWithImages(content: string, images: PerplexityImage[]): string {
         if (!images || images.length === 0) return content;
         
-        console.log(`🖼️ Processing ${images.length} images for content replacement`);
+        console.debug(`🖼️ Processing ${images.length} images for content replacement`);
         
         let processedContent = content;
         const imageRegex = /\[IMAGE\s+(\d+):\s*(.*?)\]/gi;
@@ -111,7 +111,7 @@ export class PerplexityService {
         let match;
         while ((match = imageRegex.exec(content)) !== null) {
             const [fullMatch, number, description] = match;
-            console.log(`🔍 Regex match found: "${fullMatch}" with number="${number}" description="${description}"`);
+            console.debug(`🔍 Regex match found: "${fullMatch}" with number="${number}" description="${description}"`);
             if (number && description) {
                 matches.push({
                     fullMatch,
@@ -120,16 +120,16 @@ export class PerplexityService {
                     index: match.index
                 });
             } else {
-                console.log(`⚠️ Invalid match - number: "${number}", description: "${description}"`);
+                console.debug(`⚠️ Invalid match - number: "${number}", description: "${description}"`);
             }
         }
         
         if (matches.length === 0) {
-            console.log('🔍 No image markers found in content');
+            console.debug('🔍 No image markers found in content');
             return content;
         }
         
-        console.log(`🔍 Found ${matches.length} image markers in content`);
+        console.debug(`🔍 Found ${matches.length} image markers in content`);
         
         // Sort matches by their position in the content (descending) to avoid index shifting issues
         matches.sort((a, b) => b.index - a.index);
@@ -138,7 +138,7 @@ export class PerplexityService {
         
         // Replace matches from end to beginning to avoid index shifting
         matches.forEach((matchInfo) => {
-            console.log(`🔍 Processing image reference: "${matchInfo.fullMatch}" at index ${matchInfo.index}`);
+            console.debug(`🔍 Processing image reference: "${matchInfo.fullMatch}" at index ${matchInfo.index}`);
             
             const imageIndex = parseInt(matchInfo.number) - 1; // Convert 1-based to 0-based
             const image = images[imageIndex];
@@ -147,13 +147,13 @@ export class PerplexityService {
                 const imageMarkdown = `![${matchInfo.description || 'Image'}](${image.image_url})`;
                 processedContent = processedContent.replace(matchInfo.fullMatch, imageMarkdown);
                 replacedCount++;
-                console.log(`🔄 Replaced "${matchInfo.fullMatch}" with image markdown`);
+                console.debug(`🔄 Replaced "${matchInfo.fullMatch}" with image markdown`);
             } else {
-                console.log(`⚠️ No image found for index ${imageIndex} or no image_url`);
+                console.debug(`⚠️ No image found for index ${imageIndex} or no image_url`);
             }
         });
         
-        console.log(`✅ Replaced ${replacedCount} image markers with actual images`);
+        console.debug(`✅ Replaced ${replacedCount} image markers with actual images`);
         return processedContent;
     }
 
@@ -194,7 +194,7 @@ export class PerplexityService {
         
         // If we found a callout end, return it
         if (calloutEndIndex > 0) {
-            console.log(`🔍 Query header ends at position ${calloutEndIndex}`);
+            console.debug(`🔍 Query header ends at position ${calloutEndIndex}`);
             return calloutEndIndex;
         }
         
@@ -210,7 +210,7 @@ export class PerplexityService {
             const match = content.match(pattern);
             if (match) {
                 const endIndex = match.index || 0;
-                console.log(`🔍 Found header end pattern at position ${endIndex}`);
+                console.debug(`🔍 Found header end pattern at position ${endIndex}`);
                 return endIndex;
             }
         }
@@ -221,7 +221,7 @@ export class PerplexityService {
     private processThinkBlocks(content: string): string {
         if (!content.includes('<think>')) return content;
         
-        console.log('🧠 Processing think blocks in content');
+        console.debug('🧠 Processing think blocks in content');
         
         // Replace <think> blocks with markdown callouts
         let processedContent = content;
@@ -229,7 +229,7 @@ export class PerplexityService {
         // Match <think>...</think> blocks, including nested content
         const thinkRegex = /<think>([\s\S]*?)<\/think>/gi;
         
-        processedContent = processedContent.replace(thinkRegex, (_match, thinkContent) => {
+        processedContent = processedContent.replace(thinkRegex, (_match: string, thinkContent: string) => {
             // Clean up the think content - remove extra whitespace and format
             const cleanedContent = thinkContent
                 .trim()
@@ -246,7 +246,7 @@ export class PerplexityService {
 > ---
 > *This shows the AI's internal reasoning before generating the response.*`;
             
-            console.log('🧠 Converted think block to callout');
+            console.debug('🧠 Converted think block to callout');
             return callout;
         });
         
@@ -265,15 +265,15 @@ export class PerplexityService {
             
             if (updatedLines.length !== lines.length) {
                 editor.setValue(updatedLines.join('\n'));
-                console.log('🧹 Cleared loading text from document');
+                console.debug('🧹 Cleared loading text from document');
             }
         }
     }
 
     private clearLoadingAnimation(): void {
         if (this.loadingInterval) {
-            console.log('🛑 Clearing loading animation interval');
-            clearInterval(this.loadingInterval);
+            console.debug('🛑 Clearing loading animation interval');
+            activeWindow.clearInterval(this.loadingInterval);
             this.loadingInterval = null;
         }
     }
@@ -281,7 +281,7 @@ export class PerplexityService {
     private addCitations(editor: Editor, sources: (string | PerplexitySource)[]): void {
         if (!sources || sources.length === 0) return;
 
-        console.log(`📚 Processing ${sources.length} sources for citations`);
+        console.debug(`📚 Processing ${sources.length} sources for citations`);
 
         // Check if there's already a citations section
         const content = editor.getValue();
@@ -292,7 +292,7 @@ export class PerplexityService {
         if (existingCitationsMatch && existingCitationsMatch[1]) {
             // Found existing citations section
             existingCitations = existingCitationsMatch[1];
-            console.log('📚 Found existing citations section, will append to it');
+            console.debug('📚 Found existing citations section, will append to it');
         }
 
         // Generate new citations
@@ -369,14 +369,14 @@ export class PerplexityService {
             const updatedContent = beforeCitations + updatedCitations + afterCitations;
             
             editor.setValue(updatedContent);
-            console.log('✅ Citations appended to existing section');
+            console.debug('✅ Citations appended to existing section');
         } else {
             // Create new citations section at the end
             const citationsText = '\n\n### Citations\n\n' + newCitationsText;
             const endOfDoc = editor.lastLine();
             const endPos = { line: endOfDoc, ch: editor.getLine(endOfDoc).length };
             editor.replaceRange(citationsText, endPos);
-            console.log('✅ New citations section created');
+            console.debug('✅ New citations section created');
         }
     }
 
@@ -387,8 +387,8 @@ export class PerplexityService {
         editor: Editor, 
         options?: PerplexityOptions
     ): Promise<void> {
-        console.log('🚀 PerplexityService.queryPerplexity called');
-        console.log('📊 Parameters:', { model, stream, options, queryLength: query.length });
+        console.debug('🚀 PerplexityService.queryPerplexity called');
+        console.debug('📊 Parameters:', { model, stream, options, queryLength: query.length });
         
         const timestamp = new Date().toISOString();
         
@@ -396,11 +396,11 @@ export class PerplexityService {
         const isDeepResearch = model === 'sonar-deep-research';
         const useStreaming = stream; // Allow streaming for all models including deep research
         
-        console.log('🔍 Model analysis:', { isDeepResearch, useStreaming });
+        console.debug('🔍 Model analysis:', { isDeepResearch, useStreaming });
         
         // Insert query header based on headerPosition setting
         const cursor = editor.getCursor();
-        console.log('Initial cursor position:', cursor);
+        console.debug('Initial cursor position:', cursor);
         
         // Process query to handle multi-line content in callout
         const processedQuery = query.split('\n').map(line => `> ${line}`).join('\n');
@@ -429,9 +429,9 @@ export class PerplexityService {
             };
         }
         
-        console.log('Response cursor position:', responseCursor);
-        console.log('Header position setting:', this.settings.headerPosition);
-        console.log('Header text preview:', headerText ? headerText.substring(0, 100) + '...' : 'No header text');
+        console.debug('Response cursor position:', responseCursor);
+        console.debug('Header position setting:', this.settings.headerPosition);
+        console.debug('Header text preview:', headerText ? headerText.substring(0, 100) + '...' : 'No header text');
         
         // Show loading notice for deep research
         let loadingNotice: Notice | null = null;
@@ -465,7 +465,7 @@ export class PerplexityService {
                         const payloadMatch = cleanedTemplate.match(/payload\s*=\s*({[\s\S]*?});/);
                         if (payloadMatch) {
                             let jsObject = payloadMatch[1];
-                            console.log('🔍 Extracted payload from JavaScript:', jsObject);
+                            console.debug('🔍 Extracted payload from JavaScript:', jsObject);
 
                             jsObject = jsObject?.replace(/(\w+):/g, '"$1":').replace(/'/g, '"');
 
@@ -475,7 +475,7 @@ export class PerplexityService {
                         }
                     }
 
-                    console.log('🧹 Final cleaned template:', cleanedTemplate);
+                    console.debug('🧹 Final cleaned template:', cleanedTemplate);
                     JSON.parse(cleanedTemplate);
                     payload = {
                         model,
@@ -515,12 +515,15 @@ export class PerplexityService {
             const requestId = Date.now() + Math.random();
             
             // Debug: Log the API payload being sent
-            console.log(`🚀 Perplexity API Payload [${requestId}]:`, JSON.stringify(payload, null, 2));
+            console.debug(`🚀 Perplexity API Payload [${requestId}]:`, JSON.stringify(payload, null, 2));
 
             try {
                 if (useStreaming) {
-                    console.log('🔄 Making streaming API request...');
-                    // Use fetch for streaming responses with cache busting headers
+                    console.debug('🔄 Making streaming API request...');
+                    // Streaming uses fetch because Obsidian's requestUrl does not
+                    // support reading SSE / chunked response bodies — it buffers
+                    // the whole response. Marketplace `/skip` justification.
+                    // eslint-disable-next-line no-restricted-globals
                     const response = await fetch(this.settings.perplexityEndpoint, {
                         method: 'POST',
                         headers: {
@@ -540,10 +543,10 @@ export class PerplexityService {
                         throw new Error('No response body');
                     }
 
-                    console.log('✅ Streaming response received, starting to handle...');
+                    console.debug('✅ Streaming response received, starting to handle...');
                     await this.handleStreamingResponse(response, editor, responseCursor, requestId, headerText);
                 } else {
-                    console.log('🔄 Making non-streaming API request...');
+                    console.debug('🔄 Making non-streaming API request...');
                     // Use Obsidian's request method for non-streaming with cache busting
                     const response = await request({
                         url: this.settings.perplexityEndpoint,
@@ -556,17 +559,17 @@ export class PerplexityService {
                         body: JSON.stringify(payload)
                     });
 
-                    console.log('✅ Non-streaming response received');
+                    console.debug('✅ Non-streaming response received');
                     const data = JSON.parse(response) as PerplexityResponse;
 
-                    console.log('📊 Response data structure:', Object.keys(data));
+                    console.debug('📊 Response data structure:', Object.keys(data));
                     if (data.choices && data.choices.length > 0) {
                         let content = data.choices[0]?.message?.content ?? '';
 
                         content = this.processThinkBlocks(content);
 
                         if (options?.return_images && data.images && data.images.length > 0) {
-                            console.log('🖼️ Processing images in non-streaming response:', data.images.length, 'images found');
+                            console.debug('🖼️ Processing images in non-streaming response:', data.images.length, 'images found');
                             content = this.processContentWithImages(content, data.images);
                         }
 
@@ -631,11 +634,11 @@ export class PerplexityService {
         requestId?: number,
         headerText?: string
     ): Promise<void> {
-        console.log('🔄 handleStreamingResponse called');
+        console.debug('🔄 handleStreamingResponse called');
         const reader = response.body?.getReader();
         if (!reader) throw new Error('No response body');
         
-        console.log(`🔄 Starting streaming response handler [${requestId || 'unknown'}]`);
+        console.debug(`🔄 Starting streaming response handler [${requestId || 'unknown'}]`);
 
         // Hoist decoder out of the loop so the {stream: true} flag carries
         // partial multi-byte UTF-8 state across chunk boundaries.
@@ -661,7 +664,7 @@ export class PerplexityService {
             });
         };
 
-        console.log(`📍 Initial currentPos:`, currentPos);
+        console.debug(`📍 Initial currentPos:`, currentPos);
 
         try {
             while (true) {
@@ -694,14 +697,14 @@ export class PerplexityService {
                             if (parsed.choices?.[0]?.delta?.content) {
                                 const content = parsed.choices[0].delta.content;
                                 if (content) {
-                                    // console.log('🎉 First content received! Clearing loading text...');
+                                    // console.debug('🎉 First content received! Clearing loading text...');
                                     // Clear any loading text before inserting content
                                     this.clearLoadingText(editor);
                                     
                                     // Clear the animation interval if it exists
                                     this.clearLoadingAnimation();
                                     
-                                    // console.log(`📝 Inserting content at position:`, currentPos, `Content:`, content.substring(0, 50) + '...');
+                                    // console.debug(`📝 Inserting content at position:`, currentPos, `Content:`, content.substring(0, 50) + '...');
                                     editor.replaceRange(content, currentPos);
                                     const contentLines = content.split('\n');
                                     if (contentLines.length === 1) {
@@ -722,12 +725,12 @@ export class PerplexityService {
                 }
                 
                 // Small delay to prevent UI blocking
-                await new Promise(resolve => setTimeout(resolve, 10));
+                await new Promise(resolve => activeWindow.setTimeout(resolve, 10));
             }
             
             // Process final metadata (citations, images) after streaming is complete
             if (finalResponseData) {
-                console.log(`📝 Processing final response data [${requestId || 'unknown'}]:`, finalResponseData);
+                console.debug(`📝 Processing final response data [${requestId || 'unknown'}]:`, finalResponseData);
                 await this.processStreamingMetadata(finalResponseData, editor, headerText);
             }
             
@@ -756,13 +759,13 @@ export class PerplexityService {
         editor: Editor,
         headerText?: string
     ): Promise<void> {
-        console.log('🔍 Processing streaming metadata');
-        console.log('📊 Response data keys:', Object.keys(finalResponseData || {}));
+        console.debug('🔍 Processing streaming metadata');
+        console.debug('📊 Response data keys:', Object.keys(finalResponseData || {}));
         if (finalResponseData.images) {
-            console.log(`🖼️ Images array length: ${finalResponseData.images.length}`);
+            console.debug(`🖼️ Images array length: ${finalResponseData.images.length}`);
         }
         if (finalResponseData.search_results) {
-            console.log(`📚 Search results array length: ${finalResponseData.search_results.length}`);
+            console.debug(`📚 Search results array length: ${finalResponseData.search_results.length}`);
         }
         
         // Get current content for processing
@@ -774,35 +777,35 @@ export class PerplexityService {
         if (processedThinkContent !== content) {
             content = processedThinkContent;
             contentUpdated = true;
-            console.log('🧠 Think blocks processed in streaming response');
+            console.debug('🧠 Think blocks processed in streaming response');
         }
         
         // Process images with intelligent placement
         if (finalResponseData.images && finalResponseData.images.length > 0) {
-            console.log('🖼️ Processing images in streaming response:', finalResponseData.images.length, 'images found');
+            console.debug('🖼️ Processing images in streaming response:', finalResponseData.images.length, 'images found');
             
                     // Debug: Let's see what image references are in the content
             const imageRegex = /\[IMAGE\s+(\d+):\s*(.*?)\]/gi;
             const allMatches = content.match(imageRegex);
-            console.log('🔍 All image references found in content:', allMatches);
+            console.debug('🔍 All image references found in content:', allMatches);
             
             // Also log a sample of the content to see the format
             const sampleContent = content.substring(0, Math.min(500, content.length));
-            console.log('🔍 Sample content:', sampleContent);
+            console.debug('🔍 Sample content:', sampleContent);
             
             const processedContent = this.processContentWithImages(content, finalResponseData.images);
             
             if (processedContent !== content) {
                 content = processedContent;
                 contentUpdated = true;
-                console.log('🔄 Content updated with inline images (streaming)');
+                console.debug('🔄 Content updated with inline images (streaming)');
             } else {
-                console.log('⚠️ No image markers were replaced, falling back to Images section');
+                console.debug('⚠️ No image markers were replaced, falling back to Images section');
                 
                 // Try to find where the response content starts (after the query header)
                 const queryHeaderEnd = this.findQueryHeaderEnd(content);
                 if (queryHeaderEnd > 0) {
-                    console.log(`📍 Found query header end at position ${queryHeaderEnd}, inserting images inline`);
+                    console.debug(`📍 Found query header end at position ${queryHeaderEnd}, inserting images inline`);
                     
                     // Insert images inline after the query header
                     let imagesSection = '\n\n';
@@ -818,7 +821,7 @@ export class PerplexityService {
                     const newContent = beforeHeader + imagesSection + afterHeader;
                     editor.setValue(newContent);
                     contentUpdated = true;
-                    console.log('🔄 Images inserted inline after query header');
+                    console.debug('🔄 Images inserted inline after query header');
                 } else {
                     // Fallback: add images at the end if no markers found
                     let imagesSection = '\n\n## Images\n\n';
@@ -840,14 +843,14 @@ export class PerplexityService {
                 }
             }
         } else {
-            console.log('🖼️ No images found in streaming response data');
-            console.log('💡 Note: Deep Research with streaming may not support images. Consider using non-streaming mode for image support.');
+            console.debug('🖼️ No images found in streaming response data');
+            console.debug('💡 Note: Deep Research with streaming may not support images. Consider using non-streaming mode for image support.');
         }
         
         // Update editor with processed content if any changes were made
         if (contentUpdated) {
             editor.setValue(content);
-            console.log('🔄 Editor updated with processed content (think blocks and/or images)');
+            console.debug('🔄 Editor updated with processed content (think blocks and/or images)');
         }
         
         // Process sources/citations if available
@@ -858,19 +861,19 @@ export class PerplexityService {
             // Fallback to citations array (could be URLs or other format)
             this.addCitations(editor, finalResponseData.citations);
         } else {
-            console.log('📚 No sources/citations found in Perplexity streaming response');
+            console.debug('📚 No sources/citations found in Perplexity streaming response');
         }
         
         // Add header at bottom if that setting is enabled
         if (this.settings.headerPosition === 'bottom' && headerText) {
-            console.log('📄 Adding header at bottom of document');
+            console.debug('📄 Adding header at bottom of document');
             const endOfDoc = editor.lastLine();
             const endPos = { line: endOfDoc, ch: editor.getLine(endOfDoc).length };
-            console.log('📍 End position for header:', endPos);
+            console.debug('📍 End position for header:', endPos);
             editor.replaceRange('\n\n' + headerText, endPos);
-            console.log('✅ Header added at bottom');
+            console.debug('✅ Header added at bottom');
         } else {
-            console.log('📄 Header position setting:', this.settings.headerPosition, 'Header text available:', !!headerText);
+            console.debug('📄 Header position setting:', this.settings.headerPosition, 'Header text available:', !!headerText);
         }
     }
 }

@@ -79,7 +79,8 @@ export class URLUpdateModal extends Modal {
                 new Notice(`URL updated to: ${newUrl}`);
                 this.close();
             } catch (error) {
-                new Notice(`Failed to save URL: ${error}`);
+                const msg = error instanceof Error ? error.message : String(error);
+                new Notice(`Failed to save URL: ${msg}`);
             }
         }
     }

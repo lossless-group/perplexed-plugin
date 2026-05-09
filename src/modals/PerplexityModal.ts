@@ -103,7 +103,7 @@ export class PerplexityModal extends Modal {
             .setName('Model')
             .setDesc(this.modelTagline(this.model))
             .addDropdown(dd => {
-                PERPLEXITY_MODELS.forEach(({ value, label }) => dd.addOption(value, label));
+                PERPLEXITY_MODELS.forEach(({ value, label }) => { dd.addOption(value, label); });
                 dd.setValue(this.model);
                 dd.onChange((value) => {
                     this.model = value;
@@ -115,10 +115,10 @@ export class PerplexityModal extends Modal {
         this.modelDescEl = modelSection.querySelector('.setting-item-description');
 
         new Setting(modelSection)
-            .setName('Recency Filter')
+            .setName('Recency filter')
             .setDesc('Restrict search to recent content. Multi-year options fall back to "year" (the API ceiling).')
             .addDropdown(dd => {
-                RECENCY_OPTIONS.forEach(({ value, label }) => dd.addOption(value, label));
+                RECENCY_OPTIONS.forEach(({ value, label }) => { dd.addOption(value, label); });
                 dd.setValue(this.recencyFilter);
                 dd.onChange((value) => {
                     this.recencyFilter = value;
@@ -131,7 +131,7 @@ export class PerplexityModal extends Modal {
 
         new Setting(returnsSection)
             .setName('Citations')
-            .setDesc('Append a Citations section with source links — recommended for research notes.')
+            .setDesc('Append a citations section with source links — recommended for research notes.')
             .addToggle(t => t
                 .setValue(this.citations)
                 .onChange(v => { this.citations = v; }));
@@ -144,7 +144,7 @@ export class PerplexityModal extends Modal {
                 .onChange(v => { this.images = v; }));
 
         new Setting(returnsSection)
-            .setName('Related Questions')
+            .setName('Related questions')
             .setDesc('Surface follow-up questions Perplexity suggests at the end of the response.')
             .addToggle(t => t
                 .setValue(this.relatedQuestions)
@@ -155,8 +155,8 @@ export class PerplexityModal extends Modal {
         behaviorSection.createEl('h3', { text: 'Behavior', cls: 'perplexity-modal__section-title' });
 
         new Setting(behaviorSection)
-            .setName('Stream Response')
-            .setDesc('Recommended for long answers. Deep Research model can take 30–60s — streaming makes progress visible.')
+            .setName('Stream response')
+            .setDesc('Recommended for long answers. Deep research model can take 30–60s — streaming makes progress visible.')
             .addToggle(t => t
                 .setValue(this.stream)
                 .onChange(v => { this.stream = v; }));
@@ -176,7 +176,7 @@ export class PerplexityModal extends Modal {
         askBtn.addEventListener('click', () => void this.onSubmit());
 
         // Focus the question after the DOM has settled
-        setTimeout(() => queryTextarea.focus(), 50);
+        activeWindow.setTimeout(() => queryTextarea.focus(), 50);
     }
 
     private modelTagline(value: string): string {

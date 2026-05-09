@@ -1,0 +1,22 @@
+/* Perplexed settings-tab styles
+ *
+ * Replaces inline element.style.* assignments that ObsidianReviewBot rejects.
+ * The textareas used for JSON request templates need a fixed minimum height,
+ * full container width, and monospace font; that's what these classes do.
+ */
+
+.perplexed-json-textarea {
+    width: 100%;
+    min-height: 300px;
+    font-family: var(--font-monospace);
+}
+
+/* Modifier classes for taller variants — used by the article-generator
+ * and deep-research template editors which want more vertical room. */
+.perplexed-json-textarea.is-tall {
+    min-height: 500px;
+}
+
+.perplexed-json-textarea.is-extra-tall {
+    min-height: 600px;
+}

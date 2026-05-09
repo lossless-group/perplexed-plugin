@@ -95,10 +95,10 @@ export class PerplexicaModal extends Modal {
         searchSection.createEl('h3', { text: 'Search', cls: 'perplexica-modal__section-title' });
 
         const focusSetting = new Setting(searchSection)
-            .setName('Focus Mode')
+            .setName('Focus mode')
             .setDesc(this.focusTagline(this.focusMode))
             .addDropdown(dd => {
-                FOCUS_MODES.forEach(({ value, label }) => dd.addOption(value, label));
+                FOCUS_MODES.forEach(({ value, label }) => { dd.addOption(value, label); });
                 dd.setValue(this.focusMode);
                 dd.onChange((value) => {
                     this.focusMode = value;
@@ -111,7 +111,7 @@ export class PerplexicaModal extends Modal {
             .setName('Optimization')
             .setDesc(this.optimizationTagline(this.optimization))
             .addDropdown(dd => {
-                OPTIMIZATION_MODES.forEach(({ value, label }) => dd.addOption(value, label));
+                OPTIMIZATION_MODES.forEach(({ value, label }) => { dd.addOption(value, label); });
                 dd.setValue(this.optimization);
                 dd.onChange((value) => {
                     this.optimization = value;
@@ -136,7 +136,7 @@ export class PerplexicaModal extends Modal {
         behaviorSection.createEl('h3', { text: 'Behavior', cls: 'perplexica-modal__section-title' });
 
         new Setting(behaviorSection)
-            .setName('Stream Response')
+            .setName('Stream response')
             .setDesc('Write tokens into the note as they arrive — useful for long answers and slow local models.')
             .addToggle(t => t
                 .setValue(this.stream)
@@ -157,7 +157,7 @@ export class PerplexicaModal extends Modal {
         askBtn.addEventListener('click', () => void this.onSubmit());
 
         // Focus the question after the DOM has settled
-        setTimeout(() => queryTextarea.focus(), 50);
+        activeWindow.setTimeout(() => queryTextarea.focus(), 50);
     }
 
     private focusTagline(value: string): string {

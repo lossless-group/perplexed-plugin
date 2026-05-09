@@ -65,7 +65,7 @@ export class LMStudioService {
         }
         
         if (imageIndex > 0) {
-            console.log(`🔄 Processed ${imageIndex} image markers in LM Studio content`);
+            console.debug(`🔄 Processed ${imageIndex} image markers in LM Studio content`);
         }
         
         return content;
@@ -82,7 +82,7 @@ export class LMStudioService {
         
         // Insert query header at the current cursor position
         const cursor = editor.getCursor();
-        console.log('Initial cursor position:', cursor);
+        console.debug('Initial cursor position:', cursor);
         
         // Process query to handle multi-line content in callout
         const processedQuery = query.split('\n').map(line => `> ${line}`).join('\n');
@@ -100,7 +100,7 @@ export class LMStudioService {
             ch: lastLine.length
         };
         
-        console.log('Response cursor position:', responseCursor);
+        console.debug('Response cursor position:', responseCursor);
         
         try {
             const messages: ChatMessage[] = [];
@@ -153,6 +153,9 @@ export class LMStudioService {
                 };
             }
             
+            // Streaming uses fetch because Obsidian's requestUrl does not
+            // support SSE / chunked bodies. Marketplace `/skip` justification.
+            // eslint-disable-next-line no-restricted-globals
             const response = await fetch(this.settings.lmStudioEndpoint, {
                 method: 'POST',
                 headers: {
@@ -236,7 +239,7 @@ export class LMStudioService {
                             // Scroll to follow the new content
                             editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
                             // Small delay to make scrolling smoother
-                            await new Promise(resolve => setTimeout(resolve, 10));
+                            await new Promise(resolve => activeWindow.setTimeout(resolve, 10));
                         }
                     } catch (e) {
                         // Ignore JSON parse errors for partial chunks

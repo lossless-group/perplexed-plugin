@@ -67,7 +67,7 @@ export class ArticleGeneratorModal extends Modal {
 
         // ----- Header -----
         const header = contentEl.createDiv({ cls: 'article-generator-modal__header' });
-        header.createEl('h2', { text: 'Generate One-Page Article', cls: 'article-generator-modal__title' });
+        header.createEl('h2', { text: 'Generate one-page article', cls: 'article-generator-modal__title' });
         header.createEl('p', {
             cls: 'article-generator-modal__subtitle',
             text: 'Generates a structured article from a single vocabulary term. Streams into the active note.',
@@ -76,7 +76,7 @@ export class ArticleGeneratorModal extends Modal {
         // ----- Term -----
         const termSection = contentEl.createDiv({ cls: 'article-generator-modal__section' });
         termSection.createEl('label', {
-            text: 'Vocabulary Term',
+            text: 'Vocabulary term',
             cls: 'article-generator-modal__label',
             attr: { for: 'article-generator-modal-term' },
         });
@@ -111,7 +111,7 @@ export class ArticleGeneratorModal extends Modal {
             .setName('Model')
             .setDesc(this.modelTagline(this.model))
             .addDropdown(dd => {
-                PERPLEXITY_MODELS.forEach(({ value, label }) => dd.addOption(value, label));
+                PERPLEXITY_MODELS.forEach(({ value, label }) => { dd.addOption(value, label); });
                 dd.setValue(this.model);
                 dd.onChange((value) => {
                     this.model = value;
@@ -124,10 +124,10 @@ export class ArticleGeneratorModal extends Modal {
         this.applyModelChange(this.model);
 
         new Setting(modelSection)
-            .setName('Recency Filter')
+            .setName('Recency filter')
             .setDesc('Restrict search to recent content. Multi-year options fall back to "year" (the API ceiling).')
             .addDropdown(dd => {
-                RECENCY_OPTIONS.forEach(({ value, label }) => dd.addOption(value, label));
+                RECENCY_OPTIONS.forEach(({ value, label }) => { dd.addOption(value, label); });
                 dd.setValue(this.recencyFilter);
                 dd.onChange((value) => {
                     this.recencyFilter = value;
@@ -140,7 +140,7 @@ export class ArticleGeneratorModal extends Modal {
 
         new Setting(returnsSection)
             .setName('Citations')
-            .setDesc('Append a Citations section with source links — recommended for research articles.')
+            .setDesc('Append a citations section with source links — recommended for research articles.')
             .addToggle(t => t
                 .setValue(this.citations)
                 .onChange(v => { this.citations = v; }));
@@ -161,7 +161,7 @@ export class ArticleGeneratorModal extends Modal {
         this.updateCompatibilityWarning();
 
         new Setting(returnsSection)
-            .setName('Related Questions')
+            .setName('Related questions')
             .setDesc('Surface follow-up questions Perplexity suggests at the end of the response.')
             .addToggle(t => t
                 .setValue(this.relatedQuestions)
@@ -172,8 +172,8 @@ export class ArticleGeneratorModal extends Modal {
         behaviorSection.createEl('h3', { text: 'Behavior', cls: 'article-generator-modal__section-title' });
 
         new Setting(behaviorSection)
-            .setName('Stream Response')
-            .setDesc('Recommended for articles — see content as it generates. Note: Deep Research with streaming may not support images.')
+            .setName('Stream response')
+            .setDesc('Recommended for articles — see content as it generates. Note: Deep research with streaming may not support images.')
             .addToggle(t => t
                 .setValue(this.stream)
                 .onChange(v => { this.stream = v; }));
@@ -187,12 +187,12 @@ export class ArticleGeneratorModal extends Modal {
         cancelBtn.addEventListener('click', () => this.close());
 
         const generateBtn = footer.createEl('button', {
-            text: 'Generate Article',
+            text: 'Generate article',
             cls: 'article-generator-modal__button mod-cta',
         });
         generateBtn.addEventListener('click', () => void this.onSubmit());
 
-        setTimeout(() => termInput.focus(), 50);
+        activeWindow.setTimeout(() => termInput.focus(), 50);
     }
 
     private modelTagline(value: string): string {
@@ -222,7 +222,7 @@ export class ArticleGeneratorModal extends Modal {
         const incompatible = this.images && this.model === 'sonar-deep-research';
         if (incompatible) {
             this.compatibilityWarningEl.textContent =
-                '⚠ Images are unstable in Deep Research mode. Consider a different model for reliable image support.';
+                '⚠ Images are unstable in deep research mode. Consider a different model for reliable image support.';
             this.compatibilityWarningEl.addClass('is-active');
         } else {
             this.compatibilityWarningEl.textContent = '';
@@ -261,7 +261,7 @@ export class ArticleGeneratorModal extends Modal {
         // Resolve quickly so the API request can start; PerplexityService clears
         // the text + interval when the first content chunk arrives.
         return new Promise((resolve) => {
-            setTimeout(() => resolve(), 100);
+            activeWindow.setTimeout(() => resolve(), 100);
         });
     }
 

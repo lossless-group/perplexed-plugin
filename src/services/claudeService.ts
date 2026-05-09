@@ -240,7 +240,7 @@ export class ClaudeService {
         const textBlocksWithCitations = message.content
             .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
             .filter(b => b.citations && b.citations.length > 0).length;
-        console.log(
+        console.debug(
             `[ClaudeService] extractWebCitations — block types: ${JSON.stringify(blockTypes)}; ` +
             `text blocks with citations: ${textBlocksWithCitations}; ` +
             `extracted: ${out.length}`

@@ -4,7 +4,7 @@
 **Perplexed** is an Obsidian plugin that enables AI-powered content generation with source citations using [Perplexity](https://www.perplexity.ai/), [Anthropic Claude](https://www.anthropic.com/), and [Perplexica / Vane](https://github.com/ItzCrazyKns/Vane) (self-hosted). This plugin brings research-grade AI capabilities directly into your Obsidian workspace, allowing you to generate well-cited content for your notes.
 
 ## 🎯 Key Features
-
+![Perplexed UI Modal interface](https://i.imgur.com/jaZ4UfS.png)
 - **Source-Cited AI Responses**: Get AI-generated content with proper citations and references
    - Default format:
    > ```markdown

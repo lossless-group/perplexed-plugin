@@ -71,7 +71,7 @@ export class ClaudeModal extends Modal {
             attr: {
                 id: 'claude-modal-query',
                 rows: '6',
-                placeholder: 'What would you like to research? Multi-line OK.',
+                placeholder: 'What would you like to research? Multi-line ok.',
             },
         });
         queryTextarea.value = this.query;
@@ -87,7 +87,7 @@ export class ClaudeModal extends Modal {
             .setName('Model')
             .setDesc(this.modelTagline(this.model))
             .addDropdown(dd => {
-                CLAUDE_MODELS.forEach(({ value, label }) => dd.addOption(value, label));
+                CLAUDE_MODELS.forEach(({ value, label }) => { dd.addOption(value, label); });
                 dd.setValue(this.model);
                 dd.onChange((value) => {
                     this.model = value;
@@ -103,7 +103,7 @@ export class ClaudeModal extends Modal {
             .setName('Effort')
             .setDesc('Controls thinking depth and overall token spend. Higher = more thorough; more tokens.')
             .addDropdown(dd => {
-                EFFORT_OPTIONS.forEach(({ value, label }) => dd.addOption(value, label));
+                EFFORT_OPTIONS.forEach(({ value, label }) => { dd.addOption(value, label); });
                 dd.setValue(this.effort);
                 dd.onChange((value) => {
                     this.effort = value as NonNullable<ClaudeOptions['effort']>;
@@ -115,21 +115,21 @@ export class ClaudeModal extends Modal {
         togglesSection.createEl('h3', { text: 'Behavior', cls: 'claude-modal__section-title' });
 
         new Setting(togglesSection)
-            .setName('Enable Web Search')
+            .setName('Enable web search')
             .setDesc('Server-side web_search_20250305 tool. Returns per-claim citations attached to text blocks.')
             .addToggle(t => t
                 .setValue(this.webSearch)
                 .onChange(v => { this.webSearch = v; }));
 
         new Setting(togglesSection)
-            .setName('Adaptive Thinking')
+            .setName('Adaptive thinking')
             .setDesc('Lets Claude reason before answering. Higher quality on complex questions; adds latency and tokens.')
             .addToggle(t => t
                 .setValue(this.thinking)
                 .onChange(v => { this.thinking = v; }));
 
         new Setting(togglesSection)
-            .setName('Stream Response')
+            .setName('Stream response')
             .setDesc('Recommended for long answers — avoids HTTP timeouts and writes incrementally to the note.')
             .addToggle(t => t
                 .setValue(this.stream)
@@ -158,7 +158,7 @@ export class ClaudeModal extends Modal {
         });
 
         // Focus the question after the DOM has settled
-        setTimeout(() => queryTextarea.focus(), 50);
+        activeWindow.setTimeout(() => queryTextarea.focus(), 50);
     }
 
     private modelTagline(value: string): string {

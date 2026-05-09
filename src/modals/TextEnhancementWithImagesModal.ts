@@ -35,18 +35,18 @@ export class TextEnhancementWithImagesModal extends Modal {
         // ----- Header -----
         const header = contentEl.createDiv({ cls: 'text-enhancement-with-images-modal__header' });
         header.createEl('h2', {
-            text: 'Get Related Images',
+            text: 'Get related images',
             cls: 'text-enhancement-with-images-modal__title',
         });
         header.createEl('p', {
             cls: 'text-enhancement-with-images-modal__subtitle',
-            text: 'Find images related to selected text via Perplexity (sonar-pro). Streams image markers into the active note at the cursor.',
+            text: 'Find images related to selected text via Perplexity (Sonar-pro). Streams image markers into the active note at the cursor.',
         });
 
         // ----- Selected Text (read-only) -----
         const selectedSection = contentEl.createDiv({ cls: 'text-enhancement-with-images-modal__section' });
         selectedSection.createEl('label', {
-            text: 'Selected Text',
+            text: 'Selected text',
             cls: 'text-enhancement-with-images-modal__label',
         });
         const selectedTextarea = selectedSection.createEl('textarea', {
@@ -61,7 +61,7 @@ export class TextEnhancementWithImagesModal extends Modal {
         // ----- Image Request Prompt (editable) -----
         const promptSection = contentEl.createDiv({ cls: 'text-enhancement-with-images-modal__section' });
         promptSection.createEl('label', {
-            text: 'Image Request Prompt',
+            text: 'Image request prompt',
             cls: 'text-enhancement-with-images-modal__label',
             attr: { for: 'text-enhancement-with-images-modal-prompt' },
         });
@@ -97,12 +97,12 @@ export class TextEnhancementWithImagesModal extends Modal {
         cancelBtn.addEventListener('click', () => this.close());
 
         this.fetchBtn = footer.createEl('button', {
-            text: 'Get Related Images',
+            text: 'Get related images',
             cls: 'text-enhancement-with-images-modal__button mod-cta',
         });
         this.fetchBtn.addEventListener('click', () => void this.onSubmit());
 
-        setTimeout(() => promptTextarea.focus(), 50);
+        activeWindow.setTimeout(() => promptTextarea.focus(), 50);
     }
 
     private async onSubmit(): Promise<void> {
@@ -114,7 +114,7 @@ export class TextEnhancementWithImagesModal extends Modal {
 
         try {
             this.fetchBtn.disabled = true;
-            this.fetchBtn.textContent = 'Getting Related Images…';
+            this.fetchBtn.textContent = 'Getting related images…';
 
             this.close();
 
@@ -140,7 +140,7 @@ export class TextEnhancementWithImagesModal extends Modal {
         } finally {
             if (this.fetchBtn) {
                 this.fetchBtn.disabled = false;
-                this.fetchBtn.textContent = 'Get Related Images';
+                this.fetchBtn.textContent = 'Get related images';
             }
         }
     }
