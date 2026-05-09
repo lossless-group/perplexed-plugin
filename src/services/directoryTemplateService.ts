@@ -63,14 +63,17 @@ function wrapThinkBlocks(text: string): string {
 
 function buildSourcesFooter(sources: PerplexitySource[]): string {
     if (!sources.length) return '';
-    // Format matches cite-wide's REFDEF_NUM_RE (`[N] <content>`) so the
-    // existing "convert to hex citations" command can process this footer.
-    // See cite-wide/src/services/llmCitationParserService.ts.
+    // Canonical Lossless reference-section format per
+    // cite-wide/context-v/reminders/Lossless-Citation-Spec.md:
+    //   "always use a `: ` after the citation identifier".
+    // cite-wide's parser (REFDEF_NUM_RE, line 91 of llmCitationParserService.ts)
+    // accepts both `[N]` and `[N]:` thanks to the `(:?)` group, but the colon
+    // form matches the spec, so emit it.
     const lines = sources.map((s, i) => {
         const n = i + 1;
         const title = (typeof s.title === 'string' && s.title) ? s.title : (s.url ?? 'Source');
         const url = s.url ?? '';
-        return url ? `[${n.toString()}] [${title}](${url})` : `[${n.toString()}] ${title}`;
+        return url ? `[${n.toString()}]: [${title}](${url})` : `[${n.toString()}]: ${title}`;
     });
     return '\n\n## Sources\n\n' + lines.join('\n') + '\n';
 }
