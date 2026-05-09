@@ -178,10 +178,30 @@ export function buildFrontmatterPayload(
     return stringifyYaml(filtered).trim();
 }
 
-export function interpolate(text: string, ctx: { title: string; frontmatter: string }): string {
-    return text.replace(/\{\{\s*(title|frontmatter)\s*\}\}/g, (_, key: string) => {
+function frontmatterValueToString(value: unknown): string {
+    if (value == null) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (Array.isArray(value)) return value.map(v => frontmatterValueToString(v)).join(', ');
+    return stringifyYaml(value).trim();
+}
+
+export interface InterpolationContext {
+    title: string;
+    frontmatter: string;
+    frontmatterObj: Record<string, unknown>;
+}
+
+export function interpolate(text: string, ctx: InterpolationContext): string {
+    return text.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (full, key: string) => {
         if (key === 'title') return ctx.title;
-        return ctx.frontmatter;
+        if (key === 'frontmatter') return ctx.frontmatter;
+        if (key === 'today') return new Date().toISOString().slice(0, 10);
+        const fmKey = key.startsWith('frontmatter.') ? key.slice('frontmatter.'.length) : key;
+        if (fmKey in ctx.frontmatterObj) {
+            return frontmatterValueToString(ctx.frontmatterObj[fmKey]);
+        }
+        return full;
     });
 }
 
@@ -241,39 +261,52 @@ async function callPerplexity(
     return content;
 }
 
+export type ApplyOutcome =
+    | { status: 'applied'; mode: 'fill' | 'append' }
+    | { status: 'skipped'; reason: string }
+    | { status: 'error'; error: string };
+
+export interface ApplyOptions {
+    quiet?: boolean;
+}
+
 export async function applyTemplate(
     app: App,
     settings: DirectoryTemplateSettings,
     target: TFile,
     template: ParsedTemplate,
-): Promise<void> {
+    options: ApplyOptions = {},
+): Promise<ApplyOutcome> {
+    const quiet = options.quiet === true;
+
     if (!settings.perplexityApiKey) {
-        new Notice('Perplexity API key is not set.');
-        return;
+        if (!quiet) new Notice('Perplexity API key is not set.');
+        return { status: 'error', error: 'Perplexity API key not set' };
     }
     if (!template.userSkeleton) {
-        new Notice('Template has no skeleton (no content below the cft block).');
-        return;
+        if (!quiet) new Notice('Template has no skeleton (no content below the cft block).');
+        return { status: 'error', error: 'Template has no skeleton' };
     }
 
     const targetContent = await app.vault.read(target);
     const { frontmatter: fmRaw, body } = splitFrontmatter(targetContent);
-    if (body.trim().length > 0) {
-        new Notice('File has existing body. Edit manually or delete body to re-run.');
-        return;
-    }
+    const existingBody = body.trim();
+    const mode: 'fill' | 'append' = existingBody.length === 0 ? 'fill' : 'append';
 
     const fm = safeParseYaml(fmRaw);
     const title = typeof fm.title === 'string' ? fm.title : target.basename;
     const fmYaml = buildFrontmatterPayload(fm, settings.frontmatterWhitelist);
 
-    const ctx = { title, frontmatter: fmYaml };
+    const ctx: InterpolationContext = { title, frontmatter: fmYaml, frontmatterObj: fm };
     const systemPrompt = interpolate(template.cftSystem, ctx);
     const userPrompt = interpolate(template.userSkeleton, ctx);
 
     const payload = buildPayload(template, systemPrompt, userPrompt);
 
-    const loadingNotice = new Notice('Applying template via Perplexity deep research…', 0);
+    let loadingNotice: Notice | null = null;
+    if (!quiet) {
+        loadingNotice = new Notice('Applying template via Perplexity deep research…', 0);
+    }
     try {
         const content = await callPerplexity(
             settings.perplexityApiKey,
@@ -281,15 +314,84 @@ export async function applyTemplate(
             payload,
             settings.requestTimeoutMs,
         );
-        const trimmedContent = content.replace(/^\s+/, '').replace(/\s+$/, '');
+        const trimmedResponse = content.replace(/^\s+/, '').replace(/\s+$/, '');
         const fmBlock = fmRaw.length > 0 ? `---\n${fmRaw}\n---\n` : '';
-        const newFile = `${fmBlock}\n${trimmedContent}\n`;
+
+        let newFile: string;
+        if (mode === 'fill') {
+            newFile = `${fmBlock}\n${trimmedResponse}\n`;
+        } else {
+            const existing = body.replace(/\s+$/, '');
+            newFile = `${fmBlock}\n${existing}\n\n${trimmedResponse}\n`;
+        }
         await app.vault.modify(target, newFile);
-        new Notice(`Applied "${template.file.basename}" to ${target.basename}`);
+        if (!quiet) {
+            const verb = mode === 'fill' ? 'Filled' : 'Appended to';
+            new Notice(`${verb} "${target.basename}" using ${template.file.basename}`);
+        }
+        return { status: 'applied', mode };
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        new Notice(`Perplexity error: ${msg}`);
+        if (!quiet) new Notice(`Perplexity error: ${msg}`);
+        return { status: 'error', error: msg };
     } finally {
-        loadingNotice.hide();
+        if (loadingNotice) loadingNotice.hide();
     }
+}
+
+export interface BatchProgress {
+    current: number;
+    total: number;
+    file: TFile;
+}
+
+export interface BatchResult {
+    appliedFill: number;
+    appliedAppend: number;
+    errored: number;
+    cancelled: boolean;
+    errors: { path: string; error: string }[];
+}
+
+export async function applyTemplateBatch(
+    app: App,
+    settings: DirectoryTemplateSettings,
+    files: TFile[],
+    template: ParsedTemplate,
+    onProgress: (p: BatchProgress) => void,
+    isCancelled: () => boolean,
+): Promise<BatchResult> {
+    const result: BatchResult = {
+        appliedFill: 0,
+        appliedAppend: 0,
+        errored: 0,
+        cancelled: false,
+        errors: [],
+    };
+    for (let i = 0; i < files.length; i++) {
+        if (isCancelled()) {
+            result.cancelled = true;
+            return result;
+        }
+        const file = files[i];
+        if (!file) continue;
+        onProgress({ current: i + 1, total: files.length, file });
+        const outcome = await applyTemplate(app, settings, file, template, { quiet: true });
+        if (outcome.status === 'applied') {
+            if (outcome.mode === 'fill') result.appliedFill++;
+            else result.appliedAppend++;
+        } else if (outcome.status === 'error') {
+            result.errored++;
+            result.errors.push({ path: file.path, error: outcome.error });
+        }
+    }
+    return result;
+}
+
+export function listMarkdownFilesInFolder(app: App, folderPath: string): TFile[] {
+    const normalized = folderPath.replace(/\/$/, '');
+    return app.vault.getMarkdownFiles().filter(f => {
+        if (normalized === '') return true;
+        return f.path === normalized || f.path.startsWith(normalized + '/');
+    });
 }

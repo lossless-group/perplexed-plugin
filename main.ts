@@ -18,14 +18,19 @@ import { ArticleGeneratorModal } from './src/modals/ArticleGeneratorModal';
 import { TextEnhancementModal } from './src/modals/TextEnhancementModal';
 import { TextEnhancementWithImagesModal } from './src/modals/TextEnhancementWithImagesModal';
 import { DirectoryTemplatePickerModal } from './src/modals/DirectoryTemplatePickerModal';
+import { FolderPickerModal } from './src/modals/FolderPickerModal';
+import { BatchConfirmModal } from './src/modals/BatchConfirmModal';
 
 import {
     applyTemplate as applyDirectoryTemplate,
+    applyTemplateBatch as applyDirectoryTemplateBatch,
+    listMarkdownFilesInFolder,
     listTemplates as listDirectoryTemplates,
     loadTemplate as loadDirectoryTemplate,
     pathMatchesGlobs,
 } from './src/services/directoryTemplateService';
-import type { DirectoryTemplateSettings } from './src/services/directoryTemplateService';
+import type { DirectoryTemplateSettings, ParsedTemplate } from './src/services/directoryTemplateService';
+import type { TFile } from 'obsidian';
 
 
 interface PerplexedPluginSettings {
@@ -301,6 +306,7 @@ export default class PerplexedPlugin extends Plugin {
     public settings: PerplexedPluginSettings = DEFAULT_SETTINGS;
     private statusBarItemEl: HTMLElement | null = null;
     private ribbonIconEl: HTMLElement | null = null;
+    private batchCancelled = false;
     
     // Service instances
     private perplexityService!: PerplexityService | null;
@@ -484,6 +490,25 @@ export default class PerplexedPlugin extends Plugin {
                 name: 'Apply directory template to current file',
                 callback: async () => {
                     await this.runApplyDirectoryTemplate();
+                }
+            });
+
+            // Batch run a directory template across every file in a folder (v0.2).
+            this.addCommand({
+                id: 'apply-directory-template-to-folder',
+                name: 'Apply directory template to all files in folder',
+                callback: () => {
+                    this.runApplyDirectoryTemplateBatch();
+                }
+            });
+
+            // Cancel an in-flight batch run.
+            this.addCommand({
+                id: 'stop-directory-template-batch',
+                name: 'Stop directory template batch',
+                callback: () => {
+                    this.batchCancelled = true;
+                    new Notice('Stop requested — finishing current file then halting.');
                 }
             });
             
@@ -1070,6 +1095,116 @@ export default class PerplexedPlugin extends Plugin {
                 await applyDirectoryTemplate(this.app, dirSettings, target, parsed);
             })();
         }).open();
+    }
+
+    private runApplyDirectoryTemplateBatch(): void {
+        if (!this.settings.perplexityApiKey) {
+            new Notice('Perplexity API key is not set. Configure it in perplexed settings.');
+            return;
+        }
+
+        new FolderPickerModal(this.app, (folder) => {
+            void (async () => {
+                const folderPath = folder.path;
+                const filesInFolder = listMarkdownFilesInFolder(this.app, folderPath);
+                if (filesInFolder.length === 0) {
+                    new Notice(`No markdown files in "${folderPath || '/'}".`);
+                    return;
+                }
+
+                const all = await listDirectoryTemplates(this.app, this.settings.directoryTemplatesRoot);
+                const matchingTemplates = all.filter(t =>
+                    filesInFolder.some(f => pathMatchesGlobs(f.path, t.appliesToPaths))
+                );
+                if (matchingTemplates.length === 0) {
+                    new Notice('No template matches any file in this folder.');
+                    return;
+                }
+
+                new DirectoryTemplatePickerModal(this.app, matchingTemplates, (chosen) => {
+                    void (async () => {
+                        const parsed = await loadDirectoryTemplate(this.app, chosen.file);
+                        if (!parsed) {
+                            new Notice('Template parse error: missing or malformed cft block.');
+                            return;
+                        }
+
+                        const filesForThisTemplate = filesInFolder.filter(f =>
+                            pathMatchesGlobs(f.path, chosen.appliesToPaths)
+                        );
+
+                        let fillCount = 0;
+                        let appendCount = 0;
+                        for (const f of filesForThisTemplate) {
+                            const content = await this.app.vault.cachedRead(f);
+                            const afterFm = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
+                            if (afterFm.trim().length === 0) fillCount++;
+                            else appendCount++;
+                        }
+
+                        const dirSettings: DirectoryTemplateSettings = {
+                            perplexityApiKey: this.settings.perplexityApiKey,
+                            perplexityEndpoint: this.settings.perplexityEndpoint,
+                            templatesRoot: this.settings.directoryTemplatesRoot,
+                            frontmatterWhitelist: this.settings.directoryTemplatesFrontmatterWhitelist,
+                            requestTimeoutMs: this.settings.directoryTemplatesRequestTimeoutMs,
+                        };
+
+                        new BatchConfirmModal(this.app, {
+                            folderPath,
+                            templateTitle: chosen.title,
+                            fileCount: filesForThisTemplate.length,
+                            fillCount,
+                            appendCount,
+                        }, () => {
+                            void this.executeBatch(dirSettings, parsed, filesForThisTemplate);
+                        }).open();
+                    })();
+                }).open();
+            })();
+        }).open();
+    }
+
+    private async executeBatch(
+        dirSettings: DirectoryTemplateSettings,
+        parsed: ParsedTemplate,
+        files: TFile[],
+    ): Promise<void> {
+        this.batchCancelled = false;
+        const progressNotice = new Notice(`Batch starting on ${files.length.toString()} files…`, 0);
+
+        try {
+            const result = await applyDirectoryTemplateBatch(
+                this.app,
+                dirSettings,
+                files,
+                parsed,
+                (p) => {
+                    progressNotice.setMessage(
+                        `Applying ${p.current.toString()}/${p.total.toString()}: ${p.file.basename}`
+                    );
+                },
+                () => this.batchCancelled,
+            );
+
+            const summary = [
+                `Batch ${result.cancelled ? 'cancelled' : 'complete'}.`,
+                `Filled: ${result.appliedFill.toString()}`,
+                `Appended: ${result.appliedAppend.toString()}`,
+                `Errored: ${result.errored.toString()}`,
+            ].join(' ');
+            new Notice(summary, 8000);
+
+            if (result.errors.length > 0) {
+                console.warn('Directory-template batch errors:', result.errors);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            new Notice(`Batch failed: ${msg}`);
+        } finally {
+            progressNotice.hide();
+            this.batchCancelled = false;
+        }
     }
 }
 
