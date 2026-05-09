@@ -63,12 +63,14 @@ function wrapThinkBlocks(text: string): string {
 
 function buildSourcesFooter(sources: PerplexitySource[]): string {
     if (!sources.length) return '';
+    // Format matches cite-wide's REFDEF_NUM_RE (`[N] <content>`) so the
+    // existing "convert to hex citations" command can process this footer.
+    // See cite-wide/src/services/llmCitationParserService.ts.
     const lines = sources.map((s, i) => {
         const n = i + 1;
         const title = (typeof s.title === 'string' && s.title) ? s.title : (s.url ?? 'Source');
         const url = s.url ?? '';
-        const date = (typeof s.date === 'string' && s.date) ? ` (${s.date})` : '';
-        return url ? `${n}. [${title}](${url})${date}` : `${n}. ${title}${date}`;
+        return url ? `[${n.toString()}] [${title}](${url})` : `[${n.toString()}] ${title}`;
     });
     return '\n\n## Sources\n\n' + lines.join('\n') + '\n';
 }
