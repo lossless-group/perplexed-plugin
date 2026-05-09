@@ -17,6 +17,15 @@ import { URLUpdateModal } from './src/modals/URLUpdateModal';
 import { ArticleGeneratorModal } from './src/modals/ArticleGeneratorModal';
 import { TextEnhancementModal } from './src/modals/TextEnhancementModal';
 import { TextEnhancementWithImagesModal } from './src/modals/TextEnhancementWithImagesModal';
+import { DirectoryTemplatePickerModal } from './src/modals/DirectoryTemplatePickerModal';
+
+import {
+    applyTemplate as applyDirectoryTemplate,
+    listTemplates as listDirectoryTemplates,
+    loadTemplate as loadDirectoryTemplate,
+    pathMatchesGlobs,
+} from './src/services/directoryTemplateService';
+import type { DirectoryTemplateSettings } from './src/services/directoryTemplateService';
 
 
 interface PerplexedPluginSettings {
@@ -68,6 +77,11 @@ interface PerplexedPluginSettings {
         // Text enhancement with images prompt
         enhanceWithImagesPrompt: string;
     };
+
+    // Directory templates (v0.1 spike — see context-v/specs/Per-Directory-Profile-Templates.md)
+    directoryTemplatesRoot: string;
+    directoryTemplatesFrontmatterWhitelist: string[];
+    directoryTemplatesRequestTimeoutMs: number;
 }
 
 const DEFAULT_SETTINGS: PerplexedPluginSettings = {
@@ -275,7 +289,12 @@ Structure the article as follows:
         
         // Text enhancement with images prompt
         enhanceWithImagesPrompt: "Please provide 1-3 relevant images for the following text. Return ONLY the image markers in the format [IMAGE 1: description], [IMAGE 2: description], etc. Each image should illustrate a key concept, example, or visual representation related to the text. Do not include any other text or explanation:\n\n{TEXT}"
-    }
+    },
+
+    // Directory templates (v0.1 spike defaults)
+    directoryTemplatesRoot: 'zz-cf-lib/templates',
+    directoryTemplatesFrontmatterWhitelist: ['title', 'og_description', 'tags', 'og_image'],
+    directoryTemplatesRequestTimeoutMs: 300000
 };
 
 export default class PerplexedPlugin extends Plugin {
@@ -456,6 +475,15 @@ export default class PerplexedPlugin extends Plugin {
                 name: 'Reinitialize provider services',
                 callback: async () => {
                     await this.reinitializeServices();
+                }
+            });
+
+            // Directory templates (v0.1 spike). See context-v/specs/Per-Directory-Profile-Templates.md
+            this.addCommand({
+                id: 'apply-directory-template-to-current-file',
+                name: 'Apply directory template to current file',
+                callback: async () => {
+                    await this.runApplyDirectoryTemplate();
                 }
             });
             
@@ -999,6 +1027,50 @@ export default class PerplexedPlugin extends Plugin {
             new Notice('Failed to reinitialize services. Check console for details.');
         }
     }
+
+    private async runApplyDirectoryTemplate(): Promise<void> {
+        const target = this.app.workspace.getActiveFile();
+        if (!target) {
+            new Notice('No active file.');
+            return;
+        }
+        if (!this.settings.perplexityApiKey) {
+            new Notice('Perplexity API key is not set. Configure it in perplexed settings.');
+            return;
+        }
+
+        const root = this.settings.directoryTemplatesRoot;
+        const all = await listDirectoryTemplates(this.app, root);
+        if (all.length === 0) {
+            new Notice(`No templates found under "${root}".`);
+            return;
+        }
+
+        const matching = all.filter(t => pathMatchesGlobs(target.path, t.appliesToPaths));
+        if (matching.length === 0) {
+            new Notice("No template's applies-to-paths matches this file.");
+            return;
+        }
+
+        const dirSettings: DirectoryTemplateSettings = {
+            perplexityApiKey: this.settings.perplexityApiKey,
+            perplexityEndpoint: this.settings.perplexityEndpoint,
+            templatesRoot: this.settings.directoryTemplatesRoot,
+            frontmatterWhitelist: this.settings.directoryTemplatesFrontmatterWhitelist,
+            requestTimeoutMs: this.settings.directoryTemplatesRequestTimeoutMs,
+        };
+
+        new DirectoryTemplatePickerModal(this.app, matching, (chosen) => {
+            void (async () => {
+                const parsed = await loadDirectoryTemplate(this.app, chosen.file);
+                if (!parsed) {
+                    new Notice('Template parse error: missing or malformed cft block.');
+                    return;
+                }
+                await applyDirectoryTemplate(this.app, dirSettings, target, parsed);
+            })();
+        }).open();
+    }
 }
 
 class PerplexedSettingTab extends PluginSettingTab {
@@ -1510,5 +1582,54 @@ class PerplexedSettingTab extends PluginSettingTab {
         })());
         
         enhanceWithImagesPromptSetting.settingEl.appendChild(enhanceWithImagesPromptTextArea);
+
+        // Directory Templates Section (v0.1 spike)
+        new Setting(containerEl).setName('Directory templates').setHeading();
+        containerEl.createEl('p', {
+            text: 'Apply a template (heading skeleton + per-section bullets) to fill a file via Perplexity deep research. Templates live in a vault folder and are matched to files by glob.',
+            cls: 'setting-item-description'
+        });
+
+        new Setting(containerEl)
+            .setName('Templates root')
+            .setDesc('Vault-relative folder where directory templates live.')
+            .addText(text => text
+                .setPlaceholder('Zz-cf-lib/templates')
+                .setValue(this.plugin.settings.directoryTemplatesRoot)
+                .onChange(async (value: string) => {
+                    this.plugin.settings.directoryTemplatesRoot = value.trim();
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName('Frontmatter whitelist')
+            .setDesc('Comma-separated list of frontmatter keys passed to the template as {{frontmatter}}. Other keys are filtered out.')
+            .addText(text => text
+                .setPlaceholder('Title, og_description, tags, og_image')
+                .setValue(this.plugin.settings.directoryTemplatesFrontmatterWhitelist.join(', '))
+                .onChange(async (value: string) => {
+                    this.plugin.settings.directoryTemplatesFrontmatterWhitelist = value
+                        .split(',')
+                        .map(s => s.trim())
+                        .filter(s => s.length > 0);
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName('Request timeout (ms)')
+            .setDesc('Maximum time to wait for the Perplexity deep research response. Default 300000 (5 min).')
+            .addText(text => text
+                .setPlaceholder('300000')
+                .setValue(String(this.plugin.settings.directoryTemplatesRequestTimeoutMs))
+                .onChange(async (value: string) => {
+                    const n = parseInt(value, 10);
+                    if (!isNaN(n) && n > 0) {
+                        this.plugin.settings.directoryTemplatesRequestTimeoutMs = n;
+                        await this.plugin.saveSettings();
+                    }
+                })
+            );
     }
 }
