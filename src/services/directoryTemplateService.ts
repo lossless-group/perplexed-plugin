@@ -68,17 +68,38 @@ function wrapThinkBlocks(text: string): string {
     });
 }
 
-function processContentWithImages(content: string, images: PerplexityImage[]): string {
-    if (!images || images.length === 0) return content;
-    const imageRegex = /\[IMAGE\s+(\d+):\s*([^\]]*?)\]/gi;
-    return content.replace(imageRegex, (match, numStr: string, desc: string): string => {
+function processContentWithImages(
+    content: string,
+    images: PerplexityImage[],
+): { content: string; replaced: number } {
+    if (!images || images.length === 0) return { content, replaced: 0 };
+    // Permissive regex: matches `[IMAGE N: desc]`, `[Image N: desc]`, also
+    // tolerates the markdown-image-shaped `![IMAGE N](...)` and `[IMAGE N](...)`
+    // forms some models emit when they try to anticipate the embed.
+    const imageRegex = /!?\[IMAGE\s+(\d+)(?::\s*([^\]]*?))?\](?:\([^)]*\))?/gi;
+    let replaced = 0;
+    const next = content.replace(imageRegex, (match, numStr: string, desc?: string): string => {
         const idx = parseInt(numStr, 10) - 1;
         if (isNaN(idx) || idx < 0 || idx >= images.length) return match;
         const img = images[idx];
         if (!img?.image_url) return match;
-        const cleanDesc = (desc ?? '').trim() || 'Image';
+        const cleanDesc = (desc ?? '').trim() || `Image ${(idx + 1).toString()}`;
+        replaced++;
         return `![${cleanDesc}](${img.image_url})`;
     });
+    return { content: next, replaced };
+}
+
+function buildFallbackImagesSection(images: PerplexityImage[]): string {
+    if (!images || images.length === 0) return '';
+    const lines = ['', '# Images', ''];
+    images.forEach((img, i) => {
+        if (!img.image_url) return;
+        lines.push(`![Image ${(i + 1).toString()}](${img.image_url})`);
+        if (img.origin_url) lines.push(`_Source: ${img.origin_url}_`);
+        lines.push('');
+    });
+    return lines.join('\n');
 }
 
 function stripUnreplacedImagePlaceholders(content: string): string {
@@ -515,33 +536,38 @@ export async function applyTemplate(
         const runModelLabel = `${providerLabel} ${modelName}`.trim();
 
         // Post-write cleanup: wrap <think> blocks, swap [IMAGE N: …] markers for
-        // real embeds, strip any unreplaced placeholder bullets, append sources
-        // footer.
+        // real embeds (fall back to an Images section when markers don't match
+        // but images came back), strip any unreplaced placeholder bullets,
+        // append sources footer.
         const trimmedStreamed = streamed.replace(/^\s+/, '').replace(/\s+$/, '');
         let cleanedStreamed = wrapThinkBlocks(trimmedStreamed);
+        let fallbackImagesSection = '';
         if (wantsImages) {
-            const markerRe = /\[IMAGE\s+\d+:\s*[^\]]*?\]/gi;
-            const markersBefore = (cleanedStreamed.match(markerRe) ?? []).length;
-            cleanedStreamed = processContentWithImages(cleanedStreamed, images);
+            const result = processContentWithImages(cleanedStreamed, images);
+            cleanedStreamed = result.content;
             cleanedStreamed = stripUnreplacedImagePlaceholders(cleanedStreamed);
-            const markersAfter = (cleanedStreamed.match(markerRe) ?? []).length;
-            // Diagnostics: when the model emitted markers but Perplexity returned
-            // no images (common on sonar-deep-research), surface so the user knows
-            // why image embeds didn't appear. console keeps the detail; Notice is
-            // skipped in batch (quiet) mode.
-            if (markersBefore > 0 && markersAfter > 0) {
-                console.warn(
-                    `[directoryTemplateService] ${markersAfter.toString()} of ${markersBefore.toString()} [IMAGE N: …] markers were not replaced. images.length=${images.length.toString()}, model=${modelName}.`
-                );
+            console.debug(
+                `[directoryTemplateService] images.length=${images.length.toString()}, markers replaced=${result.replaced.toString()}, model=${modelName}`,
+            );
+            // Mirror the article-generator fallback: if Perplexity returned
+            // images but no [IMAGE N: …] markers were replaced (model didn't
+            // emit them, or emitted them in a shape the regex missed), still
+            // surface the images as a section so they don't vanish silently.
+            if (result.replaced === 0 && images.length > 0) {
+                fallbackImagesSection = buildFallbackImagesSection(images);
                 if (!quiet) {
                     new Notice(
-                        `${markersAfter.toString()} image markers left unreplaced — Perplexity returned ${images.length.toString()} image(s).`
+                        `Inserted ${images.length.toString()} image${images.length === 1 ? '' : 's'} as a fallback section — model didn't emit [IMAGE N: …] markers.`,
                     );
                 }
+            } else if (result.replaced === 0 && images.length === 0) {
+                console.warn(
+                    `[directoryTemplateService] return-images is true but Perplexity returned no images. model=${modelName}. Likely an API limitation for this model on this query.`,
+                );
             }
         }
         const sourcesFooter = buildSourcesFooter(sources);
-        const finalContent = `${initialContent}${cleanedStreamed}\n${sourcesFooter}`;
+        const finalContent = `${initialContent}${cleanedStreamed}\n${fallbackImagesSection}${sourcesFooter}`;
         await app.vault.modify(target, finalContent);
 
         // Stamp run metadata in the target's frontmatter so files can be
