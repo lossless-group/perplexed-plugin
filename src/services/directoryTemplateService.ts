@@ -520,8 +520,25 @@ export async function applyTemplate(
         const trimmedStreamed = streamed.replace(/^\s+/, '').replace(/\s+$/, '');
         let cleanedStreamed = wrapThinkBlocks(trimmedStreamed);
         if (wantsImages) {
+            const markerRe = /\[IMAGE\s+\d+:\s*[^\]]*?\]/gi;
+            const markersBefore = (cleanedStreamed.match(markerRe) ?? []).length;
             cleanedStreamed = processContentWithImages(cleanedStreamed, images);
             cleanedStreamed = stripUnreplacedImagePlaceholders(cleanedStreamed);
+            const markersAfter = (cleanedStreamed.match(markerRe) ?? []).length;
+            // Diagnostics: when the model emitted markers but Perplexity returned
+            // no images (common on sonar-deep-research), surface so the user knows
+            // why image embeds didn't appear. console keeps the detail; Notice is
+            // skipped in batch (quiet) mode.
+            if (markersBefore > 0 && markersAfter > 0) {
+                console.warn(
+                    `[directoryTemplateService] ${markersAfter.toString()} of ${markersBefore.toString()} [IMAGE N: …] markers were not replaced. images.length=${images.length.toString()}, model=${modelName}.`
+                );
+                if (!quiet) {
+                    new Notice(
+                        `${markersAfter.toString()} image markers left unreplaced — Perplexity returned ${images.length.toString()} image(s).`
+                    );
+                }
+            }
         }
         const sourcesFooter = buildSourcesFooter(sources);
         const finalContent = `${initialContent}${cleanedStreamed}\n${sourcesFooter}`;

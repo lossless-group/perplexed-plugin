@@ -13,7 +13,7 @@ The H1 heading uses `{{basename}}` (strict filename, never the frontmatter `titl
 
 ```cft
 provider: perplexity
-model: sonar-deep-research
+model: sonar-pro
 search-recency: year
 return-citations: true
 return-images: true
