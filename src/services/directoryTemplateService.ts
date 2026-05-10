@@ -85,33 +85,21 @@ function stripUnreplacedImagePlaceholders(content: string): string {
     return content.replace(/^.*Image embed placeholder.*$\n?/gim, '');
 }
 
-function buildSourcesFooter(
-    sources: PerplexitySource[],
-    runTimestamp: string,
-    runModelLabel: string,
-): string {
+function buildSourcesFooter(sources: PerplexitySource[]): string {
     // Canonical Lossless reference-section format per
-    // cite-wide/context-v/reminders/Lossless-Citation-Spec.md:
-    //   "always use a `: ` after the citation identifier".
-    // cite-wide's parser (REFDEF_NUM_RE, line 91 of llmCitationParserService.ts)
-    // accepts both `[N]` and `[N]:` thanks to the `(:?)` group, but the colon
-    // form matches the spec, so emit it.
+    // cite-wide/context-v/reminders/Lossless-Citation-Spec.md: "always use a
+    // `: ` after the citation identifier". cite-wide's REFDEF_NUM_RE accepts
+    // both `[N]` and `[N]:` but the colon form matches the spec.
     //
-    // Footer shape: blank line before the `***` separator, blank line between
-    // the separator and the `# Sources` h1, blank line before the provenance
-    // line, blank line before the references. Provenance always renders, even
-    // when no sources came back, so the file always carries an in-body record
-    // of which model produced it and when.
-    const provenanceLine = `_Generated ${runTimestamp} via ${runModelLabel}._`;
+    // Run provenance lives in frontmatter (cf_last_run, cf_last_run_model);
+    // not duplicated in body.
     const sourceLines = sources.map((s, i) => {
         const n = i + 1;
         const title = (typeof s.title === 'string' && s.title) ? s.title : (s.url ?? 'Source');
         const url = s.url ?? '';
         return url ? `[${n.toString()}]: [${title}](${url})` : `[${n.toString()}]: ${title}`;
     });
-    const body = sourceLines.length > 0
-        ? `${provenanceLine}\n\n${sourceLines.join('\n')}`
-        : `${provenanceLine}\n\n_No sources returned._`;
+    const body = sourceLines.length > 0 ? sourceLines.join('\n') : '_No sources returned._';
     return '\n\n***\n\n# Sources\n\n' + body + '\n';
 }
 
@@ -513,8 +501,7 @@ export async function applyTemplate(
             isCancelled,
         );
 
-        // Compute run metadata once: used both in the in-body provenance line
-        // (inside the # Sources footer) and the frontmatter stamp.
+        // Compute run metadata for the frontmatter stamp.
         const provider = typeof template.cftConfig['provider'] === 'string'
             ? template.cftConfig['provider']
             : 'unknown';
@@ -529,14 +516,14 @@ export async function applyTemplate(
 
         // Post-write cleanup: wrap <think> blocks, swap [IMAGE N: …] markers for
         // real embeds, strip any unreplaced placeholder bullets, append sources
-        // footer with provenance line.
+        // footer.
         const trimmedStreamed = streamed.replace(/^\s+/, '').replace(/\s+$/, '');
         let cleanedStreamed = wrapThinkBlocks(trimmedStreamed);
         if (wantsImages) {
             cleanedStreamed = processContentWithImages(cleanedStreamed, images);
             cleanedStreamed = stripUnreplacedImagePlaceholders(cleanedStreamed);
         }
-        const sourcesFooter = buildSourcesFooter(sources, runTimestamp, runModelLabel);
+        const sourcesFooter = buildSourcesFooter(sources);
         const finalContent = `${initialContent}${cleanedStreamed}\n${sourcesFooter}`;
         await app.vault.modify(target, finalContent);
 
