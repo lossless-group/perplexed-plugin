@@ -33,6 +33,7 @@ import type { DirectoryTemplateSettings, ParsedTemplate } from './src/services/d
 import type { TFile } from 'obsidian';
 import { findImagesForSelection } from './src/services/findImagesService';
 import type { FindImagesSettings } from './src/services/findImagesService';
+import { reSeedMissingFiles, seedTemplatesIfMissing } from './src/services/templateSeederService';
 
 
 interface PerplexedPluginSettings {
@@ -329,7 +330,20 @@ export default class PerplexedPlugin extends Plugin {
             
             await this.loadSettings();
             console.debug('Perplexed Plugin: Settings loaded successfully');
-            
+
+            // First-run seeding: if the configured templates root is missing
+            // or empty, drop in the four shipped templates plus a README so a
+            // freshly-installed perplexed has working defaults out of the box.
+            // Idempotent — never overwrites existing files.
+            try {
+                const result = await seedTemplatesIfMissing(this.app, this.settings.directoryTemplatesRoot);
+                if (result.seeded > 0) {
+                    console.debug(`Perplexed Plugin: seeded ${result.seeded.toString()} template(s) (${result.reason})`);
+                }
+            } catch (error) {
+                console.error('Perplexed Plugin: template seeding failed:', error);
+            }
+
             // Initialize prompts service first
             try {
                 this.promptsService = new PromptsService(this.settings.prompts);
@@ -1792,6 +1806,21 @@ class PerplexedSettingTab extends PluginSettingTab {
                     if (!isNaN(n) && n > 0) {
                         this.plugin.settings.directoryTemplatesRequestTimeoutMs = n;
                         await this.plugin.saveSettings();
+                    }
+                })
+            );
+
+        new Setting(containerEl)
+            .setName('Re-seed templates')
+            .setDesc('Write any shipped template files that are missing from the templates root. Existing files are never overwritten — to reset a template to its shipped default, delete the file first then re-seed.')
+            .addButton(btn => btn
+                .setButtonText('Re-seed')
+                .onClick(async () => {
+                    try {
+                        await reSeedMissingFiles(this.plugin.app, this.plugin.settings.directoryTemplatesRoot);
+                    } catch (error) {
+                        const msg = error instanceof Error ? error.message : String(error);
+                        new Notice(`Re-seed failed: ${msg}`);
                     }
                 })
             );

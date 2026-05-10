@@ -54,7 +54,7 @@ const context = await esbuild.context({
   },
   logLevel: 'info',
   outfile: 'main.js',
-  loader: { '.css': 'text' },
+  loader: { '.css': 'text', '.md': 'text' },
 });
 
 if (isProduction) {
