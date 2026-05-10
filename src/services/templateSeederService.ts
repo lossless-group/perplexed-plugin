@@ -12,13 +12,20 @@ interface SeedFile {
     content: string;
 }
 
-const SEED_FILES: SeedFile[] = [
-    { name: 'README.md', content: readmeContent },
+// README is treated as docs (always ensure present if missing). The four
+// templates are user-customizable content, so we only seed them when the
+// folder is missing or empty — a folder with templates already in it is
+// treated as user-managed and we don't touch it.
+const README_FILE: SeedFile = { name: 'README.md', content: readmeContent };
+
+const TEMPLATE_FILES: SeedFile[] = [
     { name: 'concept-profile.md', content: conceptProfile },
     { name: 'vocabulary-profile.md', content: vocabularyProfile },
     { name: 'source-profile.md', content: sourceProfile },
     { name: 'toolkit-profile.md', content: toolkitProfile },
 ];
+
+const SEED_FILES: SeedFile[] = [README_FILE, ...TEMPLATE_FILES];
 
 async function ensureFolder(app: App, folderPath: string): Promise<void> {
     const normalized = normalizePath(folderPath);
@@ -36,46 +43,74 @@ async function ensureFolder(app: App, folderPath: string): Promise<void> {
     }
 }
 
-function folderHasMarkdown(app: App, folderPath: string): boolean {
+function folderHasTemplate(app: App, folderPath: string): boolean {
     const normalized = normalizePath(folderPath);
     const folder = app.vault.getAbstractFileByPath(normalized);
     if (!(folder instanceof TFolder)) return false;
-    return folder.children.some(child => child.path.endsWith('.md'));
+    // Treat the README as docs and ignore it when deciding whether the
+    // folder is "user-populated" — a folder that contains only the
+    // shipped README still counts as empty for template-seeding purposes.
+    return folder.children.some(child =>
+        child.path.endsWith('.md') && !child.path.endsWith('/README.md'),
+    );
 }
 
 /**
- * Seed shipped templates into the configured templates root if the folder is
- * missing or contains no markdown. Idempotent — never overwrites an existing
- * file. Designed for first-run experience: a fresh perplexed install creates
- * `zz-cf-lib/templates/` populated with the four shipped templates and a
- * README so the user has working templates without copy/paste.
+ * Seed shipped templates into the configured templates root.
+ *
+ * Two-tier behavior:
+ *   - README is docs and is always written if missing, regardless of whether
+ *     the folder contains user templates. This means a user who's edited
+ *     their templates still gets the README on first install or after a
+ *     plugin update.
+ *   - The four shipped templates are user-customizable content and are only
+ *     seeded when the folder is missing or contains no non-README markdown.
+ *     A folder with templates already in it is treated as user-managed and
+ *     left alone (so a user who deleted concept-profile intentionally won't
+ *     have it resurrected on every load).
+ *
+ * Idempotent — never overwrites an existing file.
  */
 export async function seedTemplatesIfMissing(
     app: App,
     templatesRoot: string,
     options: { quiet?: boolean } = {},
-): Promise<{ seeded: number; reason: 'missing' | 'empty' | 'skipped' }> {
+): Promise<{ seeded: number; reason: 'missing' | 'empty' | 'readme-only' | 'skipped' }> {
     const quiet = options.quiet === true;
     const normalized = normalizePath(templatesRoot);
     const existing = app.vault.getAbstractFileByPath(normalized);
+    const userPopulated = existing ? folderHasTemplate(app, normalized) : false;
 
-    if (existing && folderHasMarkdown(app, normalized)) {
-        return { seeded: 0, reason: 'skipped' };
-    }
-
-    const reason: 'missing' | 'empty' = existing ? 'empty' : 'missing';
     await ensureFolder(app, normalized);
 
+    // Always ensure the README exists.
+    const readmePath = `${normalized}/${README_FILE.name}`;
     let seeded = 0;
-    for (const file of SEED_FILES) {
-        const path = `${normalized}/${file.name}`;
-        if (app.vault.getAbstractFileByPath(path)) continue;
-        await app.vault.create(path, file.content);
+    if (!app.vault.getAbstractFileByPath(readmePath)) {
+        await app.vault.create(readmePath, README_FILE.content);
         seeded++;
     }
 
+    // Seed the four templates only when the folder is missing or empty of
+    // non-README markdown. If the user already has any template files,
+    // assume they're managing the folder and don't add new ones.
+    if (!userPopulated) {
+        for (const file of TEMPLATE_FILES) {
+            const path = `${normalized}/${file.name}`;
+            if (app.vault.getAbstractFileByPath(path)) continue;
+            await app.vault.create(path, file.content);
+            seeded++;
+        }
+    }
+
+    let reason: 'missing' | 'empty' | 'readme-only' | 'skipped';
+    if (!existing) reason = 'missing';
+    else if (userPopulated && seeded === 0) reason = 'skipped';
+    else if (userPopulated) reason = 'readme-only';
+    else reason = 'empty';
+
     if (!quiet && seeded > 0) {
-        new Notice(`Perplexed: seeded ${seeded.toString()} template${seeded === 1 ? '' : 's'} at ${normalized}`);
+        new Notice(`Perplexed: seeded ${seeded.toString()} file${seeded === 1 ? '' : 's'} at ${normalized}`);
     }
     return { seeded, reason };
 }
