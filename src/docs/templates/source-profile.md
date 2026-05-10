@@ -54,6 +54,16 @@ system: |
 
   - Book → emphasize author, publisher, year, thesis, key chapters /
     arguments. The "Catalog" section lists chapters or major arguments.
+    GOOGLE BOOKS RULE: If the frontmatter above contains a
+    `google_books_url` field, treat that URL as authoritative and use
+    it as the primary "Where it lives" link. If the frontmatter does
+    NOT contain `google_books_url`, search Google Books for the book's
+    title (and author, when ambiguous) and find the canonical URL —
+    the URL takes the form `https://books.google.com/books?id=XXXX`
+    or `https://www.google.com/books/edition/.../XXXX`. Include the
+    canonical URL as a `[Google Books](url)` link in "Where it lives".
+    A post-processor will harvest the URL into frontmatter so future
+    runs skip the search.
   - Person → emphasize bio, affiliation, body of work. The "Catalog"
     section lists their books / papers / talks / signature ideas.
   - Influencer / YouTuber / podcaster → emphasize host, channel URL,
@@ -111,7 +121,7 @@ system: |
   - Journal: publisher, peer-review status, open-access status.
   - Report: issuing org, frequency (annual / one-off), pages, where to download.
   - Event: cadence, in-person / virtual / hybrid, host org, founded year.
-- **Where it lives:** a single `[Homepage](url)`-style markdown link to the source's primary surface. Add a second link to a secondary surface if relevant (e.g., for a podcaster: their show feed AND their newsletter).
+- **Where it lives:** a `[Homepage](url)`-style markdown link to the source's primary surface. Add a secondary link if relevant (e.g., for a podcaster: their show feed AND their newsletter). For books specifically: include a `[Google Books](url)` link — use `google_books_url` from frontmatter if present, otherwise search Google Books for the canonical URL (form: `https://books.google.com/books?id=XXXX` or `https://www.google.com/books/edition/...`).
 
 # The People Behind It
 

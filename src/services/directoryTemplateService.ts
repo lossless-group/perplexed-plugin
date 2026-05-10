@@ -570,13 +570,25 @@ export async function applyTemplate(
         const finalContent = `${initialContent}${cleanedStreamed}\n${fallbackImagesSection}${sourcesFooter}`;
         await app.vault.modify(target, finalContent);
 
+        // Harvest a Google Books URL from generated body if the model surfaced
+        // one — books are the only source type with a universal canonical-URL
+        // system worth stamping back into frontmatter. First match wins; we
+        // only stamp when frontmatter doesn't already carry the field so a
+        // user-curated URL is never overwritten.
+        const googleBooksRe = /https:\/\/(?:www\.)?(?:books\.google\.com\/books\?id=[\w-]+|google\.com\/books\/edition\/[^\s)]+)/;
+        const googleBooksMatch = cleanedStreamed.match(googleBooksRe);
+        const harvestedGoogleBooksUrl = googleBooksMatch?.[0];
+
         // Stamp run metadata in the target's frontmatter so files can be
         // queried for staleness ("which Tooling/ entries were last refreshed
         // before <date>?"). Uses fileManager.processFrontMatter so other
-        // frontmatter keys remain byte-identical apart from these two.
+        // frontmatter keys remain byte-identical apart from these stamps.
         await app.fileManager.processFrontMatter(target, (fm: Record<string, unknown>) => {
             fm['cf_last_run'] = runTimestamp;
             fm['cf_last_run_model'] = runModelLabel;
+            if (harvestedGoogleBooksUrl && !fm['google_books_url']) {
+                fm['google_books_url'] = harvestedGoogleBooksUrl;
+            }
         });
 
         if (!quiet) {
