@@ -16,7 +16,7 @@ provider: perplexity
 model: sonar-deep-research
 search-recency: year
 return-citations: true
-return-images: false
+return-images: true
 system: |
   You are a research analyst writing an encyclopedia-style entry for the
   concept named "{{basename}}". Use Perplexity's web search aggressively for

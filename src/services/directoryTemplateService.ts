@@ -41,7 +41,14 @@ export interface PerplexitySource {
     last_updated?: string;
 }
 
+export interface PerplexityImage {
+    image_url?: string;
+    origin_url?: string;
+}
+
 const INLINE_CITATION_DIRECTIVE = "When you make any factual claim that comes from a web search result, append a numeric citation marker like [1], [2], etc. immediately after the claim. The numbers MUST correspond 1:1 to the order of the search results returned by the search tool (first result = [1], second = [2], and so on). You may cite the same source multiple times. Do not list the sources at the end — only inline markers. Do not invent sources; only cite results actually used.";
+
+const IMAGE_PLACEMENT_DIRECTIVE = "IMAGE PLACEMENT — where an image would clarify or illustrate a section, insert a marker of the form [IMAGE N: <specific description>] on its own line. Numbering starts at 1 and increments globally across all images. Descriptions must be specific (e.g., \"ZAPI dashboard showing API discovery interface\"), never generic. If the section skeleton already contains an image-placeholder bullet (any line containing the phrase \"Image embed placeholder\"), REPLACE that bullet entirely with a [IMAGE N: ...] marker — do not leave the placeholder text in your output. Limit to 2-4 markers across the whole response. Markers will be swapped for real image embeds in post-processing.";
 
 function buildResearchFraming(title: string, fmYaml: string): string {
     return `Research the entity "${title}" using web search. Use the metadata below as context, then produce a structured profile that follows the markdown skeleton at the end of this prompt. Every factual claim in your output must be immediately followed by an inline [N] citation marker corresponding to a returned search result. Quote phrasing from sources where useful.
@@ -59,6 +66,23 @@ function wrapThinkBlocks(text: string): string {
         const trimmed = inner.replace(/^\s+/, '').replace(/\s+$/, '');
         return '```think-output\n' + trimmed + '\n```';
     });
+}
+
+function processContentWithImages(content: string, images: PerplexityImage[]): string {
+    if (!images || images.length === 0) return content;
+    const imageRegex = /\[IMAGE\s+(\d+):\s*([^\]]*?)\]/gi;
+    return content.replace(imageRegex, (match, numStr: string, desc: string): string => {
+        const idx = parseInt(numStr, 10) - 1;
+        if (isNaN(idx) || idx < 0 || idx >= images.length) return match;
+        const img = images[idx];
+        if (!img?.image_url) return match;
+        const cleanDesc = (desc ?? '').trim() || 'Image';
+        return `![${cleanDesc}](${img.image_url})`;
+    });
+}
+
+function stripUnreplacedImagePlaceholders(content: string): string {
+    return content.replace(/^.*Image embed placeholder.*$\n?/gim, '');
 }
 
 function buildSourcesFooter(
@@ -293,7 +317,7 @@ async function streamPerplexityToFile(
     file: TFile,
     initialContent: string,
     isCancelled: () => boolean,
-): Promise<{ streamed: string; sources: PerplexitySource[] }> {
+): Promise<{ streamed: string; sources: PerplexitySource[]; images: PerplexityImage[] }> {
     payload.stream = true;
     const controller = new AbortController();
     const timer = activeWindow.setTimeout(() => controller.abort(), timeoutMs);
@@ -332,6 +356,7 @@ async function streamPerplexityToFile(
     let sseBuffer = '';
     let streamed = '';
     let sources: PerplexitySource[] = [];
+    let images: PerplexityImage[] = [];
     let lastFlush = 0;
     const FLUSH_MS = 500;
 
@@ -370,6 +395,11 @@ async function streamPerplexityToFile(
                         sources = sr.filter((x): x is PerplexitySource =>
                             typeof x === 'object' && x !== null);
                     }
+                    const imgs = obj['images'];
+                    if (Array.isArray(imgs)) {
+                        images = imgs.filter((x): x is PerplexityImage =>
+                            typeof x === 'object' && x !== null);
+                    }
                 } catch {
                     // partial JSON; skip
                 }
@@ -393,7 +423,7 @@ async function streamPerplexityToFile(
     // Final flush of raw stream content before post-processing
     await app.vault.modify(file, initialContent + streamed);
 
-    return { streamed, sources };
+    return { streamed, sources, images };
 }
 
 export type ApplyOutcome =
@@ -449,8 +479,12 @@ export async function applyTemplate(
         : INLINE_CITATION_DIRECTIVE;
 
     // User prompt: research framing prepended to the skeleton so the model treats this as a
-    // research task, not a writing brief.
-    const userPrompt = buildResearchFraming(title, fmYaml) + interpolatedSkeleton;
+    // research task, not a writing brief. When the template requests images, append the
+    // image-placement directive so the model emits [IMAGE N: …] markers we can swap for
+    // real embeds post-stream.
+    const wantsImages = template.cftConfig['return-images'] === true;
+    const imageDirective = wantsImages ? `\n\n${IMAGE_PLACEMENT_DIRECTIVE}` : '';
+    const userPrompt = buildResearchFraming(title, fmYaml) + interpolatedSkeleton + imageDirective;
 
     // Initial file content the stream will append to.
     const fmBlock = fmRaw.length > 0 ? `---\n${fmRaw}\n---\n` : '';
@@ -468,7 +502,7 @@ export async function applyTemplate(
         // Set initial state before streaming begins.
         await app.vault.modify(target, initialContent);
 
-        const { streamed, sources } = await streamPerplexityToFile(
+        const { streamed, sources, images } = await streamPerplexityToFile(
             app,
             settings.perplexityApiKey,
             settings.perplexityEndpoint,
@@ -493,10 +527,15 @@ export async function applyTemplate(
         const runTimestamp = new Date().toISOString();
         const runModelLabel = `${providerLabel} ${modelName}`.trim();
 
-        // Post-write cleanup: wrap <think> blocks, append sources footer with
-        // provenance line.
+        // Post-write cleanup: wrap <think> blocks, swap [IMAGE N: …] markers for
+        // real embeds, strip any unreplaced placeholder bullets, append sources
+        // footer with provenance line.
         const trimmedStreamed = streamed.replace(/^\s+/, '').replace(/\s+$/, '');
-        const cleanedStreamed = wrapThinkBlocks(trimmedStreamed);
+        let cleanedStreamed = wrapThinkBlocks(trimmedStreamed);
+        if (wantsImages) {
+            cleanedStreamed = processContentWithImages(cleanedStreamed, images);
+            cleanedStreamed = stripUnreplacedImagePlaceholders(cleanedStreamed);
+        }
         const sourcesFooter = buildSourcesFooter(sources, runTimestamp, runModelLabel);
         const finalContent = `${initialContent}${cleanedStreamed}\n${sourcesFooter}`;
         await app.vault.modify(target, finalContent);
