@@ -48,6 +48,7 @@ plugin directory.
   - [Using Perplexica / Vane](#using-perplexica--vane)
   - [Using LM Studio](#using-lm-studio)
   - [Command Reference](#command-reference)
+  - [Directory Templates](#directory-templates)
 - [Developer Onboarding](#developer-onboarding)
   - [Project Structure](#project-structure)
   - [Development Setup](#development-setup)
@@ -323,6 +324,52 @@ You can set custom keyboard shortcuts for any command:
 1. Open Obsidian Settings → Hotkeys
 2. Search for "Perplexed" commands
 3. Assign your preferred shortcuts
+
+---
+
+## Directory Templates
+
+**Per-folder content generation — one template fills a whole category of files.**
+
+Originally specced as "prompt outlines"; the shipped paradigm is broader and is called *directory templates* throughout the code and command palette. Full reference: [`docs/directory-templates.md`](docs/directory-templates.md). Engineering changelog: [`changelog/2026-05-10_01.md`](changelog/2026-05-10_01.md).
+
+### Why this exists
+
+A working Obsidian vault collects categories of files that share a shape — concepts, vocabulary terms, sources, tooling profiles. Filling them out one editor-callback at a time is untenable when you have hundreds or thousands. A directory template is a single markdown file that says *"for any file under `concepts/**`, here is the structure to fill and the system prompt to use,"* and the runtime applies it to one file or a whole folder via Perplexity research with streaming writes.
+
+### The three primitives
+
+1. **Template** — a markdown file in `Content-Dev/Templates/` with frontmatter (`applies-to-paths` glob), a fenced `cft` config block (provider, model, return flags, system prompt with interpolation tokens like `{{basename}}` and `{{frontmatter.tags}}`), and a heading skeleton that becomes the user prompt. Everything below the first `***` divider is excluded from the request — it's your scratch space.
+2. **Commands** — `Apply directory template to current file` auto-matches via the glob; `Apply directory template to folder` runs a batch with a confirmation modal; `Stop directory template batch` halts a running batch.
+3. **Cleanup pipeline** — after the SSE stream completes, the runtime wraps `<think>` blocks, swaps `[IMAGE N: <description>]` markers for real embeds (with a fallback `# Images` section when the model didn't emit markers but Perplexity returned images), strips unreplaced placeholders, appends a `# Sources` footer in the format [cite-wide](https://github.com/lossless-group/cite-wide) can convert to hex citations, and stamps `cf_last_run` + `cf_last_run_model` into the target's frontmatter.
+
+### Shipped templates
+
+Four templates ship inlined into the plugin and seed into your vault on first plugin load:
+
+| File | Targets | Use for |
+|---|---|---|
+| `concept-profile.md` | `concepts/**` | Encyclopedia-style entries on ideas, patterns, mental models. Anti-incumbent editorial stance baked in (tech giants treated as adopters/popularizers, not innovators, unless documented heyday-era origination supports otherwise). |
+| `vocabulary-profile.md` | `Vocabulary/**` | Term definitions with disambiguation through an innovation-consulting lens. |
+| `source-profile.md` | `Sources/**` | Profiles of books, people, channels, publications, journals, reports, events — type-aware, with Google Books URL harvesting for books. |
+| `toolkit-profile.md` | `Tooling/**` | Profiles of tools, products, platforms, frameworks. |
+
+All four use Perplexity's `sonar-pro` (deep-research is unreliable for image return).
+
+### Auto-seed behavior
+
+On first plugin load, Perplexed writes the four templates plus a user-facing `README.md` to `Content-Dev/Templates/` in your vault. The seeder uses a two-tier policy:
+
+- **README** — always ensured present; if you delete it, the next plugin load writes it back.
+- **Templates** — only seeded when the templates folder is missing or contains no non-README markdown. A folder with even one shipped template is treated as user-managed and left alone.
+
+A **Re-seed templates** button in *Settings → Directory templates* writes any shipped file whose filename doesn't already exist — useful for pulling in a new template after a plugin update without overwriting your edits.
+
+### Writing your own template
+
+Copy any shipped template under a new filename, change the frontmatter (`title`, `description`, `applies-to-paths` glob), rewrite the `cft` block's `system:` prompt for your domain, and rewrite the heading skeleton with the structure you want. Save in `Content-Dev/Templates/`. The plugin picks it up on the next palette invocation — no reload needed.
+
+For interpolation tokens, the full cft block grammar, the cleanup pipeline mechanics, the editorial stance rationale, frontmatter stamps, and known limits — see [`docs/directory-templates.md`](docs/directory-templates.md).
 
 ---
 
