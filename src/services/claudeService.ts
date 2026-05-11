@@ -141,7 +141,7 @@ export class ClaudeService {
         });
 
         const finalMessage = await stream.finalMessage();
-        await this.afterMessage(finalMessage, editor, headerText);
+        this.afterMessage(finalMessage, editor, headerText);
     }
 
     private async handleNonStreamingResponse(
@@ -165,14 +165,14 @@ export class ClaudeService {
             editor.replaceRange(text, responseCursor);
         }
 
-        await this.afterMessage(finalMessage, editor, headerText);
+        this.afterMessage(finalMessage, editor, headerText);
     }
 
-    private async afterMessage(
+    private afterMessage(
         message: Anthropic.Messages.Message,
         editor: Editor,
         headerText: string
-    ): Promise<void> {
+    ): void {
         const citations = this.extractWebCitations(message);
         if (citations.length > 0) {
             this.addCitations(editor, citations);

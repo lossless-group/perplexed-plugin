@@ -731,7 +731,7 @@ export class PerplexityService {
             // Process final metadata (citations, images) after streaming is complete
             if (finalResponseData) {
                 console.debug(`📝 Processing final response data [${requestId || 'unknown'}]:`, finalResponseData);
-                await this.processStreamingMetadata(finalResponseData, editor, headerText);
+                this.processStreamingMetadata(finalResponseData, editor, headerText);
             }
             
             // Add final separator at the very end of the document
@@ -754,11 +754,11 @@ export class PerplexityService {
         }
     }
 
-    private async processStreamingMetadata(
+    private processStreamingMetadata(
         finalResponseData: PerplexityStreamChunk,
         editor: Editor,
         headerText?: string
-    ): Promise<void> {
+    ): void {
         console.debug('🔍 Processing streaming metadata');
         console.debug('📊 Response data keys:', Object.keys(finalResponseData || {}));
         if (finalResponseData.images) {

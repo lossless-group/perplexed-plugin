@@ -502,7 +502,7 @@ export default class PerplexedPlugin extends Plugin {
                 id: 'reinitialize-services',
                 name: 'Reinitialize provider services',
                 callback: async () => {
-                    await this.reinitializeServices();
+                    this.reinitializeServices();
                 }
             });
 
@@ -1011,7 +1011,7 @@ export default class PerplexedPlugin extends Plugin {
         }
     }
 
-    private async reinitializeServices(): Promise<void> {
+    private reinitializeServices(): void {
         try {
             console.debug('Perplexed Plugin: Reinitializing services...');
             new Notice('Reinitializing perplexed services...');
