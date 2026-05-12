@@ -43,38 +43,6 @@ export default tseslint.config(
 			"@typescript-eslint/consistent-type-imports": "error",
 			// Bot's exact ban: only warn / error / debug allowed.
 			"no-console": ["error", { allow: ["warn", "error", "debug"] }],
-			// Override the obsidianmd recommended sentence-case rule with our
-			// brand allowlist — these are real proper nouns and should remain
-			// capitalized in UI text. `enforceCamelCaseLower` is left off so
-			// proper nouns aren't lowercased mid-string. `allowAutoFix` lets
-			// `eslint --fix` apply suggestions for the trivial cases.
-			"obsidianmd/ui/sentence-case": [
-				"error",
-				{
-					brands: [
-						"Perplexity",
-						"Perplexica",
-						"Vane",
-						"Claude",
-						"Anthropic",
-						"LM Studio",
-						"LMStudio",
-						"Imgur",
-						"ImageKit",
-						"OpenAI",
-						"Ollama",
-						"Sonar",
-						"Llama",
-						"GPT",
-						"YAML",
-						"JSON",
-						"URL",
-						"API",
-					],
-					acronyms: ["AI", "ID", "URL", "API", "JSON", "YAML", "HTTP", "HTTPS", "GPU", "CPU"],
-					allowAutoFix: true,
-				},
-			],
 		},
 	},
 );

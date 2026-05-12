@@ -177,10 +177,9 @@ export class PerplexicaService {
                         };
                     }
 
-                    // Streaming uses fetch because Obsidian's requestUrl does not
-                    // support SSE / chunked bodies. Marketplace `/skip` justification.
-                    // eslint-disable-next-line no-restricted-globals
-                    const response = await fetch(endpoint, {
+                    // Streaming uses activeWindow.fetch because Obsidian's
+                    // requestUrl does not support SSE / chunked bodies.
+                    const response = await activeWindow.fetch(endpoint, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -253,7 +252,7 @@ export class PerplexicaService {
                         editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
                         await new Promise(resolve => activeWindow.setTimeout(resolve, 10));
                     }
-                } catch (e) {
+                } catch {
                     // Ignore JSON parse errors
                 }
             }

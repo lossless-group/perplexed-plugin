@@ -71,7 +71,7 @@ export class ClaudeModal extends Modal {
             attr: {
                 id: 'claude-modal-query',
                 rows: '6',
-                placeholder: 'What would you like to research? Multi-line ok.',
+                placeholder: 'What would you like to research? Multi-line OK.',
             },
         });
         queryTextarea.value = this.query;

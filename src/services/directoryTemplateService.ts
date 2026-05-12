@@ -192,7 +192,7 @@ export function pathMatchesGlobs(path: string, globs: string[]): boolean {
     return globs.some(g => globToRegExp(g).test(path));
 }
 
-export async function listTemplates(app: App, root: string): Promise<TemplateFile[]> {
+export function listTemplates(app: App, root: string): TemplateFile[] {
     const normalizedRoot = root.replace(/\/$/, '');
     if (!normalizedRoot) return [];
     const all = app.vault.getMarkdownFiles();
@@ -333,8 +333,7 @@ async function streamPerplexityToFile(
 
     let response: Response;
     try {
-        // eslint-disable-next-line no-restricted-globals
-        response = await fetch(endpoint, {
+        response = await activeWindow.fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
@@ -505,7 +504,7 @@ export async function applyTemplate(
 
     let loadingNotice: Notice | null = null;
     if (!quiet) {
-        loadingNotice = new Notice('Streaming Perplexity deep research…', 0);
+        loadingNotice = new Notice('Streaming perplexity deep research…', 0);
     }
     try {
         // Set initial state before streaming begins.

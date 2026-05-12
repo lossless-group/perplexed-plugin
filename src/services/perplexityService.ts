@@ -520,11 +520,10 @@ export class PerplexityService {
             try {
                 if (useStreaming) {
                     console.debug('🔄 Making streaming API request...');
-                    // Streaming uses fetch because Obsidian's requestUrl does not
-                    // support reading SSE / chunked response bodies — it buffers
-                    // the whole response. Marketplace `/skip` justification.
-                    // eslint-disable-next-line no-restricted-globals
-                    const response = await fetch(this.settings.perplexityEndpoint, {
+                    // Streaming uses activeWindow.fetch because Obsidian's
+                    // requestUrl does not support reading SSE / chunked
+                    // response bodies — it buffers the whole response.
+                    const response = await activeWindow.fetch(this.settings.perplexityEndpoint, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${this.settings.perplexityApiKey}`,

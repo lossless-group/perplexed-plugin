@@ -350,7 +350,7 @@ export default class PerplexedPlugin extends Plugin {
                 console.debug('Perplexed Plugin: PromptsService initialized successfully');
             } catch (error) {
                 console.error('Perplexed Plugin: Failed to initialize PromptsService:', error);
-                new Notice('Failed to initialize PromptsService');
+                new Notice('Failed to initialize promptsservice');
                 this.promptsService = null;
             }
             
@@ -367,7 +367,7 @@ export default class PerplexedPlugin extends Plugin {
                     console.debug('Perplexed Plugin: PerplexityService initialized successfully');
                 } catch (error) {
                     console.error('Perplexed Plugin: Failed to initialize PerplexityService:', error);
-                    new Notice('Failed to initialize PerplexityService');
+                    new Notice('Failed to initialize perplexityservice');
                     this.perplexityService = null;
                 }
                 
@@ -382,7 +382,7 @@ export default class PerplexedPlugin extends Plugin {
                     console.debug('Perplexed Plugin: PerplexicaService initialized successfully');
                 } catch (error) {
                     console.error('Perplexed Plugin: Failed to initialize PerplexicaService:', error);
-                    new Notice('Failed to initialize PerplexicaService');
+                    new Notice('Failed to initialize perplexicaservice');
                     this.perplexicaService = null;
                 }
                 
@@ -395,7 +395,7 @@ export default class PerplexedPlugin extends Plugin {
                     console.debug('Perplexed Plugin: LMStudioService initialized successfully');
                 } catch (error) {
                     console.error('Perplexed Plugin: Failed to initialize LMStudioService:', error);
-                    new Notice('Failed to initialize LMStudioService');
+                    new Notice('Failed to initialize lmstudioservice');
                     this.lmStudioService = null;
                 }
 
@@ -408,7 +408,7 @@ export default class PerplexedPlugin extends Plugin {
                     console.debug('Perplexed Plugin: ClaudeService initialized successfully');
                 } catch (error) {
                     console.error('Perplexed Plugin: Failed to initialize ClaudeService:', error);
-                    new Notice('Failed to initialize ClaudeService');
+                    new Notice('Failed to initialize claudeservice');
                     this.claudeService = null;
                 }
             } else {
@@ -501,7 +501,7 @@ export default class PerplexedPlugin extends Plugin {
             this.addCommand({
                 id: 'reinitialize-services',
                 name: 'Reinitialize provider services',
-                callback: async () => {
+                callback: () => {
                     this.reinitializeServices();
                 }
             });
@@ -643,7 +643,7 @@ export default class PerplexedPlugin extends Plugin {
         // Command to update Perplexica URL
         this.addCommand({
             id: 'update-perplexica-url',
-            name: 'Update Perplexica / Vane URL',
+            name: 'Update perplexica / vane URL',
             callback: () => {
                 const modal = new URLUpdateModal(this.app, {
                     title: 'Update Perplexica / Vane API URL',
@@ -662,7 +662,7 @@ export default class PerplexedPlugin extends Plugin {
         // Command to show current settings
         this.addCommand({
             id: 'show-perplexica-settings',
-            name: 'Show Perplexica / Vane settings',
+            name: 'Show perplexica / vane settings',
             callback: () => {
                 new Notice(`Current Perplexica / Vane URL: ${this.settings.perplexicaEndpoint}`);
                 console.debug('Perplexica Settings:', this.settings);
@@ -672,11 +672,11 @@ export default class PerplexedPlugin extends Plugin {
         // Command to ask Perplexica
         this.addCommand({
             id: 'ask-perplexica',
-            name: 'Ask Perplexica / Vane',
+            name: 'Ask perplexica / vane',
             editorCallback: (editor: Editor) => {
                 try {
                     if (!this.perplexicaService) {
-                        new Notice('Perplexica / Vane service not initialized. Please check console for errors and try the debug command.');
+                        new Notice('Perplexica / vane service not initialized. Please check console for errors and try the debug command.');
                         console.error('Perplexica service is not initialized');
                         return;
                     }
@@ -689,7 +689,7 @@ export default class PerplexedPlugin extends Plugin {
                     modal.open();
                 } catch (error) {
                     console.error('Error opening Perplexica modal:', error);
-                    new Notice('Failed to open Perplexica / Vane modal. Check console for details.');
+                    new Notice('Failed to open perplexica / vane modal. Check console for details.');
                 }
             }
         });
@@ -700,7 +700,7 @@ export default class PerplexedPlugin extends Plugin {
             // Command to update Perplexity URL
             this.addCommand({
                 id: 'update-perplexity-url',
-                name: 'Update Perplexity URL',
+                name: 'Update perplexity URL',
                 callback: () => {
                     const modal = new URLUpdateModal(this.app, {
                         title: 'Update Perplexity API URL',
@@ -719,7 +719,7 @@ export default class PerplexedPlugin extends Plugin {
             // Command to show current Perplexity settings
             this.addCommand({
                 id: 'show-perplexity-settings',
-                name: 'Show Perplexity settings',
+                name: 'Show perplexity settings',
                 callback: () => {
                     new Notice(`Current Perplexity URL: ${this.settings.perplexityEndpoint}`);
                     console.debug('Perplexity Settings:', this.settings);
@@ -729,7 +729,7 @@ export default class PerplexedPlugin extends Plugin {
             // Command to ask Perplexity
             this.addCommand({
                 id: 'ask-perplexity',
-                name: 'Ask Perplexity',
+                name: 'Ask perplexity',
                 editorCallback: (editor: Editor) => {
                     try {
                         if (!this.perplexityService) {
@@ -746,7 +746,7 @@ export default class PerplexedPlugin extends Plugin {
                         modal.open();
                     } catch (error) {
                         console.error('Error opening Perplexity modal:', error);
-                        new Notice('Failed to open Perplexity modal. Check console for details.');
+                        new Notice('Failed to open perplexity modal. Check console for details.');
                     }
                 }
             });
@@ -754,7 +754,7 @@ export default class PerplexedPlugin extends Plugin {
             // Add a fallback command that shows service status
             this.addCommand({
                 id: 'perplexity-service-status',
-                name: 'Check Perplexity service status',
+                name: 'Check perplexity service status',
                 callback: () => {
                     if (this.perplexityService) {
                         new Notice('Perplexity service is initialized and ready');
@@ -809,7 +809,7 @@ export default class PerplexedPlugin extends Plugin {
         // Command to update LM Studio URL
         this.addCommand({
             id: 'update-lmstudio-url',
-            name: 'Update LM Studio URL',
+            name: 'Update lm studio URL',
             callback: () => {
                 const modal = new URLUpdateModal(this.app, {
                     title: 'Update LM Studio API URL',
@@ -828,7 +828,7 @@ export default class PerplexedPlugin extends Plugin {
         // Command to show current LM Studio settings
         this.addCommand({
             id: 'show-lmstudio-settings',
-            name: 'Show LM Studio settings',
+            name: 'Show lm studio settings',
             callback: () => {
                 new Notice(`Current LM Studio URL: ${this.settings.lmStudioEndpoint}`);
                 console.debug('LM Studio Settings:', this.settings);
@@ -838,11 +838,11 @@ export default class PerplexedPlugin extends Plugin {
         // Command to ask LM Studio
         this.addCommand({
             id: 'ask-lmstudio',
-            name: 'Ask LM Studio',
+            name: 'Ask lm studio',
             editorCallback: (editor: Editor) => {
                 try {
                     if (!this.lmStudioService) {
-                        new Notice('LM Studio service not initialized. Please check console for errors and try the debug command.');
+                        new Notice('Lm studio service not initialized. Please check console for errors and try the debug command.');
                         console.error('LM Studio service is not initialized');
                         return;
                     }
@@ -855,7 +855,7 @@ export default class PerplexedPlugin extends Plugin {
                     modal.open();
                 } catch (error) {
                     console.error('Error opening LM Studio modal:', error);
-                    new Notice('Failed to open LM Studio modal. Check console for details.');
+                    new Notice('Failed to open lm studio modal. Check console for details.');
                 }
             }
         });
@@ -891,7 +891,7 @@ export default class PerplexedPlugin extends Plugin {
         // Register Text Enhancement command
         this.addCommand({
             id: 'enhance-text',
-            name: 'Enhance selected text with Perplexity',
+            name: 'Enhance selected text with perplexity',
             editorCallback: (editor: Editor) => {
                 try {
                     const selectedText = editor.getSelection();
@@ -1108,7 +1108,7 @@ export default class PerplexedPlugin extends Plugin {
         }
 
         const root = this.settings.directoryTemplatesRoot;
-        const all = await listDirectoryTemplates(this.app, root);
+        const all = listDirectoryTemplates(this.app, root);
         if (all.length === 0) {
             new Notice(`No templates found under "${root}".`);
             return;
@@ -1155,7 +1155,7 @@ export default class PerplexedPlugin extends Plugin {
                     return;
                 }
 
-                const all = await listDirectoryTemplates(this.app, this.settings.directoryTemplatesRoot);
+                const all = listDirectoryTemplates(this.app, this.settings.directoryTemplatesRoot);
                 const matchingTemplates = all.filter(t =>
                     filesInFolder.some(f => pathMatchesGlobs(f.path, t.appliesToPaths))
                 );
@@ -1274,15 +1274,15 @@ class PerplexedSettingTab extends PluginSettingTab {
         // Perplexity Section
         new Setting(containerEl).setName("Perplexity (remote service)").setHeading();
         containerEl.createEl('p', {
-            text: 'Configure settings for the hosted Perplexity AI service',
+            text: 'Configure settings for the hosted perplexity AI service',
             cls: 'setting-item-description'
         });
 
         new Setting(containerEl)
             .setName('Endpoint')
-            .setDesc('API endpoint for Perplexity service')
+            .setDesc('API endpoint for perplexity service')
             .addText(text => text
-                .setPlaceholder('HTTPS://API.Perplexity.ai/chat/completions')
+                .setPlaceholder('HTTPS://api.perplexity.ai/chat/completions')
                 .setValue(this.plugin.settings.perplexityEndpoint)
                 .onChange(async (value: string) => {
                     this.plugin.settings.perplexityEndpoint = value;
@@ -1292,7 +1292,7 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('API key')
-            .setDesc('Your Perplexity API key (required for remote service)')
+            .setDesc('Your perplexity API key (required for remote service)')
             .addText(text => text
                 .setPlaceholder('Pplx-xxxxxxxxxxxxxxxxxxxxx')
                 .setValue(this.plugin.settings.perplexityApiKey)
@@ -1318,21 +1318,21 @@ class PerplexedSettingTab extends PluginSettingTab {
         // Perplexity Request Template
         const perplexityJsonSetting = new Setting(containerEl)
             .setName('Request body template')
-            .setDesc('JSON template for Perplexity API requests');
+            .setDesc('JSON template for perplexity API requests');
             
         // Create a textarea element for Perplexity
         const perplexityTextArea = activeDocument.createEl('textarea');
         perplexityTextArea.rows = 10;
         perplexityTextArea.cols = 50;
         perplexityTextArea.addClass('perplexed-json-textarea');
-        perplexityTextArea.placeholder = 'Enter Perplexity JSON request template...';
+        perplexityTextArea.placeholder = 'Enter perplexity JSON request template...';
         
         // Set initial value if it exists
         if (this.plugin.settings.perplexityRequestTemplate) {
             try {
                 const config: unknown = JSON.parse(this.plugin.settings.perplexityRequestTemplate);
                 perplexityTextArea.value = JSON.stringify(config, null, 2);
-            } catch (e) {
+            } catch {
                 // If not valid JSON, use as is
                 perplexityTextArea.value = this.plugin.settings.perplexityRequestTemplate;
             }
@@ -1380,15 +1380,15 @@ class PerplexedSettingTab extends PluginSettingTab {
                 }));
 
         // Perplexica / Vane Section
-        new Setting(containerEl).setName("Perplexica / Vane (self-hosted)").setHeading();
+        new Setting(containerEl).setName("Perplexica / vane (self-hosted)").setHeading();
         containerEl.createEl('p', {
-            text: 'Configure settings for your local Perplexica / Vane installation',
+            text: 'Configure settings for your local perplexica / vane installation',
             cls: 'setting-item-description'
         });
 
         new Setting(containerEl)
             .setName('Endpoint')
-            .setDesc('API endpoint for your local Perplexica / Vane instance')
+            .setDesc('API endpoint for your local perplexica / vane instance')
             .addText(text => text
                 .setPlaceholder('HTTP://localhost:3030/API/search')
                 .setValue(this.plugin.settings.perplexicaEndpoint)
@@ -1412,7 +1412,7 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Default model')
-            .setDesc('Default AI model for Perplexica / Vane to use')
+            .setDesc('Default AI model for perplexica / vane to use')
             .addText(text => text
                 .setPlaceholder('Llama3.2:latest')
                 .setValue(this.plugin.settings.defaultModel)
@@ -1425,21 +1425,21 @@ class PerplexedSettingTab extends PluginSettingTab {
         // Perplexica Request Template
         const perplexicaJsonSetting = new Setting(containerEl)
             .setName('Request body template')
-            .setDesc('JSON template for Perplexica / Vane API requests');
+            .setDesc('JSON template for perplexica / vane API requests');
             
         // Create a textarea element for Perplexica
         const perplexicaTextArea = activeDocument.createEl('textarea');
         perplexicaTextArea.rows = 10;
         perplexicaTextArea.cols = 50;
         perplexicaTextArea.addClass('perplexed-json-textarea');
-        perplexicaTextArea.placeholder = 'Enter Perplexica JSON request template...';
+        perplexicaTextArea.placeholder = 'Enter perplexica JSON request template...';
         
         // Set initial value if it exists
         if (this.plugin.settings.requestBodyTemplate) {
             try {
                 const config: unknown = JSON.parse(this.plugin.settings.requestBodyTemplate);
                 perplexicaTextArea.value = JSON.stringify(config, null, 2);
-            } catch (e) {
+            } catch {
                 // If not valid JSON, use as is
                 perplexicaTextArea.value = this.plugin.settings.requestBodyTemplate;
             }
@@ -1455,15 +1455,15 @@ class PerplexedSettingTab extends PluginSettingTab {
         perplexicaJsonSetting.settingEl.appendChild(perplexicaTextArea);
 
         // LM Studio Section
-        new Setting(containerEl).setName("LM Studio (local models)").setHeading();
+        new Setting(containerEl).setName("Lm studio (local models)").setHeading();
         containerEl.createEl('p', {
-            text: 'Configure settings for your local LM Studio installation with loaded models',
+            text: 'Configure settings for your local lm studio installation with loaded models',
             cls: 'setting-item-description'
         });
 
         new Setting(containerEl)
             .setName('Endpoint')
-            .setDesc('API endpoint for your local LM Studio instance')
+            .setDesc('API endpoint for your local lm studio instance')
             .addText(text => text
                 .setPlaceholder('HTTP://localhost:1234/v1/chat/completions')
                 .setValue(this.plugin.settings.lmStudioEndpoint)
@@ -1475,7 +1475,7 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Default model')
-            .setDesc('Default model name for LM Studio to use')
+            .setDesc('Default model name for lm studio to use')
             .addText(text => text
                 .setPlaceholder('Ibm/granite-3.2-8b')
                 .setValue(this.plugin.settings.defaultLMStudioModel)
@@ -1488,21 +1488,21 @@ class PerplexedSettingTab extends PluginSettingTab {
         // LM Studio Request Template
         const lmStudioJsonSetting = new Setting(containerEl)
             .setName('Request body template')
-            .setDesc('JSON template for LM Studio API requests');
+            .setDesc('JSON template for lm studio API requests');
             
         // Create a textarea element for LM Studio
         const lmStudioTextArea = activeDocument.createEl('textarea');
         lmStudioTextArea.rows = 10;
         lmStudioTextArea.cols = 50;
         lmStudioTextArea.addClass('perplexed-json-textarea');
-        lmStudioTextArea.placeholder = 'Enter LM Studio JSON request template...';
+        lmStudioTextArea.placeholder = 'Enter lm studio JSON request template...';
         
         // Set initial value if it exists
         if (this.plugin.settings.lmStudioRequestTemplate) {
             try {
                 const config: unknown = JSON.parse(this.plugin.settings.lmStudioRequestTemplate);
                 lmStudioTextArea.value = JSON.stringify(config, null, 2);
-            } catch (e) {
+            } catch {
                 // If not valid JSON, use as is
                 lmStudioTextArea.value = this.plugin.settings.lmStudioRequestTemplate;
             }
@@ -1529,9 +1529,9 @@ class PerplexedSettingTab extends PluginSettingTab {
         
         new Setting(containerEl)
             .setName('Perplexity system prompt')
-            .setDesc('System prompt used for Perplexity AI requests')
+            .setDesc('System prompt used for perplexity AI requests')
             .addTextArea(text => text
-                .setPlaceholder('Enter system prompt for Perplexity...')
+                .setPlaceholder('Enter system prompt for perplexity...')
                 .setValue(this.plugin.settings.prompts.perplexitySystemPrompt)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.perplexitySystemPrompt = value;
@@ -1544,10 +1544,10 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('Perplexica / Vane system prompt')
-            .setDesc('System prompt used for Perplexica / Vane requests')
+            .setName('Perplexica / vane system prompt')
+            .setDesc('System prompt used for perplexica / vane requests')
             .addTextArea(text => text
-                .setPlaceholder('Enter system prompt for Perplexica / Vane...')
+                .setPlaceholder('Enter system prompt for perplexica / vane...')
                 .setValue(this.plugin.settings.prompts.perplexicaSystemPrompt)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.perplexicaSystemPrompt = value;
@@ -1560,10 +1560,10 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('LM Studio default system prompt')
-            .setDesc('Default system prompt used for LM Studio requests')
+            .setName('Lm studio default system prompt')
+            .setDesc('Default system prompt used for lm studio requests')
             .addTextArea(text => text
-                .setPlaceholder('Enter default system prompt for LM Studio...')
+                .setPlaceholder('Enter default system prompt for lm studio...')
                 .setValue(this.plugin.settings.prompts.lmStudioDefaultSystemPrompt)
                 .onChange(async (value: string) => {
                     this.plugin.settings.prompts.lmStudioDefaultSystemPrompt = value;
@@ -1580,7 +1580,7 @@ class PerplexedSettingTab extends PluginSettingTab {
         
         new Setting(containerEl)
             .setName('Perplexity query placeholder')
-            .setDesc('Placeholder text for Perplexity query input')
+            .setDesc('Placeholder text for perplexity query input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
                 .setValue(this.plugin.settings.prompts.perplexityQueryPlaceholder)
@@ -1595,8 +1595,8 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('Perplexica / Vane query placeholder')
-            .setDesc('Placeholder text for Perplexica / Vane query input')
+            .setName('Perplexica / vane query placeholder')
+            .setDesc('Placeholder text for perplexica / vane query input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
                 .setValue(this.plugin.settings.prompts.perplexicaQueryPlaceholder)
@@ -1611,8 +1611,8 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('LM Studio query placeholder')
-            .setDesc('Placeholder text for LM Studio query input')
+            .setName('Lm studio query placeholder')
+            .setDesc('Placeholder text for lm studio query input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
                 .setValue(this.plugin.settings.prompts.lmStudioQueryPlaceholder)
@@ -1627,8 +1627,8 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('LM Studio system prompt placeholder')
-            .setDesc('Placeholder text for LM Studio system prompt input')
+            .setName('Lm studio system prompt placeholder')
+            .setDesc('Placeholder text for lm studio system prompt input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
                 .setValue(this.plugin.settings.prompts.lmStudioSystemPromptPlaceholder)
@@ -1764,7 +1764,7 @@ class PerplexedSettingTab extends PluginSettingTab {
         // Directory Templates Section (v0.1 spike)
         new Setting(containerEl).setName('Directory templates').setHeading();
         containerEl.createEl('p', {
-            text: 'Apply a template (heading skeleton + per-section bullets) to fill a file via Perplexity deep research. Templates live in a vault folder and are matched to files by glob.',
+            text: 'Apply a template (heading skeleton + per-section bullets) to fill a file via perplexity deep research. Templates live in a vault folder and are matched to files by glob.',
             cls: 'setting-item-description'
         });
 
@@ -1797,7 +1797,7 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Request timeout (ms)')
-            .setDesc('Maximum time to wait for the Perplexity deep research response. Default 300000 (5 min).')
+            .setDesc('Maximum time to wait for the perplexity deep research response. Default 300000 (5 min).')
             .addText(text => text
                 .setPlaceholder('300000')
                 .setValue(String(this.plugin.settings.directoryTemplatesRequestTimeoutMs))
@@ -1828,7 +1828,7 @@ class PerplexedSettingTab extends PluginSettingTab {
         // Find images for selection
         new Setting(containerEl).setName('Find images for selection').setHeading();
         containerEl.createEl('p', {
-            text: 'Highlight a passage, run "find images for selection". The plugin asks Perplexity for screenshots that visually illustrate the passage, prefers images on the entity\'s domain (frontmatter URL), and embeds them between paragraphs.',
+            text: 'Highlight a passage, run "find images for selection". The plugin asks perplexity for screenshots that visually illustrate the passage, prefers images on the entity\'s domain (frontmatter URL), and embeds them between paragraphs.',
             cls: 'setting-item-description'
         });
 

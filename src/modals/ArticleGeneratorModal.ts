@@ -162,7 +162,7 @@ export class ArticleGeneratorModal extends Modal {
 
         new Setting(returnsSection)
             .setName('Related questions')
-            .setDesc('Surface follow-up questions Perplexity suggests at the end of the response.')
+            .setDesc('Surface follow-up questions perplexity suggests at the end of the response.')
             .addToggle(t => t
                 .setValue(this.relatedQuestions)
                 .onChange(v => { this.relatedQuestions = v; }));

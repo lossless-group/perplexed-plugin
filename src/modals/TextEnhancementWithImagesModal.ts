@@ -40,7 +40,7 @@ export class TextEnhancementWithImagesModal extends Modal {
         });
         header.createEl('p', {
             cls: 'text-enhancement-with-images-modal__subtitle',
-            text: 'Find images related to selected text via Perplexity (Sonar-pro). Streams image markers into the active note at the cursor.',
+            text: 'Find images related to selected text via perplexity (sonar-pro). Streams image markers into the active note at the cursor.',
         });
 
         // ----- Selected Text (read-only) -----

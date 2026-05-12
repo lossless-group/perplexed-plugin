@@ -153,10 +153,9 @@ export class LMStudioService {
                 };
             }
             
-            // Streaming uses fetch because Obsidian's requestUrl does not
-            // support SSE / chunked bodies. Marketplace `/skip` justification.
-            // eslint-disable-next-line no-restricted-globals
-            const response = await fetch(this.settings.lmStudioEndpoint, {
+            // Streaming uses activeWindow.fetch because Obsidian's requestUrl
+            // does not support SSE / chunked bodies.
+            const response = await activeWindow.fetch(this.settings.lmStudioEndpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -241,7 +240,7 @@ export class LMStudioService {
                             // Small delay to make scrolling smoother
                             await new Promise(resolve => activeWindow.setTimeout(resolve, 10));
                         }
-                    } catch (e) {
+                    } catch {
                         // Ignore JSON parse errors for partial chunks
                     }
                 }

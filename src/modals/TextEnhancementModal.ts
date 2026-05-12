@@ -34,10 +34,10 @@ export class TextEnhancementModal extends Modal {
 
         // ----- Header -----
         const header = contentEl.createDiv({ cls: 'text-enhancement-modal__header' });
-        header.createEl('h2', { text: 'Enhance text with Perplexity', cls: 'text-enhancement-modal__title' });
+        header.createEl('h2', { text: 'Enhance text with perplexity', cls: 'text-enhancement-modal__title' });
         header.createEl('p', {
             cls: 'text-enhancement-modal__subtitle',
-            text: 'Rewrite or expand selected text via Perplexity (Sonar-pro). Streams into the active note at the cursor with citations.',
+            text: 'Rewrite or expand selected text via perplexity (sonar-pro). Streams into the active note at the cursor with citations.',
         });
 
         // ----- Selected Text (read-only) -----

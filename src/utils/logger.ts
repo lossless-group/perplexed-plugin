@@ -44,7 +44,7 @@ export class FileLogger {
         const parsed: unknown = JSON.parse(content);
         this.logEntries = Array.isArray(parsed) ? (parsed as LogEntry[]) : [];
       }
-    } catch (error) {
+    } catch {
       // File doesn't exist or is corrupted, start with empty logs
       this.logEntries = [];
     }

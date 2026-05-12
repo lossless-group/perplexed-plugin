@@ -62,7 +62,7 @@ export class PerplexityModal extends Modal {
 
         // ----- Header -----
         const header = contentEl.createDiv({ cls: 'perplexity-modal__header' });
-        header.createEl('h2', { text: 'Ask Perplexity', cls: 'perplexity-modal__title' });
+        header.createEl('h2', { text: 'Ask perplexity', cls: 'perplexity-modal__title' });
         header.createEl('p', {
             cls: 'perplexity-modal__subtitle',
             text: 'Web-grounded research with native citations. Streams into the active note at the cursor.',
@@ -145,7 +145,7 @@ export class PerplexityModal extends Modal {
 
         new Setting(returnsSection)
             .setName('Related questions')
-            .setDesc('Surface follow-up questions Perplexity suggests at the end of the response.')
+            .setDesc('Surface follow-up questions perplexity suggests at the end of the response.')
             .addToggle(t => t
                 .setValue(this.relatedQuestions)
                 .onChange(v => { this.relatedQuestions = v; }));
@@ -170,7 +170,7 @@ export class PerplexityModal extends Modal {
         cancelBtn.addEventListener('click', () => this.close());
 
         const askBtn = footer.createEl('button', {
-            text: 'Ask Perplexity',
+            text: 'Ask perplexity',
             cls: 'perplexity-modal__button mod-cta',
         });
         askBtn.addEventListener('click', () => void this.onSubmit());

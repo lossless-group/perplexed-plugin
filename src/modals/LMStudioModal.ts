@@ -49,10 +49,10 @@ export class LMStudioModal extends Modal {
 
         // ----- Header -----
         const header = contentEl.createDiv({ cls: 'lmstudio-modal__header' });
-        header.createEl('h2', { text: 'Ask LM Studio', cls: 'lmstudio-modal__title' });
+        header.createEl('h2', { text: 'Ask lm studio', cls: 'lmstudio-modal__title' });
         header.createEl('p', {
             cls: 'lmstudio-modal__subtitle',
-            text: 'Run queries against your local LM Studio server. Streams into the active note at the cursor.',
+            text: 'Run queries against your local lm studio server. Streams into the active note at the cursor.',
         });
 
         // ----- Question -----
@@ -167,7 +167,7 @@ export class LMStudioModal extends Modal {
         cancelBtn.addEventListener('click', () => this.close());
 
         const askBtn = footer.createEl('button', {
-            text: 'Ask LM Studio',
+            text: 'Ask lm studio',
             cls: 'lmstudio-modal__button mod-cta',
         });
         askBtn.addEventListener('click', () => void this.onSubmit());

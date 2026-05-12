@@ -32,7 +32,7 @@ export class BatchConfirmModal extends Modal {
         ul.createEl('li', { text: `Existing bodies (append below): ${this.info.appendCount}` });
 
         contentEl.createEl('p', {
-            text: 'Each file will hit Perplexity deep research once. Cancel any time via "stop directory template batch" command.',
+            text: 'Each file will hit perplexity deep research once. Cancel any time via "stop directory template batch" command.',
             cls: 'setting-item-description',
         });
 
