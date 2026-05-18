@@ -1,7 +1,7 @@
 {
 	"name": "perplexed",
-	"version": "0.1.1",
-	"description": "A plugin for Obsidian that allows you to generate source-cited content using AI using Perplexity and Perplexica.",
+	"version": "0.1.2",
+	"description": "Generate source-cited research content from Perplexity, Anthropic Claude, Perplexica, or local LM Studio — directly into your notes.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",

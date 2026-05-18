@@ -1,0 +1,88 @@
+name: Release plugin
+
+# Fires when a 3-digit-semver tag is pushed (e.g. 0.1.6). Builds the plugin
+# in a clean Ubuntu runner, signs the produced main.js / manifest.json /
+# styles.css with GitHub's artifact-attestation (sigstore-backed), and
+# creates the GitHub Release with those three files attached. Anyone
+# installing can verify provenance with `gh attestation verify <file>
+# --repo lossless-group/metafetch`.
+#
+# Release notes: if release-notes/<tag>.md exists in the repo at the tagged
+# commit, it's used verbatim as the release body. Otherwise the workflow
+# falls back to GitHub's --generate-notes. The convention going forward is
+# to author the marketing-shape notes in release-notes/<version>.md before
+# tagging (per content-farm/context-v/skills/changelog-conventions/SKILL.md
+# "These are marketing artifacts" section — every release page is a
+# four-audience marketing surface, not a commit-message recap).
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write       # gh release create / asset upload
+  id-token: write       # OIDC token for sigstore signing
+  attestations: write   # write the attestation to GitHub's attestation API
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out tagged commit
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin
+        run: pnpm build
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      - name: Pick release-notes source
+        id: notes
+        run: |
+          NOTES_FILE="release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "path=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+            echo "Using release-notes/${GITHUB_REF_NAME}.md as release body"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No release-notes/${GITHUB_REF_NAME}.md found — falling back to --generate-notes"
+          fi
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ steps.notes.outputs.found }}" = "true" ]; then
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file "${{ steps.notes.outputs.path }}" \
+              main.js manifest.json styles.css
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes \
+              main.js manifest.json styles.css
+          fi
