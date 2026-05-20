@@ -1,7 +1,7 @@
 ![Perplexed: An Obsidian Plugin for Perplexity and Perplexica / Vane](https://i.imgur.com/MVOK3rk.png)
 # Perplexed: AI Content Generation for Obsidian
 
-**Perplexed** is an Obsidian plugin that enables AI-powered content generation with source citations using [Perplexity](https://www.perplexity.ai/), [Anthropic Claude](https://www.anthropic.com/), and [Perplexica / Vane](https://github.com/ItzCrazyKns/Vane) (self-hosted). This plugin brings research-grade AI capabilities directly into your Obsidian workspace, allowing you to generate well-cited content for your notes.
+**Perplexed** is an Obsidian plugin that enables AI-powered content generation with source citations using [Perplexity](https://www.perplexity.ai/), [Anthropic Claude](https://www.anthropic.com/), [Google Gemini](https://ai.google.dev/) (with Google Search grounding), and [Perplexica / Vane](https://github.com/ItzCrazyKns/Vane) (self-hosted). This plugin brings research-grade AI capabilities directly into your Obsidian workspace, allowing you to generate well-cited content for your notes.
 
 ## 🎯 Key Features
 ![Perplexed UI Modal interface](https://i.imgur.com/jaZ4UfS.png)
@@ -15,7 +15,7 @@
 [2]: 2025, Jun 16. [Governance, risk and compliance (GRC): Definitions and resources](https://www.diligent.com/resources/guides/grc). Published: 2025-05-27 | Updated: 2025-06-16
    > ```
 
-- **Multiple AI Providers**: Support for Perplexity, Anthropic Claude, Perplexica / Vane (self-hosted), and LM Studio (local)
+- **Multiple AI Providers**: Support for Perplexity, Anthropic Claude, Google Gemini (with Google Search grounding), Perplexica / Vane (self-hosted), and LM Studio (local)
 - **Streaming Responses**: Real-time streaming of AI responses for better UX
 - **Flexible Configuration**: Customizable endpoints, models, and parameters
 - **Deep Research Mode**: Comprehensive research across hundreds of sources
@@ -32,8 +32,17 @@ explicitly selected when invoking selection-based commands.
 |---|---|---|---|
 | Perplexity | `https://api.perplexity.ai/chat/completions` | Required | Required (paid) |
 | Anthropic Claude | `https://api.anthropic.com/v1/messages` | Required | Required (paid) |
+| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent` | Required ([AI Studio](https://aistudio.google.com/)) | Required (free tier available, no credit card) |
 | Perplexica / Vane ([install required](https://github.com/ItzCrazyKns/Vane)) | `http://localhost:3030/api/search` (default; user-configurable) | Not required | Not required (self-hosted, runs locally) |
 | LM Studio | `http://localhost:1234/v1/chat/completions` (default; user-configurable) | Not required | Not required (runs locally) |
+
+When Gemini's `google_search` grounding is enabled, the plugin also issues
+follow-up `GET` requests to `vertexaisearch.cloud.google.com/grounding-api-redirect/…`
+URLs to resolve them to the real source page (so your `### Citations` footer
+contains durable source URLs rather than short-lived Google redirects). The
+follow-up requests go through Obsidian's `requestUrl` (Node-side), not the
+browser fetch — no cross-origin permissions involved, and the request is
+strictly URL-resolution, no auth header.
 
 The plugin does not collect telemetry, ship vault content anywhere else,
 or update itself — Obsidian handles plugin updates through the community
@@ -45,6 +54,7 @@ plugin directory.
   - [Installation](#installation)
   - [Initial Setup](#initial-setup)
   - [Using Perplexity](#using-perplexity)
+  - [Using Google Gemini](#using-google-gemini)
   - [Using Perplexica / Vane](#using-perplexica--vane)
   - [Using LM Studio](#using-lm-studio)
   - [Command Reference](#command-reference)
@@ -88,7 +98,24 @@ Perplexity is a commercial AI service that provides high-quality, source-cited r
    - Enter your Perplexity API key
    - The default endpoint should work: `https://api.perplexity.ai/chat/completions`
 
-### 2. Configure Perplexica / Vane (self-hosted — requires local install)
+### 2. Configure Google Gemini (Free tier available)
+
+Google Gemini is Google's commercial AI service. The `google_search` grounding tool returns per-segment citation attribution — meaning each cited sentence is mapped back to the specific URL it came from, which becomes the verbatim quote in your `### Citations` footer. AI Studio's free tier requires **no credit card** to get started.
+
+1. **Get API key**:
+   - Visit [Google AI Studio](https://aistudio.google.com/apikey)
+   - Sign in with a Google account
+   - Click "Create API key" → copy the `AIza…` string
+
+2. **Configure in plugin**:
+   - Open Obsidian Settings → Community Plugins → Perplexed
+   - Scroll to **Gemini (Google)**
+   - Paste your API key into "Gemini API key"
+   - Default model: `gemini-flash-latest` (always-current Flash, free-tier friendly) — `gemini-pro-latest` and pinned `gemini-2.5-pro` / `gemini-2.5-flash` also available
+   - Leave **Enable Google search grounding by default** on for source-cited research
+   - Leave **Resolve citation urls** on — this is what turns the grounding-redirect URLs into the real source URLs in your citations footer
+
+### 3. Configure Perplexica / Vane (self-hosted — requires local install)
 
 Perplexica / Vane is a free, open-source AI search engine that you run
 **locally on your own machine**. This plugin does not bundle the server
@@ -122,7 +149,7 @@ before the "Ask Perplexica / Vane" command will work.
    - Pick a focus mode, optimization mode, and the local model you've
      configured the server to use
 
-### 3. Configure LM Studio (Optional)
+### 4. Configure LM Studio (Optional)
 
 For local AI processing without internet dependency:
 
@@ -217,6 +244,58 @@ AI is changing how we work.
 Artificial Intelligence (AI) is fundamentally transforming how we work across various industries and sectors. From automating routine tasks to enabling more sophisticated decision-making processes, AI technologies are reshaping traditional workflows and creating new opportunities for productivity and innovation.
 ```
 
+## Using Google Gemini
+
+### Quick start
+
+1. **Open Command Palette**: `Ctrl/Cmd + Shift + P`
+2. **Run Command**: Type "Ask Gemini" and select it
+3. **Enter your question** in the textarea
+4. **Configure options** in the modal:
+   - **Model**: `gemini-flash-latest` (recommended, free-tier friendly), `gemini-pro-latest`, or pinned 2.5 versions
+   - **Enable Google search grounding**: server-side `google_search` tool; emits per-segment citations
+   - **Append Google searches list**: appends a Markdown bullet list of the queries Gemini ran, each linked to `google.com/search` (Markdown-native substitute for Google's required Search Suggestions chip)
+   - **Resolve citation urls**: resolves the `vertexaisearch.cloud.google.com` grounding-redirect URLs to durable source URLs + real page titles before writing the citations footer
+   - **Stream response**: incremental writing to the note as the response arrives
+
+### Available models
+
+- **gemini-flash-latest**: Google's always-current Flash alias, free-tier friendly (recommended default)
+- **gemini-pro-latest**: Always-current Pro alias for deepest reasoning
+- **gemini-2.5-pro**: Pinned Pro version (free-tier quota typically exhausted; paid tier required)
+- **gemini-2.5-flash**: Pinned Flash version for reproducibility
+
+### Why Gemini's citations are different
+
+Gemini's `groundingSupports[]` carries per-segment attribution that survives the full response round-trip — meaning the `### Citations` footer contains the verbatim quote per source, attached to the prose above it. Compare to Claude's `web_search_20260209`, where the dynamic-filter sandbox post-processes search results and per-claim attachment doesn't survive: text blocks come back with `citations: null`.
+
+The plugin walks two layers of provenance:
+
+| Layer | Field | What it gives you |
+|---|---|---|
+| Page-level | `groundingChunks[]` | URL + title per page Gemini consulted |
+| Segment-level | `groundingSupports[]` | Text span (`segment.text`) → indices into `groundingChunks[]` |
+
+Page-level chunks become URL-and-title fallbacks; segment-level supports enrich them with the verbatim quote Gemini grounded against. Citation footer mirrors Claude's exactly (`[N]: [Title](url). > cited_text`) so [cite-wide](https://github.com/lossless-group/cite-wide)'s hex-substitution pass works on Gemini output too.
+
+### Example usage
+
+#### Basic research with grounding
+```
+Question: "Who won the 2024 Nobel Prize in Physics and what was the citation?"
+Model: gemini-flash-latest
+Grounding: Enabled
+Resolve URLs: Enabled
+```
+
+Lands in the note with prose like:
+
+> The 2024 Nobel Prize in Physics was jointly awarded to John J. Hopfield and Geoffrey Hinton.
+>
+> The Nobel Prize Committee cited them "for foundational discoveries and inventions that enable machine learning with artificial neural networks".
+
+…followed by a `### Google Searches` section listing the queries Gemini issued, and a `### Citations` footer where each entry is `[N]: [Real Page Title](https://nobelprize.org/…)` with the verbatim segment as a blockquote.
+
 ## Using Perplexica / Vane
 
 ### Quick Start
@@ -302,6 +381,13 @@ System Prompt: "You are a technical expert who explains complex concepts clearly
 | `Update Perplexity URL` | Change Perplexity API endpoint | Settings command |
 | `Show Perplexity Settings` | Display current Perplexity configuration | Debug command |
 
+### Google Gemini Commands
+
+| Command | Description | Usage |
+|---------|-------------|-------|
+| `Ask Gemini` | Query Google Gemini with Google Search grounding | Editor command with modal interface |
+| `Check Gemini service status` | Report whether the service initialized and the API key is configured | Debug command |
+
 ### Perplexica / Vane Commands
 
 | Command | Description | Usage |
@@ -342,6 +428,27 @@ A working Obsidian vault collects categories of files that share a shape — con
 1. **Template** — a markdown file in `Content-Dev/Templates/` with frontmatter (`applies-to-paths` glob), a fenced `cft` config block (provider, model, return flags, system prompt with interpolation tokens like `{{basename}}` and `{{frontmatter.tags}}`), and a heading skeleton that becomes the user prompt. Everything below the first `***` divider is excluded from the request — it's your scratch space.
 2. **Commands** — `Apply directory template to current file` auto-matches via the glob; `Apply directory template to folder` runs a batch with a confirmation modal; `Stop directory template batch` halts a running batch.
 3. **Cleanup pipeline** — after the SSE stream completes, the runtime wraps `<think>` blocks, swaps `[IMAGE N: <description>]` markers for real embeds (with a fallback `# Images` section when the model didn't emit markers but Perplexity returned images), strips unreplaced placeholders, appends a `# Sources` footer in the format [cite-wide](https://github.com/lossless-group/cite-wide) can convert to hex citations, and stamps `cf_last_run` + `cf_last_run_model` into the target's frontmatter.
+
+### Partials and preambles — shared guidance across templates
+
+Two peer folders alongside `templates/` keep editorial rules vault-visible and DRY:
+
+```
+Content-Dev/
+├── templates/         (your four profile templates)
+├── partials/          (reusable snippets: mermaid-discipline, etc.)
+│   └── mermaid-discipline.md
+└── preambles/         (auto-attached to every request as system / user messages)
+    ├── inline-citation.md
+    ├── image-placement.md
+    └── research-framing.md
+```
+
+- **`{{include: name}}`** in a template body splices in `partials/name.md` recursively (depth-limited, cycle-detected). Missing files show as inline `[[include: name — file not found]]` markers so typos stay visible.
+- **Preambles auto-attach** to every Perplexity request with bundled defaults as fallback. Settings tab exposes Partials root, Preambles root, System preambles (default: `inline-citation`), User preambles (default: `image-placement` when return-images is on).
+- **Per-template overrides** in the `cft` fence: `preambles: { system: [...], skip-user: [...], skip-all: true }`.
+
+Fix the mermaid quoting rule once in `partials/mermaid-discipline.md` and every future template generation picks it up — no template editing required.
 
 ### Shipped templates
 
