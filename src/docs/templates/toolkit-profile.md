@@ -29,6 +29,9 @@ system: |
 # Features
 - Describe the core product features in 2–3 sentences each.
 - Bullet 5–8 features in priority order.
+- If the product has a notable architecture, data flow, or pipeline that a diagram clarifies (e.g., an ingest → process → serve flow, an agent/orchestrator topology, a multi-tier deployment shape), render a `mermaid` codefence describing it. If a diagram does not add insight, omit it entirely — do not force one.
+
+{{include: mermaid-discipline}}
 
 ## Screenshots
 - If three official screenshots are publicly available, list their URLs as bullets.

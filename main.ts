@@ -88,6 +88,10 @@ interface PerplexedPluginSettings {
 
     // Directory templates (v0.1 spike — see context-v/specs/Per-Directory-Profile-Templates.md)
     directoryTemplatesRoot: string;
+    directoryTemplatesPartialsRoot: string;
+    directoryTemplatesPreamblesRoot: string;
+    directoryTemplatesSystemPreambles: string[];
+    directoryTemplatesUserPreambles: { name: string; when: 'always' | 'return-images' }[];
     directoryTemplatesFrontmatterWhitelist: string[];
     directoryTemplatesRequestTimeoutMs: number;
 
@@ -304,6 +308,13 @@ Structure the article as follows:
 
     // Directory templates (v0.1 spike defaults)
     directoryTemplatesRoot: 'zz-cf-lib/templates',
+    directoryTemplatesPartialsRoot: 'zz-cf-lib/partials',
+    directoryTemplatesPreamblesRoot: 'zz-cf-lib/preambles',
+    directoryTemplatesSystemPreambles: ['inline-citation'],
+    directoryTemplatesUserPreambles: [
+        { name: 'research-framing', when: 'always' },
+        { name: 'image-placement', when: 'return-images' },
+    ],
     directoryTemplatesFrontmatterWhitelist: ['title', 'og_description', 'tags', 'og_image'],
     directoryTemplatesRequestTimeoutMs: 300000,
 
@@ -336,7 +347,12 @@ export default class PerplexedPlugin extends Plugin {
             // freshly-installed perplexed has working defaults out of the box.
             // Idempotent — never overwrites existing files.
             try {
-                const result = await seedTemplatesIfMissing(this.app, this.settings.directoryTemplatesRoot);
+                const result = await seedTemplatesIfMissing(
+                    this.app,
+                    this.settings.directoryTemplatesRoot,
+                    this.settings.directoryTemplatesPartialsRoot,
+                    this.settings.directoryTemplatesPreamblesRoot,
+                );
                 if (result.seeded > 0) {
                     console.debug(`Perplexed Plugin: seeded ${result.seeded.toString()} template(s) (${result.reason})`);
                 }
@@ -1096,6 +1112,20 @@ export default class PerplexedPlugin extends Plugin {
         }
     }
 
+    private buildDirectoryTemplateSettings(): DirectoryTemplateSettings {
+        return {
+            perplexityApiKey: this.settings.perplexityApiKey,
+            perplexityEndpoint: this.settings.perplexityEndpoint,
+            templatesRoot: this.settings.directoryTemplatesRoot,
+            partialsRoot: this.settings.directoryTemplatesPartialsRoot,
+            preamblesRoot: this.settings.directoryTemplatesPreamblesRoot,
+            systemPreambles: this.settings.directoryTemplatesSystemPreambles,
+            userPreambles: this.settings.directoryTemplatesUserPreambles,
+            frontmatterWhitelist: this.settings.directoryTemplatesFrontmatterWhitelist,
+            requestTimeoutMs: this.settings.directoryTemplatesRequestTimeoutMs,
+        };
+    }
+
     private async runApplyDirectoryTemplate(): Promise<void> {
         const target = this.app.workspace.getActiveFile();
         if (!target) {
@@ -1120,13 +1150,7 @@ export default class PerplexedPlugin extends Plugin {
             return;
         }
 
-        const dirSettings: DirectoryTemplateSettings = {
-            perplexityApiKey: this.settings.perplexityApiKey,
-            perplexityEndpoint: this.settings.perplexityEndpoint,
-            templatesRoot: this.settings.directoryTemplatesRoot,
-            frontmatterWhitelist: this.settings.directoryTemplatesFrontmatterWhitelist,
-            requestTimeoutMs: this.settings.directoryTemplatesRequestTimeoutMs,
-        };
+        const dirSettings: DirectoryTemplateSettings = this.buildDirectoryTemplateSettings();
 
         new DirectoryTemplatePickerModal(this.app, matching, (chosen) => {
             void (async () => {
@@ -1185,13 +1209,7 @@ export default class PerplexedPlugin extends Plugin {
                             else appendCount++;
                         }
 
-                        const dirSettings: DirectoryTemplateSettings = {
-                            perplexityApiKey: this.settings.perplexityApiKey,
-                            perplexityEndpoint: this.settings.perplexityEndpoint,
-                            templatesRoot: this.settings.directoryTemplatesRoot,
-                            frontmatterWhitelist: this.settings.directoryTemplatesFrontmatterWhitelist,
-                            requestTimeoutMs: this.settings.directoryTemplatesRequestTimeoutMs,
-                        };
+                        const dirSettings: DirectoryTemplateSettings = this.buildDirectoryTemplateSettings();
 
                         new BatchConfirmModal(this.app, {
                             folderPath,
@@ -1321,7 +1339,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             .setDesc('JSON template for perplexity API requests');
             
         // Create a textarea element for Perplexity
-        const perplexityTextArea = activeDocument.createEl('textarea');
+        const perplexityTextArea = containerEl.createEl('textarea');
         perplexityTextArea.rows = 10;
         perplexityTextArea.cols = 50;
         perplexityTextArea.addClass('perplexed-json-textarea');
@@ -1428,7 +1446,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             .setDesc('JSON template for perplexica / vane API requests');
             
         // Create a textarea element for Perplexica
-        const perplexicaTextArea = activeDocument.createEl('textarea');
+        const perplexicaTextArea = containerEl.createEl('textarea');
         perplexicaTextArea.rows = 10;
         perplexicaTextArea.cols = 50;
         perplexicaTextArea.addClass('perplexed-json-textarea');
@@ -1491,7 +1509,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             .setDesc('JSON template for lm studio API requests');
             
         // Create a textarea element for LM Studio
-        const lmStudioTextArea = activeDocument.createEl('textarea');
+        const lmStudioTextArea = containerEl.createEl('textarea');
         lmStudioTextArea.rows = 10;
         lmStudioTextArea.cols = 50;
         lmStudioTextArea.addClass('perplexed-json-textarea');
@@ -1662,7 +1680,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             .setName('Article generator template')
             .setDesc('Template for generating articles. Use {TERM} as placeholder for the term.');
             
-        const articleTemplateTextArea = activeDocument.createEl('textarea');
+        const articleTemplateTextArea = containerEl.createEl('textarea');
         articleTemplateTextArea.rows = 15;
         articleTemplateTextArea.cols = 50;
         articleTemplateTextArea.addClass('perplexed-json-textarea is-tall');
@@ -1682,7 +1700,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             .setName('Deep research article generator template')
             .setDesc('Template for generating articles with Deep Research model. Use {TERM} as placeholder for the term.');
             
-        const deepResearchTemplateTextArea = activeDocument.createEl('textarea');
+        const deepResearchTemplateTextArea = containerEl.createEl('textarea');
         deepResearchTemplateTextArea.rows = 20;
         deepResearchTemplateTextArea.cols = 50;
         deepResearchTemplateTextArea.addClass('perplexed-json-textarea is-tall');
@@ -1704,7 +1722,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             .setName('Image references prompt')
             .setDesc('Prompt added to queries when images are enabled');
             
-        const imagePromptsTextArea = activeDocument.createEl('textarea');
+        const imagePromptsTextArea = containerEl.createEl('textarea');
         imagePromptsTextArea.rows = 8;
         imagePromptsTextArea.cols = 50;
         imagePromptsTextArea.addClass('perplexed-json-textarea');
@@ -1726,7 +1744,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             .setName('Text enhancement prompt')
             .setDesc('Template for enhancing selected text. Use {TEXT} as placeholder for the selected text.');
             
-        const enhancePromptTextArea = activeDocument.createEl('textarea');
+        const enhancePromptTextArea = containerEl.createEl('textarea');
         enhancePromptTextArea.rows = 10;
         enhancePromptTextArea.cols = 50;
         enhancePromptTextArea.addClass('perplexed-json-textarea');
@@ -1746,7 +1764,7 @@ class PerplexedSettingTab extends PluginSettingTab {
             .setName('Related images prompt')
             .setDesc('Template for requesting related images for selected text. Use {TEXT} as placeholder for the selected text.');
             
-        const enhanceWithImagesPromptTextArea = activeDocument.createEl('textarea');
+        const enhanceWithImagesPromptTextArea = containerEl.createEl('textarea');
         enhanceWithImagesPromptTextArea.rows = 10;
         enhanceWithImagesPromptTextArea.cols = 50;
         enhanceWithImagesPromptTextArea.addClass('perplexed-json-textarea');
@@ -1776,6 +1794,69 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.directoryTemplatesRoot)
                 .onChange(async (value: string) => {
                     this.plugin.settings.directoryTemplatesRoot = value.trim();
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName('Partials root')
+            .setDesc('Vault-relative folder where reusable snippets live. Templates pull them in with {{include: name}}.')
+            .addText(text => text
+                .setPlaceholder('Zz-cf-lib/partials')
+                .setValue(this.plugin.settings.directoryTemplatesPartialsRoot)
+                .onChange(async (value: string) => {
+                    this.plugin.settings.directoryTemplatesPartialsRoot = value.trim();
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName('Preambles root')
+            .setDesc('Vault-relative folder where plugin-wide preambles live. Files here are auto-attached to every perplexity request per the lists below.')
+            .addText(text => text
+                .setPlaceholder('Zz-cf-lib/preambles')
+                .setValue(this.plugin.settings.directoryTemplatesPreamblesRoot)
+                .onChange(async (value: string) => {
+                    this.plugin.settings.directoryTemplatesPreamblesRoot = value.trim();
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName('System preambles')
+            .setDesc('Comma-separated preamble names (no .md) prepended to every system prompt, in order. Default: inline-citation.')
+            .addText(text => text
+                .setPlaceholder('Inline-citation')
+                .setValue(this.plugin.settings.directoryTemplatesSystemPreambles.join(', '))
+                .onChange(async (value: string) => {
+                    this.plugin.settings.directoryTemplatesSystemPreambles = value
+                        .split(',')
+                        .map(s => s.trim())
+                        .filter(s => s.length > 0);
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName('User preambles')
+            .setDesc('Comma-separated user-prompt preambles. Append ":return-images" to attach only when a template sets return-images: true. Default: research-framing, image-placement:return-images.')
+            .addText(text => text
+                .setPlaceholder('Research-framing, image-placement:return-images')
+                .setValue(this.plugin.settings.directoryTemplatesUserPreambles
+                    .map(p => p.when === 'always' ? p.name : `${p.name}:${p.when}`)
+                    .join(', '))
+                .onChange(async (value: string) => {
+                    this.plugin.settings.directoryTemplatesUserPreambles = value
+                        .split(',')
+                        .map(s => s.trim())
+                        .filter(s => s.length > 0)
+                        .map(token => {
+                            const [name, whenRaw] = token.split(':').map(s => s.trim());
+                            const when: 'always' | 'return-images' =
+                                whenRaw === 'return-images' ? 'return-images' : 'always';
+                            return { name: name ?? '', when };
+                        })
+                        .filter(p => p.name.length > 0);
                     await this.plugin.saveSettings();
                 })
             );
@@ -1817,7 +1898,12 @@ class PerplexedSettingTab extends PluginSettingTab {
                 .setButtonText('Re-seed')
                 .onClick(async () => {
                     try {
-                        await reSeedMissingFiles(this.plugin.app, this.plugin.settings.directoryTemplatesRoot);
+                        await reSeedMissingFiles(
+                            this.plugin.app,
+                            this.plugin.settings.directoryTemplatesRoot,
+                            this.plugin.settings.directoryTemplatesPartialsRoot,
+                            this.plugin.settings.directoryTemplatesPreamblesRoot,
+                        );
                     } catch (error) {
                         const msg = error instanceof Error ? error.message : String(error);
                         new Notice(`Re-seed failed: ${msg}`);

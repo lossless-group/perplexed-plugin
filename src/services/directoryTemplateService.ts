@@ -1,10 +1,21 @@
-import type { App, TFile } from 'obsidian';
-import { Notice, parseYaml, stringifyYaml } from 'obsidian';
+import type { App } from 'obsidian';
+import { normalizePath, Notice, parseYaml, stringifyYaml, TFile } from 'obsidian';
+
+import { BUNDLED_PREAMBLES } from './templateSeederService';
+
+export interface UserPreambleSpec {
+    name: string;
+    when: 'always' | 'return-images';
+}
 
 export interface DirectoryTemplateSettings {
     perplexityApiKey: string;
     perplexityEndpoint: string;
     templatesRoot: string;
+    partialsRoot: string;
+    preamblesRoot: string;
+    systemPreambles: string[];
+    userPreambles: UserPreambleSpec[];
     frontmatterWhitelist: string[];
     requestTimeoutMs: number;
 }
@@ -46,19 +57,132 @@ export interface PerplexityImage {
     origin_url?: string;
 }
 
-const INLINE_CITATION_DIRECTIVE = "When you make any factual claim that comes from a web search result, append a numeric citation marker like [1], [2], etc. immediately after the claim. The numbers MUST correspond 1:1 to the order of the search results returned by the search tool (first result = [1], second = [2], and so on). You may cite the same source multiple times. Do not list the sources at the end — only inline markers. Do not invent sources; only cite results actually used.";
+/**
+ * Strip frontmatter from a partial/preamble body before splicing into a prompt.
+ * Partials and preambles are pure snippets; any frontmatter is editorial metadata
+ * for the human, not content meant for Perplexity.
+ */
+function stripFrontmatter(text: string): string {
+    const { body } = splitFrontmatter(text);
+    return body.trimStart();
+}
 
-const IMAGE_PLACEMENT_DIRECTIVE = "IMAGE PLACEMENT — where an image would clarify or illustrate a section, insert a marker of the form [IMAGE N: <specific description>] on its own line. Numbering starts at 1 and increments globally across all images. Descriptions must be specific (e.g., \"ZAPI dashboard showing API discovery interface\"), never generic. If the section skeleton already contains an image-placeholder bullet (any line containing the phrase \"Image embed placeholder\"), REPLACE that bullet entirely with a [IMAGE N: ...] marker — do not leave the placeholder text in your output. Limit to 2-4 markers across the whole response. Markers will be swapped for real image embeds in post-processing.";
+/**
+ * Read a partial or preamble file from the vault. Returns null when the file
+ * is absent or not a TFile — callers decide whether that's an error.
+ */
+async function readVaultMarkdown(app: App, root: string, name: string): Promise<string | null> {
+    const filename = name.endsWith('.md') ? name : `${name}.md`;
+    const path = normalizePath(`${root.replace(/\/$/, '')}/${filename}`);
+    const f = app.vault.getAbstractFileByPath(path);
+    if (!(f instanceof TFile)) return null;
+    return await app.vault.read(f);
+}
 
-function buildResearchFraming(title: string, fmYaml: string): string {
-    return `Research the entity "${title}" using web search. Use the metadata below as context, then produce a structured profile that follows the markdown skeleton at the end of this prompt. Every factual claim in your output must be immediately followed by an inline [N] citation marker corresponding to a returned search result. Quote phrasing from sources where useful.
+const INCLUDE_RE = /\{\{\s*include:\s*([\w.-]+)\s*\}\}/g;
+const INCLUDE_MAX_DEPTH = 5;
 
-Metadata for "${title}":
-${fmYaml}
+/**
+ * Recursively expand {{include: <name>}} directives by splicing the named
+ * partial's body in place. Frontmatter on the partial is stripped. Depth and
+ * cycle guards prevent runaway expansion. Missing partials are surfaced as an
+ * inline `[[include: <name> — file not found]]` marker so the user can see
+ * the typo in the generated output.
+ */
+async function expandIncludes(
+    app: App,
+    text: string,
+    partialsRoot: string,
+    seen: Set<string> = new Set(),
+    depth = 0,
+): Promise<string> {
+    if (depth > INCLUDE_MAX_DEPTH) {
+        return text.replace(INCLUDE_RE, (_full, name: string) =>
+            `[[include: ${name} — max depth ${INCLUDE_MAX_DEPTH.toString()} exceeded]]`);
+    }
+    // Collect unique include names in this pass before doing async reads.
+    const names = new Set<string>();
+    text.replace(INCLUDE_RE, (_full, name: string) => {
+        names.add(name);
+        return '';
+    });
+    if (names.size === 0) return text;
 
-Skeleton (follow this structure; bullets under each heading describe what the section requires):
+    const resolved = new Map<string, string>();
+    for (const name of names) {
+        if (seen.has(name)) {
+            resolved.set(name, `[[include: ${name} — cycle detected]]`);
+            continue;
+        }
+        const raw = partialsRoot ? await readVaultMarkdown(app, partialsRoot, name) : null;
+        if (raw === null) {
+            resolved.set(name, `[[include: ${name} — file not found]]`);
+            continue;
+        }
+        const body = stripFrontmatter(raw);
+        const nextSeen = new Set(seen);
+        nextSeen.add(name);
+        const expanded = await expandIncludes(app, body, partialsRoot, nextSeen, depth + 1);
+        resolved.set(name, expanded);
+    }
+    return text.replace(INCLUDE_RE, (_full, name: string) =>
+        resolved.get(name) ?? `[[include: ${name} — unresolved]]`);
+}
 
-`;
+/**
+ * Load a preamble by name. Tries the vault first (so user edits win), then
+ * the bundled default. Returns null if the name is unknown and the vault has
+ * no file by that name. Logs a console.warn when falling back to bundled.
+ */
+async function loadPreamble(
+    app: App,
+    preamblesRoot: string,
+    name: string,
+): Promise<string | null> {
+    if (preamblesRoot) {
+        const raw = await readVaultMarkdown(app, preamblesRoot, name);
+        if (raw !== null) return stripFrontmatter(raw);
+    }
+    const bundled = BUNDLED_PREAMBLES[name];
+    if (bundled !== undefined) {
+        console.warn(`[perplexed] preamble "${name}" missing from ${preamblesRoot || '(no preamblesRoot)'}; using bundled default`);
+        return stripFrontmatter(bundled);
+    }
+    console.warn(`[perplexed] preamble "${name}" not found in vault and no bundled default exists`);
+    return null;
+}
+
+/**
+ * Extract per-template preamble overrides from the cft config. Supports:
+ *   preambles:
+ *     system: ["inline-citation", "house-rules"]   # replace defaults
+ *     skip-user: ["research-framing"]              # opt out of user preambles
+ *     skip-all: true                                # bypass all global preambles
+ */
+interface TemplatePreambleOverrides {
+    systemOverride?: string[];
+    skipUser: Set<string>;
+    skipAll: boolean;
+}
+
+function parsePreambleOverrides(cfg: Record<string, unknown>): TemplatePreambleOverrides {
+    const out: TemplatePreambleOverrides = { skipUser: new Set(), skipAll: false };
+    const raw = cfg['preambles'];
+    if (!raw || typeof raw !== 'object') return out;
+    const obj = raw as Record<string, unknown>;
+    if (obj['skip-all'] === true) {
+        out.skipAll = true;
+        return out;
+    }
+    const sys = obj['system'];
+    if (Array.isArray(sys)) {
+        out.systemOverride = sys.filter((s): s is string => typeof s === 'string');
+    }
+    const skipUser = obj['skip-user'];
+    if (Array.isArray(skipUser)) {
+        for (const s of skipUser) if (typeof s === 'string') out.skipUser.add(s);
+    }
+    return out;
 }
 
 function wrapThinkBlocks(text: string): string {
@@ -478,21 +602,64 @@ export async function applyTemplate(
         frontmatterObj: fm,
         basename: target.basename,
     };
-    const templateSystem = interpolate(template.cftSystem, ctx);
-    const interpolatedSkeleton = interpolate(template.userSkeleton, ctx);
 
-    // Combined system prompt: citation-enforcement directive first, then template's role framing.
-    const systemPrompt = templateSystem
-        ? `${INLINE_CITATION_DIRECTIVE}\n\n${templateSystem}`
-        : INLINE_CITATION_DIRECTIVE;
+    // Expand {{include: …}} directives against the partials root, then run token
+    // interpolation. Expansion must happen first so partials can themselves use
+    // {{basename}}/{{title}}/etc.
+    const expandedSystem = await expandIncludes(app, template.cftSystem, settings.partialsRoot);
+    const expandedSkeleton = await expandIncludes(app, template.userSkeleton, settings.partialsRoot);
+    const templateSystem = interpolate(expandedSystem, ctx);
+    const interpolatedSkeleton = interpolate(expandedSkeleton, ctx);
 
-    // User prompt: research framing prepended to the skeleton so the model treats this as a
-    // research task, not a writing brief. When the template requests images, append the
-    // image-placement directive so the model emits [IMAGE N: …] markers we can swap for
-    // real embeds post-stream.
+    // Assemble preambles. Per-template `preambles:` config in the cft fence
+    // may override the global lists or skip them entirely.
+    const overrides = parsePreambleOverrides(template.cftConfig);
     const wantsImages = template.cftConfig['return-images'] === true;
-    const imageDirective = wantsImages ? `\n\n${IMAGE_PLACEMENT_DIRECTIVE}` : '';
-    const userPrompt = buildResearchFraming(title, fmYaml) + interpolatedSkeleton + imageDirective;
+
+    async function resolvePreamble(name: string): Promise<string | null> {
+        const raw = await loadPreamble(app, settings.preamblesRoot, name);
+        if (raw === null) return null;
+        const expanded = await expandIncludes(app, raw, settings.partialsRoot);
+        return interpolate(expanded, ctx);
+    }
+
+    let systemPreambleText = '';
+    let userFramingText = '';
+    let userTrailingText = '';
+
+    if (!overrides.skipAll) {
+        const systemNames = overrides.systemOverride ?? settings.systemPreambles;
+        const systemChunks: string[] = [];
+        for (const name of systemNames) {
+            const text = await resolvePreamble(name);
+            if (text) systemChunks.push(text.trim());
+        }
+        systemPreambleText = systemChunks.join('\n\n');
+
+        const framingChunks: string[] = [];
+        const trailingChunks: string[] = [];
+        for (const spec of settings.userPreambles) {
+            if (overrides.skipUser.has(spec.name)) continue;
+            if (spec.when === 'return-images' && !wantsImages) continue;
+            const text = await resolvePreamble(spec.name);
+            if (!text) continue;
+            // `research-framing` (and any other preamble that wraps the
+            // skeleton) goes before; everything else trails. Convention: a
+            // preamble whose name is `research-framing` goes in front.
+            if (spec.name === 'research-framing') framingChunks.push(text);
+            else trailingChunks.push(text);
+        }
+        userFramingText = framingChunks.join('\n\n');
+        userTrailingText = trailingChunks.length > 0 ? '\n\n' + trailingChunks.join('\n\n') : '';
+    }
+
+    const systemPrompt = systemPreambleText && templateSystem
+        ? `${systemPreambleText}\n\n${templateSystem}`
+        : systemPreambleText || templateSystem;
+
+    const userPrompt = userFramingText
+        ? `${userFramingText}${interpolatedSkeleton}${userTrailingText}`
+        : `${interpolatedSkeleton}${userTrailingText}`;
 
     // Initial file content the stream will append to.
     const fmBlock = fmRaw.length > 0 ? `---\n${fmRaw}\n---\n` : '';

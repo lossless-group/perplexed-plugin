@@ -75,6 +75,9 @@ system: |
 
 # Defining and Describing {{basename}}
 - Insert this exact placeholder line on its own bullet so the user can replace it after generation: `[Image embed placeholder — run "Find images for selection" on this section to populate.]`
+- Diagrams are usually NOT helpful for vocabulary entries — a term's meaning is rarely clarified by a flowchart. Omit the diagram by default. Only render a `mermaid` codefence here when the term genuinely names a relationship, hierarchy, or distinction that a diagram makes crisper (e.g., disambiguating a 3-way distinction, showing where this term sits in a taxonomy). When in doubt, omit.
+
+{{include: mermaid-discipline}}
 - Write a one-sentence italicized lede that gives a tight definition aimed at someone who heard the term used in a startup or innovation-consulting context. Use markdown italics: `_..._`.
 - Then write a 2–4 sentence paragraph clarifying scope: when this term applies, when it doesn't, and why an innovation consultant would care.
 
