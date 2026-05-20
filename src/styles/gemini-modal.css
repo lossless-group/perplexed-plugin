@@ -1,0 +1,230 @@
+/* ============================================================
+   Gemini Modal — research query composer with Google grounding
+   Same skeleton as claude-modal (proven wide-modal pattern from
+   context-v/issues/Widen-Modals-in-Obsidian-using-CSS.md), with
+   Gemini-flavored accents: subtle multi-stop gradient on the
+   title and a gradient hairline under the header echoing
+   Google's brand identity without screaming about it.
+   ============================================================ */
+
+.gemini-modal {
+    /* Modal container — wider and breathier than default */
+    width: 90vw;
+    max-width: 680px;
+}
+
+.gemini-modal .modal-content {
+    padding: 0;
+}
+
+/* ----- Header ----- */
+
+.gemini-modal__header {
+    position: relative;
+    padding: 24px 28px 18px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+/* Gradient hairline under the header — Google's four-color identity
+   distilled into a subtle 1px accent. Stays under the divider so it
+   reads as a brand cue, not a banner. */
+.gemini-modal__header::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: linear-gradient(
+        90deg,
+        #4285f4 0%,
+        #4285f4 25%,
+        #ea4335 25%,
+        #ea4335 50%,
+        #fbbc04 50%,
+        #fbbc04 75%,
+        #34a853 75%,
+        #34a853 100%
+    );
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.gemini-modal__title {
+    margin: 0 0 6px;
+    font-size: 1.55em;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    /* Gradient title text — Google blue → red → yellow → green
+       transitions tuned to feel premium, not garish. Falls back
+       to plain text-normal in browsers that don't support
+       background-clip: text. */
+    background: linear-gradient(
+        92deg,
+        #4285f4 0%,
+        #9b72cb 38%,
+        #ea4335 64%,
+        #fbbc04 88%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: var(--text-normal); /* fallback */
+}
+
+.gemini-modal__subtitle {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+/* ----- Sections ----- */
+
+.gemini-modal__section {
+    padding: 18px 28px 4px;
+}
+
+.gemini-modal__section + .gemini-modal__section {
+    border-top: 1px solid var(--background-modifier-border-hover);
+    margin-top: 4px;
+}
+
+.gemini-modal__section-title {
+    margin: 0 0 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+}
+
+/* Tighten the native Setting spacing inside our sections */
+.gemini-modal__section .setting-item {
+    padding: 10px 0;
+    border-top: none;
+}
+
+.gemini-modal__section .setting-item + .setting-item {
+    border-top: 1px solid var(--background-modifier-border-hover);
+}
+
+/* ----- Question label + textarea ----- */
+
+.gemini-modal__label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+}
+
+.gemini-modal__textarea {
+    width: 100%;
+    min-height: 130px;
+    padding: 13px 15px;
+    font-family: var(--font-text);
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--text-normal);
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 10px;
+    resize: vertical;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+}
+
+.gemini-modal__textarea:focus {
+    outline: none;
+    /* Gemini-blue focus ring instead of the theme accent so the brand
+       cue stays consistent inside the modal regardless of user theme. */
+    border-color: #4285f4;
+    box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.22);
+}
+
+.gemini-modal__textarea::placeholder {
+    color: var(--text-faint);
+}
+
+/* ----- Footer / actions ----- */
+
+.gemini-modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 28px 24px;
+    margin-top: 12px;
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+    border-bottom-left-radius: var(--modal-radius, 8px);
+    border-bottom-right-radius: var(--modal-radius, 8px);
+}
+
+.gemini-modal__button {
+    padding: 8px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease,
+                box-shadow 0.15s ease, transform 0.05s ease;
+}
+
+.gemini-modal__button:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.gemini-modal__button:active {
+    transform: translateY(1px);
+}
+
+/* Primary CTA — Gemini-blue, gradient on hover. Stays readable in
+   both light and dark Obsidian themes because the gradient is on
+   its own background, not relying on theme tokens. */
+.gemini-modal__button.mod-cta {
+    background: #4285f4;
+    color: #ffffff;
+    border-color: #4285f4;
+    box-shadow: 0 1px 2px rgba(66, 133, 244, 0.25);
+}
+
+.gemini-modal__button.mod-cta:hover {
+    background: linear-gradient(135deg, #4285f4 0%, #9b72cb 100%);
+    border-color: #4285f4;
+    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.35);
+}
+
+.gemini-modal__button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ----- Responsive ----- */
+
+@media (max-width: 600px) {
+    .gemini-modal {
+        width: 95vw;
+        max-width: none;
+    }
+
+    .gemini-modal__header,
+    .gemini-modal__section,
+    .gemini-modal__footer {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .gemini-modal__footer {
+        flex-direction: column-reverse;
+    }
+
+    .gemini-modal__button {
+        width: 100%;
+    }
+}

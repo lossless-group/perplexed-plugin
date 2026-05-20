@@ -1,7 +1,7 @@
 {
 	"name": "perplexed",
-	"version": "0.1.2",
-	"description": "Generate source-cited research content from Perplexity, Anthropic Claude, Perplexica, or local LM Studio — directly into your notes.",
+	"version": "0.2.0",
+	"description": "Generate source-cited research content from Perplexity, Anthropic Claude, Google Gemini, Perplexica, or local LM Studio — directly into your notes.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",

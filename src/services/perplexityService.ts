@@ -743,13 +743,40 @@ export class PerplexityService {
             
         } catch (error) {
             console.error('Error in streaming response:', error);
-            const errorMsg = error instanceof Error ? error.message : 'Unknown error during streaming';
-            new Notice(`Streaming error: ${errorMsg}`);
-            
-            // Clear loading text and animation before showing error
+            const rawMsg = error instanceof Error ? error.message : 'Unknown error during streaming';
+
+            // Connectivity classes we can recognize and translate. Mid-stream
+            // resume isn't possible — Perplexity has no resume token — so the
+            // best UX is to tell the user exactly what happened and that
+            // they should re-run the query.
+            //
+            //  - ERR_NETWORK_CHANGED       : WiFi flip, VPN reconnect, sleep/wake
+            //  - failed to fetch / TypeError: socket closed before headers
+            //  - stream went idle for Ns   : our own idle-timeout in readWithIdleTimeout
+            //  - AbortError                : caller aborted
+            const isNetworkChange = /NETWORK_CHANGED|network changed/i.test(rawMsg);
+            const isSocketDrop = /failed to fetch|load failed|socket|ECONNRESET/i.test(rawMsg);
+            const isIdleTimeout = /went idle/i.test(rawMsg);
+            const isAbort = /AbortError|aborted/i.test(rawMsg);
+
+            let userMsg: string;
+            if (isNetworkChange) {
+                userMsg = 'Network changed mid-stream (WiFi flip, VPN reconnect, or sleep/wake). Re-run the query — no partial response was saved.';
+            } else if (isIdleTimeout) {
+                userMsg = 'Perplexity stream stalled (likely API back-pressure or rate limit). Re-run the query; if it stalls again, try a smaller prompt or a non-research model.';
+            } else if (isAbort) {
+                userMsg = 'Request aborted.';
+            } else if (isSocketDrop) {
+                userMsg = `Connection dropped before Perplexity finished. Re-run the query. (raw: ${rawMsg})`;
+            } else {
+                userMsg = `Streaming error: ${rawMsg}`;
+            }
+
+            new Notice(userMsg);
+
             this.clearLoadingText(editor);
             this.clearLoadingAnimation();
-            editor.replaceRange(`\n**Streaming Error:** ${errorMsg}\n\n`, currentPos);
+            editor.replaceRange(`\n**Streaming Error:** ${userMsg}\n\n`, currentPos);
         }
     }
 

@@ -52,6 +52,22 @@ export const BUNDLED_PREAMBLES: Record<string, string> = {
     'research-framing': researchFramingPreamble,
 };
 
+/**
+ * vault.create wrapped to tolerate the same race window ensureFolder handles:
+ * getAbstractFileByPath returns null but a concurrent or just-finished write
+ * has already produced the file (Obsidian's index lags behind the adapter
+ * write). Treat "File already exists" as success — the caller's intent
+ * (file exists at path with content) is satisfied either way.
+ */
+async function safeCreateFile(app: App, path: string, content: string): Promise<void> {
+    try {
+        await app.vault.create(path, content);
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!/already exists/i.test(msg)) throw err;
+    }
+}
+
 async function ensureFolder(app: App, folderPath: string): Promise<void> {
     const normalized = normalizePath(folderPath);
     const existing = app.vault.getAbstractFileByPath(normalized);
@@ -63,7 +79,15 @@ async function ensureFolder(app: App, folderPath: string): Promise<void> {
     for (const seg of segments) {
         cursor = cursor ? `${cursor}/${seg}` : seg;
         if (!app.vault.getAbstractFileByPath(cursor)) {
-            await app.vault.createFolder(cursor);
+            try {
+                await app.vault.createFolder(cursor);
+            } catch (err) {
+                // Race / stale cache: getAbstractFileByPath can return null for
+                // a folder Obsidian has already begun creating. Treat the
+                // "already exists" path as success; rethrow anything else.
+                const msg = err instanceof Error ? err.message : String(err);
+                if (!/already exists/i.test(msg)) throw err;
+            }
         }
     }
 }
@@ -97,7 +121,7 @@ async function seedFolder(
     let seeded = 0;
     const readmePath = `${normalized}/${readme.name}`;
     if (!app.vault.getAbstractFileByPath(readmePath)) {
-        await app.vault.create(readmePath, readme.content);
+        await safeCreateFile(app, readmePath, readme.content);
         seeded++;
     }
 
@@ -105,7 +129,7 @@ async function seedFolder(
         for (const file of contentFiles) {
             const path = `${normalized}/${file.name}`;
             if (app.vault.getAbstractFileByPath(path)) continue;
-            await app.vault.create(path, file.content);
+            await safeCreateFile(app, path, file.content);
             seeded++;
         }
     }
@@ -187,7 +211,7 @@ export async function reSeedMissingFiles(
                 skipped++;
                 continue;
             }
-            await app.vault.create(path, file.content);
+            await safeCreateFile(app, path, file.content);
             seeded++;
         }
     }

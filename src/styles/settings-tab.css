@@ -20,3 +20,33 @@
 .perplexed-json-textarea.is-extra-tall {
     min-height: 600px;
 }
+
+/* Prose textarea — for system prompts and other natural-language inputs.
+ * Distinct from json-textarea: body font (not monospace), short default
+ * height (~3 lines), user can resize vertically if they paste a longer prompt.
+ * Pair with full-width sibling-row pattern, not Setting.addTextArea. */
+.perplexed-prose-textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px 12px;
+    font-family: var(--font-text);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-normal);
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    resize: vertical;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.perplexed-prose-textarea:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 3px var(--interactive-accent-hover);
+}
+
+.perplexed-prose-textarea::placeholder {
+    color: var(--text-faint);
+}

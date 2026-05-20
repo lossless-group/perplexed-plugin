@@ -6,6 +6,7 @@ import { PerplexityService } from './src/services/perplexityService';
 import { PerplexicaService } from './src/services/perplexicaService';
 import { LMStudioService } from './src/services/lmStudioService';
 import { ClaudeService } from './src/services/claudeService';
+import { GeminiService } from './src/services/geminiService';
 import { PromptsService } from './src/services/promptsService';
 
 // Import modals
@@ -13,6 +14,7 @@ import { PerplexityModal } from './src/modals/PerplexityModal';
 import { PerplexicaModal } from './src/modals/PerplexicaModal';
 import { LMStudioModal } from './src/modals/LMStudioModal';
 import { ClaudeModal } from './src/modals/ClaudeModal';
+import { GeminiModal } from './src/modals/GeminiModal';
 import { URLUpdateModal } from './src/modals/URLUpdateModal';
 import { ArticleGeneratorModal } from './src/modals/ArticleGeneratorModal';
 import { TextEnhancementModal } from './src/modals/TextEnhancementModal';
@@ -48,6 +50,11 @@ interface PerplexedPluginSettings {
     lmStudioRequestTemplate: string;
     anthropicApiKey: string;
     claudeDefaultModel: string;
+    geminiApiKey: string;
+    geminiDefaultModel: string;
+    geminiEnableGrounding: boolean;
+    geminiIncludeSearchSuggestions: boolean;
+    geminiResolveCitationUrls: boolean;
     defaultModel: string;
     defaultOptimizationMode: string;
     defaultFocusMode: string;
@@ -133,6 +140,11 @@ const DEFAULT_SETTINGS: PerplexedPluginSettings = {
     perplexityApiKey: '',
     anthropicApiKey: '',
     claudeDefaultModel: 'claude-opus-4-7',
+    geminiApiKey: '',
+    geminiDefaultModel: 'gemini-flash-latest',
+    geminiEnableGrounding: true,
+    geminiIncludeSearchSuggestions: true,
+    geminiResolveCitationUrls: true,
     perplexityRequestTemplate: `{
   "model": "llama-3.1-sonar-small-128k-online",
   "messages": [
@@ -333,6 +345,7 @@ export default class PerplexedPlugin extends Plugin {
     private perplexicaService!: PerplexicaService | null;
     private lmStudioService!: LMStudioService | null;
     private claudeService!: ClaudeService | null;
+    private geminiService!: GeminiService | null;
     private promptsService!: PromptsService | null;
 
     async onload(): Promise<void> {
@@ -427,12 +440,26 @@ export default class PerplexedPlugin extends Plugin {
                     new Notice('Failed to initialize claudeservice');
                     this.claudeService = null;
                 }
+
+                try {
+                    this.geminiService = new GeminiService({
+                        geminiApiKey: this.settings.geminiApiKey,
+                        promptsService: this.promptsService,
+                        headerPosition: this.settings.headerPosition,
+                    });
+                    console.debug('Perplexed Plugin: GeminiService initialized successfully');
+                } catch (error) {
+                    console.error('Perplexed Plugin: Failed to initialize GeminiService:', error);
+                    new Notice('Failed to initialize geminiservice');
+                    this.geminiService = null;
+                }
             } else {
                 // If promptsService failed, set all other services to null
                 this.perplexityService = null;
                 this.perplexicaService = null;
                 this.lmStudioService = null;
                 this.claudeService = null;
+                this.geminiService = null;
                 console.debug('Perplexed Plugin: Skipping service initialization due to PromptsService failure');
             }
             
@@ -471,6 +498,13 @@ export default class PerplexedPlugin extends Plugin {
                 console.debug('Perplexed Plugin: Claude commands registered successfully');
             } catch (error) {
                 console.error('Perplexed Plugin: Failed to register Claude commands:', error);
+            }
+
+            try {
+                this.registerGeminiCommands();
+                console.debug('Perplexed Plugin: Gemini commands registered successfully');
+            } catch (error) {
+                console.error('Perplexed Plugin: Failed to register Gemini commands:', error);
             }
 
             try {
@@ -789,6 +823,49 @@ export default class PerplexedPlugin extends Plugin {
         }
     }
 
+    private registerGeminiCommands(): void {
+        this.addCommand({
+            id: 'ask-gemini',
+            name: 'Ask Gemini',
+            editorCallback: (editor: Editor) => {
+                if (!this.geminiService) {
+                    new Notice('Gemini service not initialized. Set GEMINI_API_KEY in .env or settings, then reinitialize services.');
+                    return;
+                }
+                if (!this.promptsService) {
+                    new Notice('Prompts service not initialized.');
+                    return;
+                }
+                new GeminiModal(
+                    this.app,
+                    editor,
+                    this.geminiService,
+                    this.promptsService,
+                    {
+                        defaultModel: this.settings.geminiDefaultModel,
+                        enableGrounding: this.settings.geminiEnableGrounding,
+                        includeSearchSuggestions: this.settings.geminiIncludeSearchSuggestions,
+                        resolveCitationUrls: this.settings.geminiResolveCitationUrls,
+                    }
+                ).open();
+            },
+        });
+
+        this.addCommand({
+            id: 'gemini-service-status',
+            name: 'Check Gemini service status',
+            callback: () => {
+                if (this.geminiService && this.settings.geminiApiKey) {
+                    new Notice('Gemini service is initialized and an API key is configured.');
+                } else if (this.geminiService) {
+                    new Notice('Gemini service is initialized but no API key is set.');
+                } else {
+                    new Notice('Gemini service is not initialized.');
+                }
+            },
+        });
+    }
+
     private registerClaudeCommands(): void {
         this.addCommand({
             id: 'ask-claude',
@@ -1094,12 +1171,25 @@ export default class PerplexedPlugin extends Plugin {
                     console.error('Perplexed Plugin: Failed to reinitialize ClaudeService:', error);
                     this.claudeService = null;
                 }
+
+                try {
+                    this.geminiService = new GeminiService({
+                        geminiApiKey: this.settings.geminiApiKey,
+                        promptsService: this.promptsService,
+                        headerPosition: this.settings.headerPosition,
+                    });
+                    console.debug('Perplexed Plugin: GeminiService reinitialized successfully');
+                } catch (error) {
+                    console.error('Perplexed Plugin: Failed to reinitialize GeminiService:', error);
+                    this.geminiService = null;
+                }
             } else {
                 // If promptsService failed, set all other services to null
                 this.perplexityService = null;
                 this.perplexicaService = null;
                 this.lmStudioService = null;
                 this.claudeService = null;
+                this.geminiService = null;
                 console.debug('Perplexed Plugin: Skipping service reinitialization due to PromptsService failure');
             }
             
@@ -1397,6 +1487,68 @@ class PerplexedSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
+        // Gemini (Google) Section
+        new Setting(containerEl).setName("Gemini (Google)").setHeading();
+        containerEl.createEl('p', {
+            text: 'Configure Gemini API access. The Google_search tool emits per-segment grounding supports that map text spans to source urls — the per-claim attribution Claude\'s dynamic-filter pass loses.',
+            cls: 'setting-item-description'
+        });
+
+        new Setting(containerEl)
+            .setName('Gemini API key')
+            .setDesc('Your Google AI studio API key. Generate one in Google AI studio.')
+            .addText(text => text
+                .setPlaceholder('Aiza...')
+                .setValue(this.plugin.settings.geminiApiKey)
+                .onChange(async (value) => {
+                    this.plugin.settings.geminiApiKey = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Default Gemini model')
+            .setDesc('Default model used by the ask Gemini command. Recommended: Gemini flash (latest) — free-tier friendly.')
+            .addDropdown(dropdown => dropdown
+                .addOption('gemini-flash-latest', 'Gemini flash (latest) — recommended')
+                .addOption('gemini-pro-latest', 'Gemini pro (latest)')
+                .addOption('gemini-2.5-pro', 'Gemini 2.5 pro (pinned)')
+                .addOption('gemini-2.5-flash', 'Gemini 2.5 flash (pinned)')
+                .setValue(this.plugin.settings.geminiDefaultModel)
+                .onChange(async (value) => {
+                    this.plugin.settings.geminiDefaultModel = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Enable Google search grounding by default')
+            .setDesc('Sends the Google_search tool with every request. Disable to get ungrounded model knowledge only.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.geminiEnableGrounding)
+                .onChange(async (value) => {
+                    this.plugin.settings.geminiEnableGrounding = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Include Google searches list in notes')
+            .setDesc('Appends a Markdown "Google searches" section listing the queries Gemini ran, each linked to Google search. Markdown-native substitute for the Google grounding chip (which is inline-styled HTML that Obsidian can\'t render cleanly).')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.geminiIncludeSearchSuggestions)
+                .onChange(async (value) => {
+                    this.plugin.settings.geminiIncludeSearchSuggestions = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Resolve citation urls (durable, slower)')
+            .setDesc('Google\'s grounding redirect urls expire ~30 days after the response. With this on, the plugin resolves each redirect to the real source URL before writing the citations footer. Costs one HTTP request per cited source (parallelized, 3s timeout each).')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.geminiResolveCitationUrls)
+                .onChange(async (value) => {
+                    this.plugin.settings.geminiResolveCitationUrls = value;
+                    await this.plugin.saveSettings();
+                }));
+
         // Perplexica / Vane Section
         new Setting(containerEl).setName("Perplexica / vane (self-hosted)").setHeading();
         containerEl.createEl('p', {
@@ -1544,54 +1696,57 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         // System Prompts
         new Setting(containerEl).setName("System prompts").setHeading();
-        
-        new Setting(containerEl)
-            .setName('Perplexity system prompt')
-            .setDesc('System prompt used for perplexity AI requests')
-            .addTextArea(text => text
-                .setPlaceholder('Enter system prompt for perplexity...')
-                .setValue(this.plugin.settings.prompts.perplexitySystemPrompt)
-                .onChange(async (value: string) => {
-                    this.plugin.settings.prompts.perplexitySystemPrompt = value;
-                    const promptsService = this.plugin.getPromptsService();
-                    if (promptsService) {
-                        promptsService.updateSettings(this.plugin.settings.prompts);
-                    }
-                    await this.plugin.saveSettings();
-                })
-            );
 
-        new Setting(containerEl)
-            .setName('Perplexica / vane system prompt')
-            .setDesc('System prompt used for perplexica / vane requests')
-            .addTextArea(text => text
-                .setPlaceholder('Enter system prompt for perplexica / vane...')
-                .setValue(this.plugin.settings.prompts.perplexicaSystemPrompt)
-                .onChange(async (value: string) => {
-                    this.plugin.settings.prompts.perplexicaSystemPrompt = value;
-                    const promptsService = this.plugin.getPromptsService();
-                    if (promptsService) {
-                        promptsService.updateSettings(this.plugin.settings.prompts);
-                    }
-                    await this.plugin.saveSettings();
-                })
-            );
+        // Helper: render a system prompt as a Setting (name+desc only) followed
+        // by a sibling full-width textarea. Beats Setting.addTextArea — which
+        // crams a multi-line input into a ~200px right-edge slot — for any
+        // input where the user actually has to read what they wrote.
+        const addPromptRow = (
+            name: string,
+            desc: string,
+            placeholder: string,
+            getter: () => string,
+            setter: (v: string) => void,
+        ): void => {
+            new Setting(containerEl).setName(name).setDesc(desc);
+            const ta = containerEl.createEl('textarea');
+            ta.addClass('perplexed-prose-textarea');
+            ta.placeholder = placeholder;
+            ta.value = getter();
+            ta.rows = 3;
+            ta.addEventListener('input', () => void (async () => {
+                setter(ta.value);
+                const promptsService = this.plugin.getPromptsService();
+                if (promptsService) {
+                    promptsService.updateSettings(this.plugin.settings.prompts);
+                }
+                await this.plugin.saveSettings();
+            })());
+        };
 
-        new Setting(containerEl)
-            .setName('Lm studio default system prompt')
-            .setDesc('Default system prompt used for lm studio requests')
-            .addTextArea(text => text
-                .setPlaceholder('Enter default system prompt for lm studio...')
-                .setValue(this.plugin.settings.prompts.lmStudioDefaultSystemPrompt)
-                .onChange(async (value: string) => {
-                    this.plugin.settings.prompts.lmStudioDefaultSystemPrompt = value;
-                    const promptsService = this.plugin.getPromptsService();
-                    if (promptsService) {
-                        promptsService.updateSettings(this.plugin.settings.prompts);
-                    }
-                    await this.plugin.saveSettings();
-                })
-            );
+        addPromptRow(
+            'Perplexity system prompt',
+            'System prompt used for perplexity AI requests',
+            'Enter system prompt for perplexity...',
+            () => this.plugin.settings.prompts.perplexitySystemPrompt,
+            (v) => { this.plugin.settings.prompts.perplexitySystemPrompt = v; },
+        );
+
+        addPromptRow(
+            'Perplexica / vane system prompt',
+            'System prompt used for perplexica / vane requests',
+            'Enter system prompt for perplexica / vane...',
+            () => this.plugin.settings.prompts.perplexicaSystemPrompt,
+            (v) => { this.plugin.settings.prompts.perplexicaSystemPrompt = v; },
+        );
+
+        addPromptRow(
+            'Lm studio default system prompt',
+            'Default system prompt used for lm studio requests',
+            'Enter default system prompt for lm studio...',
+            () => this.plugin.settings.prompts.lmStudioDefaultSystemPrompt,
+            (v) => { this.plugin.settings.prompts.lmStudioDefaultSystemPrompt = v; },
+        );
 
         // Placeholder Text
         new Setting(containerEl).setName("Placeholder text").setHeading();
@@ -1683,7 +1838,7 @@ class PerplexedSettingTab extends PluginSettingTab {
         const articleTemplateTextArea = containerEl.createEl('textarea');
         articleTemplateTextArea.rows = 15;
         articleTemplateTextArea.cols = 50;
-        articleTemplateTextArea.addClass('perplexed-json-textarea is-tall');
+        articleTemplateTextArea.addClasses(['perplexed-json-textarea', 'is-tall']);
         articleTemplateTextArea.placeholder = 'Enter article generator template...';
         articleTemplateTextArea.value = this.plugin.settings.prompts.articleGeneratorTemplate;
         
@@ -1703,7 +1858,7 @@ class PerplexedSettingTab extends PluginSettingTab {
         const deepResearchTemplateTextArea = containerEl.createEl('textarea');
         deepResearchTemplateTextArea.rows = 20;
         deepResearchTemplateTextArea.cols = 50;
-        deepResearchTemplateTextArea.addClass('perplexed-json-textarea is-tall');
+        deepResearchTemplateTextArea.addClasses(['perplexed-json-textarea', 'is-tall']);
         deepResearchTemplateTextArea.placeholder = 'Enter deep research article generator template...';
         deepResearchTemplateTextArea.value = this.plugin.settings.prompts.deepResearchArticleTemplate;
         
