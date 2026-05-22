@@ -43,6 +43,7 @@ interface PerplexityPayload {
     return_images: boolean;
     return_related_questions: boolean;
     search_recency_filter?: string;
+    search_domain_filter?: string[];
 }
 
 export interface PerplexitySource {
@@ -413,13 +414,51 @@ export function interpolate(text: string, ctx: InterpolationContext): string {
     });
 }
 
+// Job boards and recruiting sites are never a credible source for a product
+// profile, yet they rank highly for company names — especially names that
+// collide with a large employer (e.g. "NATS" also = National Air Traffic
+// Services). Denied on every run UNLESS the run declares an explicit
+// allowlist: an allowlist already restricts results, and Perplexity caps
+// search_domain_filter at 10 entries, so deny entries would only burn slots.
+const JOB_BOARD_DENYLIST = [
+    '-indeed.com',
+    '-glassdoor.com',
+    '-ziprecruiter.com',
+    '-usajobs.gov',
+];
+
+// Perplexity's hard cap on search_domain_filter length.
+const SEARCH_DOMAIN_CAP = 10;
+
+/**
+ * Normalize a cft `search-domains:` value or a target file's
+ * `cf_search_domains:` frontmatter value into a clean string list. Accepts a
+ * YAML array or a comma-separated string. A leading `-` marks a denylist
+ * entry; everything else is an allowlist entry.
+ */
+function parseDomainList(raw: unknown): string[] {
+    const items = Array.isArray(raw)
+        ? raw
+        : typeof raw === 'string'
+            ? raw.split(',')
+            : [];
+    return items
+        .filter((x): x is string => typeof x === 'string')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+}
+
 function buildPayload(
     template: ParsedTemplate,
     systemPrompt: string,
     userPrompt: string,
+    targetDomains: string[] = [],
+    modelOverride?: string,
 ): PerplexityPayload {
     const cfg = template.cftConfig;
-    const model = typeof cfg.model === 'string' ? cfg.model : 'sonar-deep-research';
+    const model = (modelOverride && modelOverride.length > 0)
+        ? modelOverride
+        : (typeof cfg.model === 'string' ? cfg.model : 'sonar-pro');
     const recency = typeof cfg['search-recency'] === 'string'
         ? cfg['search-recency']
         : undefined;
@@ -438,6 +477,22 @@ function buildPayload(
         return_related_questions: false,
     };
     if (recency) payload.search_recency_filter = recency;
+
+    // search_domain_filter: template-level `search-domains:` (generic) + the
+    // target file's `cf_search_domains:` frontmatter (entity-specific) + the
+    // built-in job-board denylist. Declared entries win over the denylist on
+    // truncation to the 10-domain cap.
+    const declared = [
+        ...parseDomainList(cfg['search-domains']),
+        ...targetDomains,
+    ];
+    const hasAllowlist = declared.some((d) => !d.startsWith('-'));
+    const merged = hasAllowlist ? declared : [...declared, ...JOB_BOARD_DENYLIST];
+    const domainFilter = [...new Set(merged)].slice(0, SEARCH_DOMAIN_CAP);
+    if (domainFilter.length > 0) {
+        payload.search_domain_filter = domainFilter;
+    }
+
     return payload;
 }
 
@@ -450,7 +505,7 @@ async function streamPerplexityToFile(
     file: TFile,
     initialContent: string,
     isCancelled: () => boolean,
-): Promise<{ streamed: string; sources: PerplexitySource[]; images: PerplexityImage[] }> {
+): Promise<{ streamed: string; sources: PerplexitySource[]; images: PerplexityImage[]; truncated: boolean }> {
     payload.stream = true;
     const controller = new AbortController();
     const timer = activeWindow.setTimeout(() => controller.abort(), timeoutMs);
@@ -489,6 +544,7 @@ async function streamPerplexityToFile(
     let streamed = '';
     let sources: PerplexitySource[] = [];
     let images: PerplexityImage[] = [];
+    let truncated = false;
     let lastFlush = 0;
     const FLUSH_MS = 500;
 
@@ -498,7 +554,20 @@ async function streamPerplexityToFile(
                 controller.abort();
                 break;
             }
-            const { value, done } = await reader.read();
+            let value: Uint8Array | undefined;
+            let done = false;
+            try {
+                ({ value, done } = await reader.read());
+            } catch {
+                // Timeout (AbortController fired), user cancel, or a dropped
+                // socket. Don't throw away what already arrived —
+                // sonar-deep-research delivers the whole document plus its
+                // citations in the FIRST SSE event, so a later disconnect
+                // should still leave a usable, cited file. Mark the run
+                // truncated and fall through to the final flush + return.
+                truncated = true;
+                break;
+            }
             if (done) break;
             sseBuffer += decoder.decode(value, { stream: true });
 
@@ -516,10 +585,23 @@ async function streamPerplexityToFile(
                     const choices = obj['choices'];
                     if (Array.isArray(choices) && choices.length > 0) {
                         const first = choices[0] as Record<string, unknown> | undefined;
+                        const message = first?.['message'] as Record<string, unknown> | undefined;
                         const delta = first?.['delta'] as Record<string, unknown> | undefined;
-                        const content = delta?.['content'];
-                        if (typeof content === 'string') {
-                            streamed += content;
+                        const snapshot = message?.['content'];
+                        const fragment = delta?.['content'];
+                        // Perplexity streams a *cumulative* message.content
+                        // snapshot on every SSE event. sonar-deep-research does
+                        // all its research server-side and dumps the ENTIRE
+                        // document into the first event's message.content, while
+                        // delta.content only ever carries a short tail fragment
+                        // — so reading delta alone silently loses ~99% of the
+                        // response. Prefer the snapshot; fall back to delta.
+                        if (typeof snapshot === 'string'
+                            && snapshot.length > streamed.length
+                            && snapshot.startsWith(streamed)) {
+                            streamed = snapshot;
+                        } else if (typeof fragment === 'string') {
+                            streamed += fragment;
                         }
                     }
                     const sr = obj['search_results'];
@@ -555,7 +637,7 @@ async function streamPerplexityToFile(
     // Final flush of raw stream content before post-processing
     await app.vault.modify(file, initialContent + streamed);
 
-    return { streamed, sources, images };
+    return { streamed, sources, images, truncated };
 }
 
 export type ApplyOutcome =
@@ -566,6 +648,8 @@ export type ApplyOutcome =
 export interface ApplyOptions {
     quiet?: boolean;
     isCancelled?: () => boolean;
+    /** Per-run Perplexity model; overrides the template's cft `model:`. */
+    modelOverride?: string;
 }
 
 export async function applyTemplate(
@@ -667,17 +751,31 @@ export async function applyTemplate(
         ? `${fmBlock}\n`
         : `${fmBlock}\n${existingBody}\n\n`;
 
-    const payload = buildPayload(template, systemPrompt, userPrompt);
+    // Effective model: an explicit per-run override (from the run modal) wins
+    // over the template's cft `model:`. Used for the payload, the loading
+    // notice, and the cf_last_run_model frontmatter stamp.
+    const cftModel = typeof template.cftConfig['model'] === 'string'
+        ? template.cftConfig['model']
+        : '';
+    const effectiveModel = (options.modelOverride && options.modelOverride.length > 0)
+        ? options.modelOverride
+        : (cftModel || 'sonar-pro');
+
+    // Entity-specific domain hints live in the target file's frontmatter so a
+    // collision-heavy name (e.g. NATS) can be pinned per-file without editing
+    // the shared template.
+    const targetDomains = parseDomainList(fm['cf_search_domains']);
+    const payload = buildPayload(template, systemPrompt, userPrompt, targetDomains, effectiveModel);
 
     let loadingNotice: Notice | null = null;
     if (!quiet) {
-        loadingNotice = new Notice('Streaming perplexity deep research…', 0);
+        loadingNotice = new Notice(`Streaming Perplexity · ${effectiveModel}…`, 0);
     }
     try {
         // Set initial state before streaming begins.
         await app.vault.modify(target, initialContent);
 
-        const { streamed, sources, images } = await streamPerplexityToFile(
+        const { streamed, sources, images, truncated } = await streamPerplexityToFile(
             app,
             settings.perplexityApiKey,
             settings.perplexityEndpoint,
@@ -692,9 +790,7 @@ export async function applyTemplate(
         const provider = typeof template.cftConfig['provider'] === 'string'
             ? template.cftConfig['provider']
             : 'unknown';
-        const modelName = typeof template.cftConfig['model'] === 'string'
-            ? template.cftConfig['model']
-            : 'unknown';
+        const modelName = effectiveModel;
         const providerLabel = provider.length > 0
             ? provider.charAt(0).toUpperCase() + provider.slice(1)
             : provider;
@@ -758,6 +854,11 @@ export async function applyTemplate(
         });
 
         if (!quiet) {
+            if (truncated) {
+                new Notice(
+                    `"${target.basename}": stream cut off (timeout or lost connection) — saved partial content with ${sources.length.toString()} sources. Re-run to complete.`,
+                );
+            }
             const verb = mode === 'fill' ? 'Filled' : 'Appended to';
             new Notice(`${verb} "${target.basename}" using ${template.file.basename} (${sources.length.toString()} sources)`);
         }

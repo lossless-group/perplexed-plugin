@@ -543,7 +543,7 @@ export class PerplexityService {
                     }
 
                     console.debug('✅ Streaming response received, starting to handle...');
-                    await this.handleStreamingResponse(response, editor, responseCursor, requestId, headerText);
+                    await this.handleStreamingResponse(response, editor, responseCursor, requestId, headerText, isDeepResearch);
                 } else {
                     console.debug('🔄 Making non-streaming API request...');
                     // Use Obsidian's request method for non-streaming with cache busting
@@ -627,16 +627,17 @@ export class PerplexityService {
     }
 
     private async handleStreamingResponse(
-        response: Response, 
-        editor: Editor, 
+        response: Response,
+        editor: Editor,
         responseCursor: { line: number; ch: number },
         requestId?: number,
-        headerText?: string
+        headerText?: string,
+        isDeepResearch = false
     ): Promise<void> {
         console.debug('🔄 handleStreamingResponse called');
         const reader = response.body?.getReader();
         if (!reader) throw new Error('No response body');
-        
+
         console.debug(`🔄 Starting streaming response handler [${requestId || 'unknown'}]`);
 
         // Hoist decoder out of the loop so the {stream: true} flag carries
@@ -645,12 +646,17 @@ export class PerplexityService {
         let buffer = '';
         const currentPos = { ...responseCursor };
         let finalResponseData: PerplexityStreamChunk | null = null;
+        // Everything already written into the editor. Perplexity streams a
+        // cumulative message.content snapshot, so we diff against this.
+        let accumulated = '';
 
         // Race each read against an idle timer — if no chunk arrives within
         // STREAM_IDLE_TIMEOUT_MS, throw so the catch surfaces a visible
         // "Streaming Error" instead of leaving reader.read() blocked forever
-        // on a dropped/idle SSE socket.
-        const STREAM_IDLE_TIMEOUT_MS = 90_000;
+        // on a dropped/idle SSE socket. sonar-deep-research does all its
+        // research server-side and can hold the socket silent for minutes
+        // before the first byte, so it gets a much longer leash.
+        const STREAM_IDLE_TIMEOUT_MS = isDeepResearch ? 270_000 : 90_000;
         const readWithIdleTimeout = (): Promise<ReadableStreamReadResult<Uint8Array>> => {
             let timer: number | undefined;
             const timeout = new Promise<never>((_, reject) => {
@@ -693,28 +699,41 @@ export class PerplexityService {
                                 };
                             }
 
-                            if (parsed.choices?.[0]?.delta?.content) {
-                                const content = parsed.choices[0].delta.content;
-                                if (content) {
-                                    // console.debug('🎉 First content received! Clearing loading text...');
-                                    // Clear any loading text before inserting content
-                                    this.clearLoadingText(editor);
-                                    
-                                    // Clear the animation interval if it exists
-                                    this.clearLoadingAnimation();
-                                    
-                                    // console.debug(`📝 Inserting content at position:`, currentPos, `Content:`, content.substring(0, 50) + '...');
-                                    editor.replaceRange(content, currentPos);
-                                    const contentLines = content.split('\n');
-                                    if (contentLines.length === 1) {
-                                        currentPos.ch += content.length;
-                                    } else {
-                                        currentPos.line += contentLines.length - 1;
-                                        currentPos.ch = contentLines[contentLines.length - 1]?.length ?? 0;
-                                    }
-                                    // Scroll to follow the new content
-                                    editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
+                            // Perplexity streams a *cumulative* message.content
+                            // snapshot on every SSE event. sonar-deep-research does
+                            // all its research server-side and dumps the ENTIRE
+                            // document into the first event's message.content, while
+                            // delta.content only ever carries a short tail fragment
+                            // — so reading delta alone silently drops ~99% of a deep
+                            // research article. Treat message.content as the source
+                            // of truth and write only the not-yet-written tail; fall
+                            // back to accumulating delta.content if message is absent.
+                            const choice = parsed.choices?.[0];
+                            let fullSoFar: string | undefined;
+                            if (typeof choice?.message?.content === 'string') {
+                                fullSoFar = choice.message.content;
+                            } else if (typeof choice?.delta?.content === 'string') {
+                                fullSoFar = accumulated + choice.delta.content;
+                            }
+                            // startsWith guard: Perplexity is append-only, but if a
+                            // prefix ever changes we skip rather than corrupt the doc.
+                            if (fullSoFar && fullSoFar.length > accumulated.length && fullSoFar.startsWith(accumulated)) {
+                                const newText = fullSoFar.slice(accumulated.length);
+                                // Clear any loading text / animation before first insert
+                                this.clearLoadingText(editor);
+                                this.clearLoadingAnimation();
+
+                                editor.replaceRange(newText, currentPos);
+                                const contentLines = newText.split('\n');
+                                if (contentLines.length === 1) {
+                                    currentPos.ch += newText.length;
+                                } else {
+                                    currentPos.line += contentLines.length - 1;
+                                    currentPos.ch = contentLines[contentLines.length - 1]?.length ?? 0;
                                 }
+                                // Scroll to follow the new content
+                                editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
+                                accumulated = fullSoFar;
                             }
                         }
                     } catch (e) {
@@ -776,6 +795,18 @@ export class PerplexityService {
 
             this.clearLoadingText(editor);
             this.clearLoadingAnimation();
+
+            // Salvage citations/images already received before the drop —
+            // deep research delivers them in its first SSE event, so a later
+            // disconnect shouldn't discard a footer we already have the data
+            // for. processStreamingMetadata appends at the document tail.
+            if (finalResponseData) {
+                try {
+                    this.processStreamingMetadata(finalResponseData, editor, headerText);
+                } catch (metaErr) {
+                    console.warn('Could not salvage streaming metadata:', metaErr);
+                }
+            }
             editor.replaceRange(`\n**Streaming Error:** ${userMsg}\n\n`, currentPos);
         }
     }

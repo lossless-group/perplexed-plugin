@@ -20,6 +20,8 @@ import { ArticleGeneratorModal } from './src/modals/ArticleGeneratorModal';
 import { TextEnhancementModal } from './src/modals/TextEnhancementModal';
 import { TextEnhancementWithImagesModal } from './src/modals/TextEnhancementWithImagesModal';
 import { DirectoryTemplatePickerModal } from './src/modals/DirectoryTemplatePickerModal';
+import { DirectoryTemplateRunModal } from './src/modals/DirectoryTemplateRunModal';
+import type { TemplateRunChoice } from './src/modals/DirectoryTemplateRunModal';
 import { FolderPickerModal } from './src/modals/FolderPickerModal';
 import { BatchConfirmModal } from './src/modals/BatchConfirmModal';
 
@@ -328,7 +330,7 @@ Structure the article as follows:
         { name: 'image-placement', when: 'return-images' },
     ],
     directoryTemplatesFrontmatterWhitelist: ['title', 'og_description', 'tags', 'og_image'],
-    directoryTemplatesRequestTimeoutMs: 300000,
+    directoryTemplatesRequestTimeoutMs: 600000,
 
     // Find images for selection
     findImagesMaxImages: 3
@@ -1242,15 +1244,20 @@ export default class PerplexedPlugin extends Plugin {
 
         const dirSettings: DirectoryTemplateSettings = this.buildDirectoryTemplateSettings();
 
-        new DirectoryTemplatePickerModal(this.app, matching, (chosen) => {
-            void (async () => {
-                const parsed = await loadDirectoryTemplate(this.app, chosen.file);
-                if (!parsed) {
-                    new Notice('Template parse error: missing or malformed cft block.');
-                    return;
-                }
-                await applyDirectoryTemplate(this.app, dirSettings, target, parsed);
-            })();
+        // Load every matching template up front so the run modal can show
+        // each one's cft model as the default in the model selector.
+        const choices: TemplateRunChoice[] = [];
+        for (const tf of matching) {
+            const parsed = await loadDirectoryTemplate(this.app, tf.file);
+            if (parsed) choices.push({ template: parsed, title: tf.title });
+        }
+        if (choices.length === 0) {
+            new Notice('Template parse error: missing or malformed cft block.');
+            return;
+        }
+
+        new DirectoryTemplateRunModal(this.app, choices, (template, model) => {
+            void applyDirectoryTemplate(this.app, dirSettings, target, template, { modelOverride: model });
         }).open();
     }
 
