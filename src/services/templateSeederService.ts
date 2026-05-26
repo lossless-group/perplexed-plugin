@@ -6,6 +6,7 @@ import conceptProfile from '../docs/templates/concept-profile.md';
 import vocabularyProfile from '../docs/templates/vocabulary-profile.md';
 import sourceProfile from '../docs/templates/source-profile.md';
 import toolkitProfile from '../docs/templates/toolkit-profile.md';
+import marketMapProfile from '../docs/templates/market-map-profile.md';
 
 import partialsReadme from '../docs/partials/README.md';
 import mermaidDisciplinePartial from '../docs/partials/mermaid-discipline.md';
@@ -30,6 +31,7 @@ const TEMPLATE_FILES: SeedFile[] = [
     { name: 'vocabulary-profile.md', content: vocabularyProfile },
     { name: 'source-profile.md', content: sourceProfile },
     { name: 'toolkit-profile.md', content: toolkitProfile },
+    { name: 'market-map-profile.md', content: marketMapProfile },
 ];
 
 const PARTIALS_README: SeedFile = { name: 'README.md', content: partialsReadme };

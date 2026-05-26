@@ -79,7 +79,7 @@ You can keep your own notes here without polluting the prompt.
 ### The three zones
 
 1. **Frontmatter** (between `---` lines at the top) — carries `title`, `applies-to-paths` (array of globs), and an optional `description`. The runtime uses `applies-to-paths` to match a template to a target file.
-2. **`cft` block** (a code fence with language `cft`) — YAML carrying `provider`, `model`, optional `search-recency`, `return-citations`, `return-images`, and a multi-line `system:` prompt. Everything **above** the `cft` block is dropped from the request.
+2. **`cft` block** (a code fence with language `cft`) — YAML carrying `provider`, `model`, optional `search-recency`, `return-citations`, `return-images`, optional `request-timeout-ms:` (per-template wall-clock override — see *Per-template timeout override* below), and a multi-line `system:` prompt. Everything **above** the `cft` block is dropped from the request.
 3. **Heading skeleton** — the markdown structure between the `cft` block's closing fence and the first `***` divider. This becomes the user prompt. Bullets under each heading are *instructions to the model*, not literal output. Everything **below** the first `***` is excluded from the request.
 
 ### Interpolation tokens
@@ -140,7 +140,7 @@ These let you query for stale files later (`cf_last_run` older than X), audit wh
 
 ## Shipped templates
 
-Four templates ship inlined into `main.js` (via esbuild's `.md` text loader) and are seeded into the user's vault on first plugin load.
+Five templates ship inlined into `main.js` (via esbuild's `.md` text loader) and are seeded into the user's vault on first plugin load.
 
 | File | Targets | Model | Notes |
 |---|---|---|---|
@@ -148,6 +148,7 @@ Four templates ship inlined into `main.js` (via esbuild's `.md` text loader) and
 | `vocabulary-profile.md` | `Vocabulary/**` | `sonar-pro` | Term definitions with disambiguation through an innovation-consulting lens. |
 | `source-profile.md` | `Sources/**` | `sonar-pro` | Profiles of trusted sources — books, people, channels, publications, journals, reports, events. Type-aware: the system prompt enumerates seven canonical types and the model picks one from frontmatter signals (`youtube_channel_url` → channel, `aliases` → likely book, etc.). Each section has per-type bullet shapes. |
 | `toolkit-profile.md` | `Tooling/**` | `sonar-pro` | Profiles of tools, products, platforms, frameworks. |
+| `market-map-profile.md` | `lost-in-public/market-maps/**`, `market-maps/**` | `sonar-deep-research` | Analyst-grade market-map drafts. Dual flavor: Known Category (Quantum Computing, Humanoid Robots) or Thesis-Driven (e.g., Neural Network Hardware as Brains for Robotics) traversing adjacent categories. Lean v1, single-stage. Skips image return by design — deep-research's image metadata is unreliable and market-map imagery is generated separately (Ideogram → frontmatter `banner_image` / `portrait_image` / `square_image`). Multi-stage v2 (RAG pre-flight to inject canonical Lossless tools/concepts as context + Claude editorial pass to emit `[[wikilink]]`s) is deferred — see the User Notes zone of the template for the roadmap. |
 
 `source-profile` is the trickiest because `Sources/` is genuinely heterogeneous. The solution is one template, type-conditional content. Books also trigger Google Books URL handling: frontmatter `google_books_url` is used if present, otherwise the model finds it; either way the URL is harvested into frontmatter post-generation via regex, so subsequent runs skip the search.
 
@@ -198,6 +199,34 @@ Don't write overlapping `applies-to-paths` patterns across templates; the first 
 All three appear in the Obsidian command palette under `Perplexed: …`.
 
 ---
+
+## Per-template timeout override
+
+The runtime applies a wall-clock timeout to every Perplexity stream via an `AbortController` (see [`directoryTemplateService.ts`](../src/services/directoryTemplateService.ts) `streamPerplexityToFile`). The plugin-level default (*Plugin settings → Directory templates → Request timeout (ms)*) is **30 min** (1,800,000 ms) — generous because most templates are well under that ceiling, and the few that aren't (the analyst-grade deep-research templates) shouldn't be cut off in the middle of a draft worth $10-$50 of analyst time.
+
+Templates can override the plugin-level default by declaring `request-timeout-ms:` inside their `cft` block:
+
+```cft
+provider: perplexity
+model: sonar-deep-research
+request-timeout-ms: 2400000   # 40 min
+system: |
+  ...
+```
+
+Override semantics:
+
+- A numeric value or a numeric string both work; non-positive / non-numeric values are silently ignored and the plugin-level default is used.
+- The override applies only to that template's runs. Other templates continue to use the plugin-level value.
+- The runtime tolerates mid-stream truncation gracefully: a stream cut off by timeout leaves a partial draft on disk with `truncated: true` flagged in the result and a Notice telling the user to re-run.
+
+When to bump above the plugin-level default:
+
+- `sonar-deep-research` on a multi-section analyst template (market maps, in-depth research reports, sector overviews). These routinely emit 6–8K-word bodies and the tail sections (Frontier, Adjacent Concepts, Open Questions) are the first to be cut.
+- Templates with deeply nested skeleton structure and many `[IMAGE N: …]` markers — Perplexity's image-result population time stretches the wall clock.
+- Templates that declare a large `include-sources:` block (per the [multi-stage exploration](../context-v/explorations/Multi-Stage-Cooperative-Claude-and-Perplexity-with-RAG.md)) when that feature ships — RAG context inflation adds prompt-processing time.
+
+Market-map-profile ships with `request-timeout-ms: 2400000` (40 min) for exactly the reason above. Concept, vocabulary, source, and toolkit profiles do not declare the field and inherit the plugin-level 30-min default — they all finish comfortably under that.
 
 ## Settings
 

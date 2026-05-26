@@ -17,6 +17,7 @@ The plugin seeds this folder on first run with the four templates below. You can
 | `vocabulary-profile.md` | `Vocabulary/**` | Definitions of terms with disambiguation through an innovation-consulting lens. |
 | `source-profile.md` | `Sources/**` | Profiles of trusted sources — books, people, channels, publications, journals, reports, events. Adapts emphasis to the source's type. |
 | `toolkit-profile.md` | `Tooling/**` | Profiles of tools, products, platforms, frameworks. |
+| `market-map-profile.md` | `lost-in-public/market-maps/**`, `market-maps/**` | Analyst-grade market-map drafts — both Known Category (e.g., Humanoid Robots) and Thesis-Driven (e.g., Neural Network Hardware as Brains for Robotics). Runs on `sonar-deep-research`. Single-stage v1; multi-stage RAG + Claude-edit pass is planned. |
 
 ## How a template works
 
@@ -59,7 +60,7 @@ Anything below the `***` line is excluded from the request.
 ### The three zones
 
 1. **Frontmatter** (top, between `---` lines) — carries `title`, `applies-to-paths` (array of glob patterns), and an optional `description`. The plugin uses `applies-to-paths` to match a template to a target file.
-2. **`cft` block** (a code fence with language `cft`) — YAML config: `provider`, `model`, `search-recency`, `return-citations`, `return-images`, plus a multi-line `system:` prompt. Anything above the `cft` block is treated as documentation and dropped from the request.
+2. **`cft` block** (a code fence with language `cft`) — YAML config: `provider`, `model`, `search-recency`, `return-citations`, `return-images`, optional `request-timeout-ms:` (overrides the plugin-level *Request timeout (ms)* setting for this template — useful for long deep-research runs that need 20-40 min), plus a multi-line `system:` prompt. Anything above the `cft` block is treated as documentation and dropped from the request.
 3. **Heading skeleton** (everything between the `cft` block's closing fence and the first `***`) — the user prompt. This is the markdown structure the model fills in. Bullets under each heading are *instructions to the model*, not literal output.
 
 The `***` divider terminates the user prompt. Anything below it (the User Notes zone) is for your own scratch work and never reaches the model.

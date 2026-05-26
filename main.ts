@@ -330,7 +330,7 @@ Structure the article as follows:
         { name: 'image-placement', when: 'return-images' },
     ],
     directoryTemplatesFrontmatterWhitelist: ['title', 'og_description', 'tags', 'og_image'],
-    directoryTemplatesRequestTimeoutMs: 600000,
+    directoryTemplatesRequestTimeoutMs: 1800000,
 
     // Find images for selection
     findImagesMaxImages: 3
@@ -2040,9 +2040,9 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Request timeout (ms)')
-            .setDesc('Maximum time to wait for the perplexity deep research response. Default 300000 (5 min).')
+            .setDesc('Maximum wall-clock time to wait for a Perplexity response. Default 1800000 (30 min) — generous because deep-research runs on long analyst-grade templates routinely take 15-25 min and the $10-$50 of value per good output is worth waiting for. Individual templates may override this per-template via `request-timeout-ms:` in their cft block.')
             .addText(text => text
-                .setPlaceholder('300000')
+                .setPlaceholder('1800000')
                 .setValue(String(this.plugin.settings.directoryTemplatesRequestTimeoutMs))
                 .onChange(async (value: string) => {
                     const n = parseInt(value, 10);

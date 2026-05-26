@@ -775,12 +775,27 @@ export async function applyTemplate(
         // Set initial state before streaming begins.
         await app.vault.modify(target, initialContent);
 
+        // Template-level `request-timeout-ms:` in the cft block overrides the
+        // plugin-level default. Deep-research templates routinely need 20-40min
+        // to fully render a long analyst draft and shouldn't be capped by a
+        // setting tuned for short concept-profile runs. Accept number or
+        // numeric string. Ignore non-positive / non-numeric values silently.
+        const cftTimeoutRaw = template.cftConfig['request-timeout-ms'];
+        const cftTimeoutMs = typeof cftTimeoutRaw === 'number'
+            ? cftTimeoutRaw
+            : typeof cftTimeoutRaw === 'string'
+                ? parseInt(cftTimeoutRaw, 10)
+                : NaN;
+        const effectiveTimeoutMs = Number.isFinite(cftTimeoutMs) && cftTimeoutMs > 0
+            ? cftTimeoutMs
+            : settings.requestTimeoutMs;
+
         const { streamed, sources, images, truncated } = await streamPerplexityToFile(
             app,
             settings.perplexityApiKey,
             settings.perplexityEndpoint,
             payload,
-            settings.requestTimeoutMs,
+            effectiveTimeoutMs,
             target,
             initialContent,
             isCancelled,
