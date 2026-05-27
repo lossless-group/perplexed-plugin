@@ -79,7 +79,7 @@ You can keep your own notes here without polluting the prompt.
 ### The three zones
 
 1. **Frontmatter** (between `---` lines at the top) — carries `title`, `applies-to-paths` (array of globs), and an optional `description`. The runtime uses `applies-to-paths` to match a template to a target file.
-2. **`cft` block** (a code fence with language `cft`) — YAML carrying `provider`, `model`, optional `search-recency`, `return-citations`, `return-images`, optional `request-timeout-ms:` (per-template wall-clock override — see *Per-template timeout override* below), and a multi-line `system:` prompt. Everything **above** the `cft` block is dropped from the request.
+2. **`cft` block** (a code fence with language `cft`) — YAML carrying `provider`, `model`, optional `search-recency`, `return-citations`, `return-images`, optional `stream-idle-timeout-ms:` and `request-timeout-ms:` (per-template timeout overrides — see *Per-template timeout overrides* below), optional `max-tokens:` (per-template output-token budget — see *Per-template max-tokens override* below), and a multi-line `system:` prompt. Everything **above** the `cft` block is dropped from the request.
 3. **Heading skeleton** — the markdown structure between the `cft` block's closing fence and the first `***` divider. This becomes the user prompt. Bullets under each heading are *instructions to the model*, not literal output. Everything **below** the first `***` is excluded from the request.
 
 ### Interpolation tokens
@@ -200,33 +200,84 @@ All three appear in the Obsidian command palette under `Perplexed: …`.
 
 ---
 
-## Per-template timeout override
+## Per-template timeout overrides
 
-The runtime applies a wall-clock timeout to every Perplexity stream via an `AbortController` (see [`directoryTemplateService.ts`](../src/services/directoryTemplateService.ts) `streamPerplexityToFile`). The plugin-level default (*Plugin settings → Directory templates → Request timeout (ms)*) is **30 min** (1,800,000 ms) — generous because most templates are well under that ceiling, and the few that aren't (the analyst-grade deep-research templates) shouldn't be cut off in the middle of a draft worth $10-$50 of analyst time.
+The runtime applies **two complementary timers** to every Perplexity stream (see [`directoryTemplateService.ts`](../src/services/directoryTemplateService.ts) `streamPerplexityToFile`):
 
-Templates can override the plugin-level default by declaring `request-timeout-ms:` inside their `cft` block:
+| Timer | What it does | Default |
+|---|---|---|
+| **Stream-idle timeout** (per-chunk) | Each `reader.read()` is raced against a fresh timer. As long as bytes keep arriving, the timer is cleared and re-armed — the stream only dies if it goes **quiet** for the idle duration. | `270_000` ms (4.5 min) for deep-research models (matched by `/deep-research/i` against the resolved model name); `90_000` ms (1.5 min) otherwise. Matches the legacy modal flow in `perplexityService.ts:659`. |
+| **Wall-clock ceiling** (absolute) | An optional `AbortController` deadline armed once at fetch time. Belt-and-suspenders backstop. | Plugin-level `settings.requestTimeoutMs` (default **30 min**). Set to **0** in settings to disable; the idle timer alone is responsible for safety. |
+
+The idle timer is the primary safety mechanism. It catches the two pathologies that a single wall-clock timer handles poorly:
+
+- **Silently stalled stream** (Perplexity rate-limit, socket close, upstream stall): the idle timer surfaces the failure within `idleMs` seconds rather than making the user wait the full ceiling.
+- **Slow-but-healthy stream**: as long as some byte arrives every `idleMs` seconds, the stream completes naturally — it does not get cut off mid-sentence at the ceiling regardless of whether it's still producing.
+
+Templates can override either or both via their `cft` block:
 
 ```cft
 provider: perplexity
 model: sonar-deep-research
-request-timeout-ms: 2400000   # 40 min
+stream-idle-timeout-ms: 270000   # per-chunk idle (default already 270s for deep-research)
+request-timeout-ms: 2400000      # absolute ceiling (40 min)
 system: |
   ...
 ```
 
 Override semantics:
 
-- A numeric value or a numeric string both work; non-positive / non-numeric values are silently ignored and the plugin-level default is used.
-- The override applies only to that template's runs. Other templates continue to use the plugin-level value.
-- The runtime tolerates mid-stream truncation gracefully: a stream cut off by timeout leaves a partial draft on disk with `truncated: true` flagged in the result and a Notice telling the user to re-run.
+- A numeric value or a numeric string both work.
+- For `stream-idle-timeout-ms:`: non-positive / non-numeric values fall through to the model-class default (270s deep, 90s normal).
+- For `request-timeout-ms:`: an explicit `0` disables the ceiling entirely (idle-only). Non-numeric or missing falls through to `settings.requestTimeoutMs`.
+- Overrides apply only to that template's runs.
+- The runtime tolerates mid-stream truncation gracefully: a stream killed by either timer leaves a partial draft on disk with `truncated: true` flagged in the result and a Notice telling the user to re-run.
 
-When to bump above the plugin-level default:
+When to override the defaults:
 
-- `sonar-deep-research` on a multi-section analyst template (market maps, in-depth research reports, sector overviews). These routinely emit 6–8K-word bodies and the tail sections (Frontier, Adjacent Concepts, Open Questions) are the first to be cut.
-- Templates with deeply nested skeleton structure and many `[IMAGE N: …]` markers — Perplexity's image-result population time stretches the wall clock.
-- Templates that declare a large `include-sources:` block (per the [multi-stage exploration](../context-v/explorations/Multi-Stage-Cooperative-Claude-and-Perplexity-with-RAG.md)) when that feature ships — RAG context inflation adds prompt-processing time.
+- `sonar-deep-research` on a multi-section analyst template (market maps, in-depth research reports, sector overviews) routinely emits 6–8K-word bodies. The 270s idle default lets the slow trickle complete naturally — no override needed for the *idle* key in most cases.
+- Bump `request-timeout-ms:` (or set to `0`) when you want truly unbounded healthy runs and trust the idle timer to catch stalls.
+- Lower `stream-idle-timeout-ms:` for short non-deep-research templates that should fail fast (the 90s default already does this for them).
+- Templates that declare a large `include-sources:` block (per the [multi-stage exploration](../context-v/explorations/Multi-Stage-Cooperative-Claude-and-Perplexity-with-RAG.md)) when that feature ships — RAG context inflation adds first-byte latency; consider bumping `stream-idle-timeout-ms:` if first-byte routinely exceeds the default.
 
-Market-map-profile ships with `request-timeout-ms: 2400000` (40 min) for exactly the reason above. Concept, vocabulary, source, and toolkit profiles do not declare the field and inherit the plugin-level 30-min default — they all finish comfortably under that.
+Market-map-profile ships with `request-timeout-ms: 2400000` (40 min ceiling) as a safety cap on absolutely-runaway runs; the per-chunk idle timer (270s, inherited) is what actually keeps the stream healthy. Concept, vocabulary, source, and toolkit profiles declare neither key and inherit `settings.requestTimeoutMs` for the ceiling and the 90s idle default — they all finish comfortably under both.
+
+---
+
+## Per-template `max-tokens:` override
+
+Perplexity's default output-token cap silently truncates long analyst-grade templates by ending the stream **cleanly** with `finish_reason: "length"` mid-skeleton. The symptom is hostile: the run looks like a healthy completion (sources footer renders, no Notice, no truncation warning), but the back half of the section skeleton never appears. Default is approximately 8,192 tokens for `sonar-deep-research` (~6,000 English words).
+
+Templates can override the default by declaring `max-tokens:` inside their `cft` block:
+
+```cft
+provider: perplexity
+model: sonar-deep-research
+max-tokens: 24000   # ~18K-word budget
+system: |
+  ...
+```
+
+Override semantics:
+
+- A numeric value or a numeric string both work; non-positive / non-numeric values are silently ignored and Perplexity's default applies.
+- The override is per-template. Other templates continue to use Perplexity's default.
+- Perplexity may itself cap the request below your declared `max-tokens:` based on the model's context window minus the prompt length. If you request more than the model can deliver, Perplexity returns the model's actual cap; your override is the ceiling you're willing to accept.
+
+When to bump above the default:
+
+- **Any analyst-grade template that asks for >6K words of body.** `market-map-profile` and `standards-and-specs-profile` both ship with `max-tokens: 24000` for this reason.
+- **Templates with deeply nested skeletons** (3+ heading levels) — the model rations its token budget across the skeleton, and a deep skeleton means more sections competing for the same budget.
+- **Templates that demand multiple cards per section** (e.g., the three-tier adoption skeleton in `standards-and-specs-profile` with deeper implementation cards). Each card takes ~150-300 tokens; 15-30 cards × 200 tokens = 3,000-6,000 tokens just for the card sections.
+
+**The diagnostic to distinguish max-tokens truncation from wall-clock truncation:**
+
+| Symptom | Cause |
+|---|---|
+| Mid-sentence cutoff (literally ends with a partial word or trailing punctuation); no sources footer; user sees "stream went idle" or no Notice at all | Wall-clock timer (`request-timeout-ms:` ceiling) or idle timer (`stream-idle-timeout-ms:`) fired during streaming |
+| Clean section-end cutoff (last byte is a paragraph break or full sentence); **sources footer renders correctly with all citations**; no Notice | Perplexity `max_tokens` cap; the stream completed cleanly via `finish_reason: "length"` |
+
+The wall-clock and idle timers are streaming-time controls; `max-tokens` is an output-budget control. They are independent — a template can hit either, neither, or both. Set both knobs generously for thorough deep-research templates.
 
 ## Settings
 

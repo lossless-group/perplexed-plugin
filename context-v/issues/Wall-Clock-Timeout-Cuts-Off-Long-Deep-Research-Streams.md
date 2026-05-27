@@ -3,13 +3,14 @@ title: Wall-clock timeout cuts off long deep-research streams
 lede: "The directory-template runtime caps every stream by total wall-clock duration, but the legacy modal flow already moved to per-chunk idle-timeout discipline two iterations ago — and the discrepancy is now actively truncating analyst-grade market-map drafts mid-sentence."
 date_created: 2026-05-26
 date_modified: 2026-05-26
+date_resolved: 2026-05-26
 authors:
   - Michael Staton
 augmented_with:
   - Claude Opus 4.7 (1M context)
-semantic_version: 0.0.0.1
+semantic_version: 0.0.0.2
 type: issue
-status: open
+status: resolved
 target_repo: perplexed
 tags:
   - Issue-Resolution
@@ -103,12 +104,21 @@ Port the idle-timeout pattern from [`perplexityService.ts:659-668`](../../src/se
 
 The diff is moderate — `streamPerplexityToFile` is ~140 lines today; the refactor touches roughly the first 40 of those (the timer setup and the `reader.read()` call inside the loop). The post-stream cleanup pipeline (`wrapThinkBlocks`, `processContentWithImages`, `buildSourcesFooter`) is unaffected.
 
-## Open items before this becomes a spec
+## Resolution (2026-05-26)
 
-- [ ] Decide whether the cft-block key stays named `request-timeout-ms:` (which becomes a misnomer once idle-timeout is what's actually applied) or migrates to `stream-idle-timeout-ms:`. Compatibility-alias plan if the latter.
-- [ ] Decide whether to retain a wall-clock absolute ceiling alongside the idle timeout, and if so what the value is (60 min? 120 min? infinite with a Notice that surfaces "this run has been going for X min" past a threshold?).
-- [ ] Audit other long-stream callsites in the codebase that may have the same wall-clock pathology (Gemini service, LM Studio service, Claude service streaming flows) — the idle-timeout discipline should be the house style across all of them.
-- [ ] Confirm the model-name-based deep-research detection (`/deep-research/i` regex on the resolved model) is robust against future Perplexity model name changes; consider exposing the idle-timeout values as plugin settings so they can be tuned without a code change.
+The structural fix shipped the same day as the issue was filed. See [`changelog/2026-05-26_02.md`](../../changelog/2026-05-26_02.md) for the full ship note.
+
+What landed:
+
+- [x] **The port itself.** `streamPerplexityToFile` now wraps each `reader.read()` in a `readWithIdleTimeout()` race, ported from `perplexityService.ts:659-668`. Signature changed from `timeoutMs: number` to `timeouts: { idleMs: number; ceilingMs: number }`. AbortController retained for cancel + ceiling.
+- [x] **Dual-key naming decision.** Kept `request-timeout-ms:` as the legacy key (now semantically the *absolute wall-clock ceiling*) and added `stream-idle-timeout-ms:` as the new key (the per-chunk idle timer, primary safety). No rename, no compatibility alias needed — existing template values for `request-timeout-ms:` still work and now mean exactly what their name suggests.
+- [x] **Ceiling-vs-idle defaults.** Idle defaults match the legacy modal flow: 270s for deep-research models (`/deep-research/i` on resolved model name), 90s otherwise. Ceiling defaults to `settings.requestTimeoutMs` (30 min); explicit `0` in either settings or cft disables the ceiling entirely.
+
+Deferred (now their own follow-ups, not blocking):
+
+- [ ] **Cross-service audit.** The same wall-clock pathology may live in the Gemini service, the LM Studio service, and the Claude streaming flows. The idle-timeout discipline should be the house style across all of them. Track as its own issue.
+- [ ] **Settings-pane exposure of idle defaults.** Today the 270s/90s values are hardcoded in `streamPerplexityToFile` (matching `perplexityService.ts`). Exposing them as plugin settings is a follow-up if we ever need to tune them without a code change.
+- [ ] **Robustness of deep-research detection.** `/deep-research/i` against the resolved model name is the current heuristic — same as `perplexityService.ts`. Revisit if Perplexity ever ships a long-running model under a different naming convention.
 
 ## Related
 

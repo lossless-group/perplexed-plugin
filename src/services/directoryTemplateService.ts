@@ -44,6 +44,7 @@ interface PerplexityPayload {
     return_related_questions: boolean;
     search_recency_filter?: string;
     search_domain_filter?: string[];
+    max_tokens?: number;
 }
 
 export interface PerplexitySource {
@@ -493,6 +494,23 @@ function buildPayload(
         payload.search_domain_filter = domainFilter;
     }
 
+    // Per-template `max-tokens:` override — Perplexity's default output cap
+    // (~8192 for sonar-deep-research) silently truncates long analyst-grade
+    // templates by ending the stream cleanly with finish_reason: "length"
+    // mid-skeleton. The symptom looks identical to a healthy run except
+    // that the back half of the section skeleton never appears. Templates
+    // that legitimately want 6-9K-word bodies must bump this explicitly.
+    // Accept number or numeric-string; ignore non-positive / non-numeric.
+    const maxTokensRaw = cfg['max-tokens'];
+    const maxTokens = typeof maxTokensRaw === 'number'
+        ? maxTokensRaw
+        : typeof maxTokensRaw === 'string'
+            ? parseInt(maxTokensRaw, 10)
+            : NaN;
+    if (Number.isFinite(maxTokens) && maxTokens > 0) {
+        payload.max_tokens = maxTokens;
+    }
+
     return payload;
 }
 
@@ -501,14 +519,21 @@ async function streamPerplexityToFile(
     apiKey: string,
     endpoint: string,
     payload: PerplexityPayload,
-    timeoutMs: number,
+    timeouts: { idleMs: number; ceilingMs: number },
     file: TFile,
     initialContent: string,
     isCancelled: () => boolean,
 ): Promise<{ streamed: string; sources: PerplexitySource[]; images: PerplexityImage[]; truncated: boolean }> {
     payload.stream = true;
     const controller = new AbortController();
-    const timer = activeWindow.setTimeout(() => controller.abort(), timeoutMs);
+    // Optional absolute wall-clock ceiling — belt-and-suspenders backstop.
+    // The per-chunk idle timer below is the primary safety mechanism; the
+    // ceiling only fires if a stream sustains bytes past the ceiling AND
+    // a hard cap is desired (e.g. settings/cft override > 0). Set ceilingMs
+    // to Infinity to disable the ceiling entirely.
+    const ceilingTimer = Number.isFinite(timeouts.ceilingMs) && timeouts.ceilingMs > 0
+        ? activeWindow.setTimeout(() => controller.abort(), timeouts.ceilingMs)
+        : null;
 
     let response: Response;
     try {
@@ -524,20 +549,41 @@ async function streamPerplexityToFile(
             cache: 'no-store',
         });
     } catch (err) {
-        activeWindow.clearTimeout(timer);
+        if (ceilingTimer !== null) activeWindow.clearTimeout(ceilingTimer);
         throw err;
     }
 
     if (!response.ok) {
-        activeWindow.clearTimeout(timer);
+        if (ceilingTimer !== null) activeWindow.clearTimeout(ceilingTimer);
         throw new Error(`Perplexity HTTP ${response.status.toString()}`);
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-        activeWindow.clearTimeout(timer);
+        if (ceilingTimer !== null) activeWindow.clearTimeout(ceilingTimer);
         throw new Error('Perplexity returned no response body');
     }
+
+    // Race each reader.read() against a fresh per-chunk idle timer. As long
+    // as bytes keep arriving the timer is cleared and re-armed, so a healthy
+    // slow stream completes naturally — only a stream that goes *quiet* for
+    // `idleMs` (Perplexity stall, rate-limit, socket close) is killed. This
+    // is the structural fix for [[Wall-Clock-Timeout-Cuts-Off-Long-Deep-
+    // Research-Streams]] — ported from the legacy PerplexityModal flow in
+    // perplexityService.ts:659-668, where the same pattern has been load-
+    // bearing for sonar-deep-research runs for two iterations.
+    const idleMs = timeouts.idleMs;
+    const readWithIdleTimeout = (): Promise<ReadableStreamReadResult<Uint8Array>> => {
+        let timer: number | undefined;
+        const timeout = new Promise<never>((_, reject) => {
+            timer = activeWindow.setTimeout(() => {
+                reject(new Error(`stream went idle for ${(idleMs / 1000).toString()}s (likely API stall, rate limit, or socket close)`));
+            }, idleMs);
+        });
+        return Promise.race([reader.read(), timeout]).finally(() => {
+            if (timer !== undefined) activeWindow.clearTimeout(timer);
+        });
+    };
 
     const decoder = new TextDecoder();
     let sseBuffer = '';
@@ -557,14 +603,15 @@ async function streamPerplexityToFile(
             let value: Uint8Array | undefined;
             let done = false;
             try {
-                ({ value, done } = await reader.read());
+                ({ value, done } = await readWithIdleTimeout());
             } catch {
-                // Timeout (AbortController fired), user cancel, or a dropped
-                // socket. Don't throw away what already arrived —
-                // sonar-deep-research delivers the whole document plus its
-                // citations in the FIRST SSE event, so a later disconnect
-                // should still leave a usable, cited file. Mark the run
-                // truncated and fall through to the final flush + return.
+                // Idle timer fired, AbortController fired (ceiling or user
+                // cancel), or a dropped socket. Don't throw away what
+                // already arrived — sonar-deep-research delivers the whole
+                // document plus its citations in the FIRST SSE event, so a
+                // later disconnect should still leave a usable, cited file.
+                // Mark the run truncated and fall through to the final
+                // flush + return.
                 truncated = true;
                 break;
             }
@@ -626,7 +673,7 @@ async function streamPerplexityToFile(
             }
         }
     } finally {
-        activeWindow.clearTimeout(timer);
+        if (ceilingTimer !== null) activeWindow.clearTimeout(ceilingTimer);
         try {
             reader.releaseLock();
         } catch {
@@ -775,27 +822,42 @@ export async function applyTemplate(
         // Set initial state before streaming begins.
         await app.vault.modify(target, initialContent);
 
-        // Template-level `request-timeout-ms:` in the cft block overrides the
-        // plugin-level default. Deep-research templates routinely need 20-40min
-        // to fully render a long analyst draft and shouldn't be capped by a
-        // setting tuned for short concept-profile runs. Accept number or
-        // numeric string. Ignore non-positive / non-numeric values silently.
-        const cftTimeoutRaw = template.cftConfig['request-timeout-ms'];
-        const cftTimeoutMs = typeof cftTimeoutRaw === 'number'
-            ? cftTimeoutRaw
-            : typeof cftTimeoutRaw === 'string'
-                ? parseInt(cftTimeoutRaw, 10)
-                : NaN;
-        const effectiveTimeoutMs = Number.isFinite(cftTimeoutMs) && cftTimeoutMs > 0
-            ? cftTimeoutMs
-            : settings.requestTimeoutMs;
+        // Two complementary timeout knobs:
+        //   - `stream-idle-timeout-ms:` (cft) — per-chunk idle timer; primary
+        //     safety. Defaults: 270s deep-research, 90s normal — matches the
+        //     legacy modal flow in perplexityService.ts:659.
+        //   - `request-timeout-ms:` (cft, legacy key retained) — absolute
+        //     wall-clock ceiling; opt-in backstop. Falls back to the
+        //     plugin-level `settings.requestTimeoutMs`. Set to 0 (in cft or
+        //     settings) to disable the ceiling and rely entirely on idle.
+        // Both accept number or numeric-string; non-positive / non-numeric
+        // falls through to the fallback chain silently.
+        const parseMs = (raw: unknown): number => {
+            if (typeof raw === 'number') return raw;
+            if (typeof raw === 'string') return parseInt(raw, 10);
+            return NaN;
+        };
+        const isDeepResearch = /deep-research/i.test(effectiveModel);
+        const idleDefaultMs = isDeepResearch ? 270_000 : 90_000;
+        const cftIdleMs = parseMs(template.cftConfig['stream-idle-timeout-ms']);
+        const effectiveIdleMs = Number.isFinite(cftIdleMs) && cftIdleMs > 0
+            ? cftIdleMs
+            : idleDefaultMs;
+
+        const cftCeilingMs = parseMs(template.cftConfig['request-timeout-ms']);
+        const settingsCeilingMs = settings.requestTimeoutMs;
+        // Negative or non-numeric → fall through to settings; explicit 0 in
+        // cft → disable ceiling entirely (Infinity, idle-only).
+        const effectiveCeilingMs = Number.isFinite(cftCeilingMs)
+            ? (cftCeilingMs > 0 ? cftCeilingMs : Infinity)
+            : (settingsCeilingMs > 0 ? settingsCeilingMs : Infinity);
 
         const { streamed, sources, images, truncated } = await streamPerplexityToFile(
             app,
             settings.perplexityApiKey,
             settings.perplexityEndpoint,
             payload,
-            effectiveTimeoutMs,
+            { idleMs: effectiveIdleMs, ceilingMs: effectiveCeilingMs },
             target,
             initialContent,
             isCancelled,

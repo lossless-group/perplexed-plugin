@@ -60,6 +60,8 @@ system: |
 - If this concept involves a process, hierarchy, taxonomy, or part-relationship that a diagram clarifies, render a `mermaid` codefence here. If a diagram does not add insight, omit it entirely — do not force one.
 
 {{include: mermaid-discipline}}
+
+{{include: latex-discipline}}
 - Write a one-sentence italicized lede (a zinger or kicker) that captures the core insight in plain language. Use markdown italics: `_..._`.
 - Then write a 2–4 sentence paragraph giving more context: what the concept is, when it applies, and why it matters.
 

@@ -7,9 +7,12 @@ import vocabularyProfile from '../docs/templates/vocabulary-profile.md';
 import sourceProfile from '../docs/templates/source-profile.md';
 import toolkitProfile from '../docs/templates/toolkit-profile.md';
 import marketMapProfile from '../docs/templates/market-map-profile.md';
+import standardsAndSpecsProfile from '../docs/templates/standards-and-specs-profile.md';
+import marketCategoryProfile from '../docs/templates/market-category-profile.md';
 
 import partialsReadme from '../docs/partials/README.md';
 import mermaidDisciplinePartial from '../docs/partials/mermaid-discipline.md';
+import latexDisciplinePartial from '../docs/partials/latex-discipline.md';
 
 import preamblesReadme from '../docs/preambles/README.md';
 import inlineCitationPreamble from '../docs/preambles/inline-citation.md';
@@ -32,11 +35,14 @@ const TEMPLATE_FILES: SeedFile[] = [
     { name: 'source-profile.md', content: sourceProfile },
     { name: 'toolkit-profile.md', content: toolkitProfile },
     { name: 'market-map-profile.md', content: marketMapProfile },
+    { name: 'standards-and-specs-profile.md', content: standardsAndSpecsProfile },
+    { name: 'market-category-profile.md', content: marketCategoryProfile },
 ];
 
 const PARTIALS_README: SeedFile = { name: 'README.md', content: partialsReadme };
 const PARTIAL_FILES: SeedFile[] = [
     { name: 'mermaid-discipline.md', content: mermaidDisciplinePartial },
+    { name: 'latex-discipline.md', content: latexDisciplinePartial },
 ];
 
 const PREAMBLES_README: SeedFile = { name: 'README.md', content: preamblesReadme };

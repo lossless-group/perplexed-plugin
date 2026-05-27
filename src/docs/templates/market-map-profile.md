@@ -26,13 +26,24 @@ provider: perplexity
 model: sonar-deep-research
 return-citations: true
 return-images: false
-# 40-minute wall-clock budget for this template specifically. Market-map deep
-# research runs routinely produce 6-8K-word drafts with 20-40 named innovators
-# across 4-8 sub-segments, and the tail of that generation (Frontier and
-# Adjacent Concepts sections) is the most cuttable under aggressive timeouts.
-# Overrides the plugin-level default. A complete run is worth $10-$50 of
-# analyst time; let it cook.
+# 40-minute absolute wall-clock ceiling — the belt-and-suspenders cap.
+# The primary safety is the per-chunk idle timer (270s for deep-research,
+# inherited from the model-class default), which lets a slow-but-healthy
+# stream complete naturally while killing a silently-stalled one fast.
+# This ceiling is the "do not run longer than 40 min under any
+# circumstances" cap on top of that. Market-map deep-research runs
+# routinely produce 6-8K-word drafts with 20-40 named innovators across
+# 4-8 sub-segments; a complete run is worth $10-$50 of analyst time, so
+# the cap is generous. Set this key to 0 to disable the ceiling entirely
+# and rely on idle-only safety.
 request-timeout-ms: 2400000
+# Generous output-token budget. Perplexity's default for sonar-deep-research
+# (~8192 tokens, ~6K words) silently truncates market-map drafts mid-skeleton
+# by ending the stream cleanly with finish_reason: length. Bumped to 24000
+# (~18K-word budget) so a complete map can land with headroom for 20-40
+# innovator cards across 4-8 sub-segments plus Market Dynamics, Frontier,
+# and Adjacent Concepts.
+max-tokens: 24000
 system: |
   You are writing the analyst-grade draft of a MARKET MAP titled "{{basename}}".
 

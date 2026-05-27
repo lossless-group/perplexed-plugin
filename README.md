@@ -3,6 +3,20 @@
 
 **Perplexed** is an Obsidian plugin that enables AI-powered content generation with source citations using [Perplexity](https://www.perplexity.ai/), [Anthropic Claude](https://www.anthropic.com/), [Google Gemini](https://ai.google.dev/) (with Google Search grounding), and [Perplexica / Vane](https://github.com/ItzCrazyKns/Vane) (self-hosted). This plugin brings research-grade AI capabilities directly into your Obsidian workspace, allowing you to generate well-cited content for your notes.
 
+## 💼 For Venture Capital, Private Equity, and Equities-Trading Workflows
+
+Perplexed ships a set of **analyst-grade directory templates** aimed at the research deliverables a VC analyst, PE associate, equity-research analyst, or trading-desk strategist produces daily. Drop an empty file into the matching folder, run *Apply directory template to current file*, and Perplexity Deep Research returns a 6-9K-word cited analyst draft you can curate into a memo for a partner, an IC, or a portfolio review.
+
+| Workflow | Template | What it produces |
+|---|---|---|
+| **Naming the players in a category** (incumbents vs challengers vs innovators by financial stage) | `market-category-profile.md` → `concepts/Market-Categories/` | Three-tier company landscape with explicit definitions: **Incumbents** (public / late-stage private / PE-owned), **Challengers** (Series C+ scale-ups, recently public), **Innovators** (Pre-Seed through Series B). Plus Why Now / What's Happening sections covering CAGR + category-creation momentum, and an Industry Coverage section sub-grouped into Market Reports (Gartner, IDC, Forrester, ABI) / Industry Articles / Financial News (Bloomberg, FT, Pitchbook). |
+| **Authoring a market map** (Known Category or Thesis-Driven) | `market-map-profile.md` → `lost-in-public/market-maps/` | Analyst-grade memo with 4-8 sub-segments, 20-40 named innovator cards (Offering / Funding / Why-they-matter / Coverage), Market Dynamics (Sizing / Adoption / Capital Flow), Frontier and Open Questions. Anti-incumbent editorial stance prevents big-tech over-representation. |
+| **Profiling an open spec or standard** an investment thesis depends on | `standards-and-specs-profile.md` → `Sources/Standards-and-Specs/` | Five-way authority typing (de-jure / consortium / vendor-led-open / community / de-facto), three-tier adoption framing with notable holdouts, named editors, stewardship-transition stories, named public critics with their arguments. |
+| **Catalogue an authoritative source** (book, person, channel, report, conference) | `source-profile.md` → `Sources/` | Type-aware emphasis (author / publisher / cadence / methodology), Google Books URL harvesting for books, signature-work catalog. |
+| **Encyclopedia entry on a concept, pattern, or mental model** the desk repeatedly invokes | `concept-profile.md` → `concepts/` | Definition, usage, history, examples, case studies. Mermaid + LaTeX rendering discipline baked in for diagrams and formulas. |
+
+Every analyst-grade template runs on `sonar-deep-research`, ships with idle-only timeout safety (`request-timeout-ms: 0`, per-chunk idle timer at 270s) and a 24,000-token output budget (`max-tokens: 24000`) — enough for the longest analyst drafts to land without silent mid-document truncation. See [Directory Templates](#directory-templates) below for the full set and the cft-block grammar for tuning your own.
+
 ## 🎯 Key Features
 ![Perplexed UI Modal interface](https://i.imgur.com/jaZ4UfS.png)
 - **Source-Cited AI Responses**: Get AI-generated content with proper citations and references
@@ -50,6 +64,7 @@ plugin directory.
 
 ## 📋 Table of Contents
 
+- [For Venture Capital, Private Equity, and Equities-Trading Workflows](#-for-venture-capital-private-equity-and-equities-trading-workflows)
 - [User Onboarding](#user-onboarding)
   - [Installation](#installation)
   - [Initial Setup](#initial-setup)
@@ -435,9 +450,10 @@ Two peer folders alongside `templates/` keep editorial rules vault-visible and D
 
 ```
 Content-Dev/
-├── templates/         (your four profile templates)
-├── partials/          (reusable snippets: mermaid-discipline, etc.)
-│   └── mermaid-discipline.md
+├── templates/         (your seven profile templates)
+├── partials/          (reusable snippets included via {{include: name}})
+│   ├── mermaid-discipline.md      (paired BAD/GOOD examples + 6-item self-check)
+│   └── latex-discipline.md        (Obsidian MathJax delimiters + $ escaping)
 └── preambles/         (auto-attached to every request as system / user messages)
     ├── inline-citation.md
     ├── image-placement.md
@@ -452,16 +468,19 @@ Fix the mermaid quoting rule once in `partials/mermaid-discipline.md` and every 
 
 ### Shipped templates
 
-Four templates ship inlined into the plugin and seed into your vault on first plugin load:
+Seven templates ship inlined into the plugin and seed into your vault on first plugin load:
 
 | File | Targets | Use for |
 |---|---|---|
-| `concept-profile.md` | `concepts/**` | Encyclopedia-style entries on ideas, patterns, mental models. Anti-incumbent editorial stance baked in (tech giants treated as adopters/popularizers, not innovators, unless documented heyday-era origination supports otherwise). |
+| `concept-profile.md` | `concepts/**` | Encyclopedia-style entries on ideas, patterns, mental models. Anti-incumbent editorial stance baked in (tech giants treated as adopters/popularizers, not innovators, unless documented heyday-era origination supports otherwise). Includes both `mermaid-discipline` and `latex-discipline` partials. |
 | `vocabulary-profile.md` | `Vocabulary/**` | Term definitions with disambiguation through an innovation-consulting lens. |
 | `source-profile.md` | `Sources/**` | Profiles of books, people, channels, publications, journals, reports, events — type-aware, with Google Books URL harvesting for books. |
 | `toolkit-profile.md` | `Tooling/**` | Profiles of tools, products, platforms, frameworks. |
+| `market-map-profile.md` | `lost-in-public/market-maps/**`, `market-maps/**` | Analyst-grade market-map drafts — both Known Category (e.g., Humanoid Robots) and Thesis-Driven (e.g., Neural Network Hardware as Brains for Robotics). Runs on `sonar-deep-research` with idle-only timeout, `max-tokens: 24000`, and a 40-min absolute wall-clock ceiling. |
+| `standards-and-specs-profile.md` | `Sources/Standards-and-Specs/**`, `Standards-and-Specs/**` | Analyst-grade profiles of open specs and standards. Five-way authority typing (de-jure / consortium / vendor-led-open / community / de-facto). Three-tier structural adoption framing (incumbents / challengers / innovators) plus notable holdouts. Named editors, stewardship transitions, named critics. |
+| `market-category-profile.md` | `concepts/Market-Categories/**`, `Market-Categories/**` | Concept-folder reference card for a named market category. Three-tier company landscape with explicit FINANCIAL-STAGE definitions: Incumbents (public / late-stage private / PE-owned) → Challengers (Series C+ scale-ups, recently public) → Innovators (Pre-Seed through Series B). Separate Why Now / What's Happening sections covering CAGR + category-creation momentum. Industry Coverage sub-grouped into Market Reports / Industry Articles / Financial News. |
 
-All four use Perplexity's `sonar-pro` (deep-research is unreliable for image return).
+The first four templates use Perplexity's `sonar-pro`. The three deep-research templates (`market-map-profile`, `standards-and-specs-profile`, `market-category-profile`) use `sonar-deep-research` and declare per-template cft-block overrides for the wall-clock ceiling (`request-timeout-ms`), the per-chunk idle timer (`stream-idle-timeout-ms`), and the Perplexity output-token budget (`max-tokens: 24000`). See [`docs/directory-templates.md`](docs/directory-templates.md) for the full cft-block grammar and the diagnostic table for distinguishing wall-clock-timeout truncation from max_tokens truncation.
 
 ### Auto-seed behavior
 
