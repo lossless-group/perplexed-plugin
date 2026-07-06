@@ -1,3 +1,5 @@
+import * as https from 'node:https';
+import type { IncomingMessage } from 'node:http';
 import type { App } from 'obsidian';
 import { normalizePath, Notice, parseYaml, stringifyYaml, TFile } from 'obsidian';
 
@@ -535,19 +537,49 @@ async function streamPerplexityToFile(
         ? activeWindow.setTimeout(() => controller.abort(), timeouts.ceilingMs)
         : null;
 
+    // Use Node.js https to bypass CORS from the Obsidian renderer origin
+    // (app://obsidian.md). activeWindow.fetch is blocked by Perplexity's
+    // CORS policy; Node.js routes through the OS network stack instead.
     let response: Response;
     try {
-        response = await activeWindow.fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-                'Accept': 'text/event-stream',
-            },
-            body: JSON.stringify(payload),
-            signal: controller.signal,
-            cache: 'no-store',
+        const endpointUrl = new URL(endpoint);
+        const nodeStream = await new Promise<IncomingMessage>((resolve, reject) => {
+            const req = https.request(
+                {
+                    hostname: endpointUrl.hostname,
+                    path: endpointUrl.pathname + endpointUrl.search,
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'text/event-stream',
+                    },
+                    signal: controller.signal,
+                },
+                (res) => {
+                    if (res.statusCode !== undefined && res.statusCode >= 400) {
+                        let body = '';
+                        res.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+                        res.on('end', () => {
+                            reject(new Error(`Perplexity HTTP ${String(res.statusCode)} — ${body}`));
+                        });
+                        return;
+                    }
+                    resolve(res);
+                }
+            );
+            req.on('error', reject);
+            req.write(JSON.stringify(payload));
+            req.end();
         });
+        const webStream = new ReadableStream<Uint8Array>({
+            start(ctrl) {
+                nodeStream.on('data', (chunk: Buffer) => { ctrl.enqueue(chunk); });
+                nodeStream.on('end', () => { ctrl.close(); });
+                nodeStream.on('error', (err: Error) => { ctrl.error(err); });
+            },
+        });
+        response = { ok: true, body: webStream } as unknown as Response;
     } catch (err) {
         if (ceilingTimer !== null) activeWindow.clearTimeout(ceilingTimer);
         throw err;

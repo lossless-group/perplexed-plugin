@@ -1,6 +1,6 @@
 {
 	"name": "perplexed",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"description": "Generate source-cited research content through prompts and templates. From Perplexity, Anthropic Claude, Google Gemini, Perplexica (now Vane), or local LM Studio — directly into your notes.",
 	"main": "main.js",
 	"scripts": {

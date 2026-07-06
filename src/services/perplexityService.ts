@@ -1,3 +1,5 @@
+import * as https from 'node:https';
+import type { IncomingMessage } from 'node:http';
 import type { Editor} from 'obsidian';
 import { Notice, request } from 'obsidian';
 import type { PromptsService } from './promptsService';
@@ -519,30 +521,58 @@ export class PerplexityService {
 
             try {
                 if (useStreaming) {
-                    console.debug('🔄 Making streaming API request...');
-                    // Streaming uses activeWindow.fetch because Obsidian's
-                    // requestUrl does not support reading SSE / chunked
-                    // response bodies — it buffers the whole response.
-                    const response = await activeWindow.fetch(this.settings.perplexityEndpoint, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${this.settings.perplexityApiKey}`,
-                            'Content-Type': 'application/json',
-                            'Accept': 'text/event-stream'
-                        },
-                        body: JSON.stringify(payload),
-                        cache: 'no-store'
+                    console.debug('🔄 Making streaming API request via Node.js https (CORS bypass)...');
+                    // activeWindow.fetch is blocked by CORS from the Obsidian renderer
+                    // origin (app://obsidian.md). Node.js https routes through the OS
+                    // network stack and is never subject to Chromium CORS enforcement.
+                    const endpointUrl = new URL(this.settings.perplexityEndpoint);
+                    const nodeStream = await new Promise<IncomingMessage>((resolve, reject) => {
+                        const req = https.request(
+                            {
+                                hostname: endpointUrl.hostname,
+                                path: endpointUrl.pathname + endpointUrl.search,
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${this.settings.perplexityApiKey}`,
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'text/event-stream',
+                                },
+                            },
+                            (res) => {
+                                if (res.statusCode !== undefined && res.statusCode >= 400) {
+                                    let body = '';
+                                    res.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+                                    res.on('end', () => {
+                                        reject(new Error(`HTTP error! status: ${res.statusCode} — ${body}`));
+                                    });
+                                    return;
+                                }
+                                resolve(res);
+                            }
+                        );
+                        req.on('error', reject);
+                        req.write(JSON.stringify(payload));
+                        req.end();
                     });
 
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
+                    // Wrap Node.js IncomingMessage in a Web ReadableStream so the
+                    // existing handleStreamingResponse method consumes it unchanged.
+                    const webStream = new ReadableStream<Uint8Array>({
+                        start(controller) {
+                            nodeStream.on('data', (chunk: Buffer) => {
+                                controller.enqueue(chunk);
+                            });
+                            nodeStream.on('end', () => {
+                                controller.close();
+                            });
+                            nodeStream.on('error', (err: Error) => {
+                                controller.error(err);
+                            });
+                        },
+                    });
 
-                    if (!response.body) {
-                        throw new Error('No response body');
-                    }
-
-                    console.debug('✅ Streaming response received, starting to handle...');
+                    const response = { ok: true, body: webStream } as unknown as Response;
+                    console.debug('✅ Streaming response via Node.js ready, handling SSE...');
                     await this.handleStreamingResponse(response, editor, responseCursor, requestId, headerText, isDeepResearch);
                 } else {
                     console.debug('🔄 Making non-streaming API request...');
