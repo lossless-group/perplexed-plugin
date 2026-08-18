@@ -1,3 +1,16 @@
+---
+site_uuid: dda3ed2d-93dd-42a9-9556-6d649611c6bb
+hex_code: s4w7op
+title: Updating Naming to Reflect Provider Rebrand
+date_created: 2026-05-04
+date_authored_initial_draft: 2026-05-04
+date_authored_current_draft: 2026-05-04
+authors:
+  - Michael Staton
+at_semantic_version: 0.0.1.0
+tags:
+  - Issue
+---
 
 
 - main.ts:95, 99 — example query content in the default JSON template ("What is Perplexica's

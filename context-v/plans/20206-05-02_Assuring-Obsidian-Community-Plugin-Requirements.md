@@ -7,6 +7,9 @@ authors:
   - Michael Staton
 augmented_with: Claude Code (Opus 4.7, 1M context)
 related_reference: ../../cite-wide/context-v/reminders/Obsidian-Type-Safety.md
+site_uuid: 481353f2-347c-4120-b257-0f4604785621
+hex_code: b9tfss
+date_created: 2026-05-02
 ---
 
 # Plan — Bring Perplexed up to Obsidian Community-Plugin Publishing Standards

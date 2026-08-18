@@ -1,3 +1,16 @@
+---
+site_uuid: f33b9e0c-1ba5-4709-8c64-470981a84851
+hex_code: lr8oid
+title: Using Files as Prompt Outlines
+date_created: 2026-05-02
+date_authored_initial_draft: 2026-05-02
+date_authored_current_draft: 2026-05-02
+authors:
+  - Michael Staton
+at_semantic_version: 0.0.1.0
+tags:
+  - Spec
+---
 
 
 # Using Files as Prompt Outlines

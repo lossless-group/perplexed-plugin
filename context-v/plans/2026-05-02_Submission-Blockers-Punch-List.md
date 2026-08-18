@@ -14,6 +14,9 @@ source_audit: |
   - https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines
   - https://docs.obsidian.md/Reference/Manifest
   Raw markdown sourced from `obsidianmd/obsidian-developer-docs` via `gh api`.
+site_uuid: 447588fe-2768-4dd9-9636-275707fe1864
+hex_code: 3ea88r
+date_created: 2026-05-02
 ---
 
 # Plan — Submission Blockers Punch List

@@ -1,3 +1,16 @@
+---
+site_uuid: ffdba051-707b-46e2-92eb-906bacfbe878
+hex_code: qji48z
+title: Getting Claude to Respond with Research
+date_created: 2026-05-02
+date_authored_initial_draft: 2026-05-02
+date_authored_current_draft: 2026-05-02
+authors:
+  - Michael Staton
+at_semantic_version: 0.0.1.0
+tags:
+  - Issue
+---
 
 
 

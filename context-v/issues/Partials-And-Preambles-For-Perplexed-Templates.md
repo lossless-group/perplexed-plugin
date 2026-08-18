@@ -7,6 +7,10 @@ target_repo: perplexed
 related:
   - "[[Nudgeing-AI-Search-to-Return-Contextually-Appriate-Images]]"
   - "[[Obsidian-Review-Bot-Feedback-on-Perplexed-Submission]]"
+site_uuid: 06b625a0-c4b9-4c01-825e-c7add2a052b0
+hex_code: 4jxhw1
+date_authored_initial_draft: 2026-05-19
+date_authored_current_draft: 2026-05-19
 ---
 
 # Partials and preambles for perplexed templates

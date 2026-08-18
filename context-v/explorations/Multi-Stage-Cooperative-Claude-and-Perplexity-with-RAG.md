@@ -25,6 +25,10 @@ related:
   - "[[Partials-And-Preambles-For-Perplexed-Templates]]"
   - "[[Getting-Claude-to-Respond-With-Research]]"
   - "[[Wall-Clock-Timeout-Cuts-Off-Long-Deep-Research-Streams]]"
+site_uuid: ed0f1378-edb9-4d7b-be3f-2827b9176332
+hex_code: bj863v
+date_authored_initial_draft: 2026-05-26
+date_authored_current_draft: 2026-05-26
 ---
 
 # Multi-Stage Cooperative Claude + Perplexity with RAG
