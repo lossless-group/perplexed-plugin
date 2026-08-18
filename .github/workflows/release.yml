@@ -7,10 +7,10 @@ name: Release plugin
 # installing can verify provenance with `gh attestation verify <file>
 # --repo lossless-group/metafetch`.
 #
-# Release notes: if release-notes/<tag>.md exists in the repo at the tagged
+# Release notes: if changelog/releases/<tag>.md exists in the repo at the tagged
 # commit, it's used verbatim as the release body. Otherwise the workflow
 # falls back to GitHub's --generate-notes. The convention going forward is
-# to author the marketing-shape notes in release-notes/<version>.md before
+# to author the marketing-shape notes in changelog/releases/<version>.md before
 # tagging (per content-farm/context-v/skills/changelog-conventions/SKILL.md
 # "These are marketing artifacts" section — every release page is a
 # four-audience marketing surface, not a commit-message recap).
@@ -61,15 +61,51 @@ jobs:
       - name: Pick release-notes source
         id: notes
         run: |
-          NOTES_FILE="release-notes/${GITHUB_REF_NAME}.md"
-          if [ -f "$NOTES_FILE" ]; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-            echo "path=$NOTES_FILE" >> "$GITHUB_OUTPUT"
-            echo "Using release-notes/${GITHUB_REF_NAME}.md as release body"
+          # changelog/releases/<tag>.md is a Lossless changelog document:
+          # YAML frontmatter + body. The frontmatter exists because the parent
+          # splash rolls this folder up and renders it. GitHub wants only the
+          # body, so we strip the frontmatter here rather than maintaining a
+          # second frontmatter-free copy of the same release narrative.
+          #
+          # Note for authors: everything after the frontmatter becomes the
+          # release page verbatim. Open the body with a bold one-liner if you
+          # want a hook — the frontmatter `lede` is NOT prepended, because
+          # parsing YAML in bash is a bug farm we don't need.
+          CANONICAL="changelog/releases/${GITHUB_REF_NAME}.md"
+          LEGACY="release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "$CANONICAL" ]; then
+            SRC="$CANONICAL"
+          elif [ -f "$LEGACY" ]; then
+            SRC="$LEGACY"
           else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "No release-notes/${GITHUB_REF_NAME}.md found — falling back to --generate-notes"
+            SRC=""
           fi
+
+          if [ -z "$SRC" ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No notes at $CANONICAL or $LEGACY — falling back to --generate-notes"
+            exit 0
+          fi
+
+          mkdir -p /tmp/relnotes
+          BODY="/tmp/relnotes/${GITHUB_REF_NAME}.md"
+          awk '
+            BEGIN { infm = 0; started = 0 }
+            NR == 1 && $0 == "---" { infm = 1; next }
+            infm && $0 == "---" { infm = 0; next }
+            infm { next }
+            { if (!started && $0 == "") next; started = 1; print }
+          ' "$SRC" > "$BODY"
+
+          if [ ! -s "$BODY" ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "$SRC had no body after frontmatter — falling back to --generate-notes"
+            exit 0
+          fi
+
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "path=$BODY" >> "$GITHUB_OUTPUT"
+          echo "Using $SRC (frontmatter stripped) as release body"
 
       - name: Create release
         env:
