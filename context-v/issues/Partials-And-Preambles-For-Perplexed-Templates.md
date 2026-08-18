@@ -11,6 +11,8 @@ site_uuid: 06b625a0-c4b9-4c01-825e-c7add2a052b0
 hex_code: 4jxhw1
 date_authored_initial_draft: 2026-05-19
 date_authored_current_draft: 2026-05-19
+lede: "Mermaid rules sit in all four templates and three directives are hardcoded in TS — pull both into vault-visible partials and preambles."
+summary: "Open design issue proposing two primitives for perplexed's template system: {{include: name}} partials and settings-wired preambles, both as vault-visible markdown under zz-cf-lib/. Includes an architecture review of the current seed/load/apply path, a seven-step incremental implementation plan starting with moving the three hardcoded directives out of directoryTemplateService.ts, the deliberate asymmetry in missing-file behavior between partials and preambles, and the seeder caveat that stops template updates from reaching an already-seeded vault."
 ---
 
 # Partials and preambles for perplexed templates

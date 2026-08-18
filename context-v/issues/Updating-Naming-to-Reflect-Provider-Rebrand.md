@@ -10,6 +10,8 @@ authors:
 at_semantic_version: 0.0.1.0
 tags:
   - Issue
+lede: "Inventory of the Perplexica mentions that deliberately stay — class names, command IDs, settings fields, where renaming would break things."
+summary: "Fragmentary issue note listing the Perplexica references in perplexed that survive the rebrand on purpose: example prompt text, an internal error string, code comments, a README callout that distinguishes the two names by design, and all class, method, CSS, command-ID, and settings-field identifiers. Treat it as the do-not-rename list before any find-and-replace across perplexed; renaming the identifiers would break compatibility or require a settings migration."
 ---
 
 
