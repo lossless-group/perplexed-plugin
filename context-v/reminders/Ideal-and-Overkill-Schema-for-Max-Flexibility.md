@@ -12,6 +12,7 @@ tags:
   - Reminder
 lede: "The citation schema this plugin depends on is documented in cite-wide's context-v, not here — three files, listed with paths."
 summary: "Pointer reminder, not a spec. It exists because perplexed must emit citations conforming to a schema whose explanatory documents live in a sibling plugin. Follow the three links into cite-wide (the canonical-sources blueprint, the citation spec, the citation standards) before changing anything in perplexed that writes references. The links are absolute file:// URLs written before the repo moved under content-farm/plugin-modules and will need re-resolution."
+publish: false
 ---
 
 

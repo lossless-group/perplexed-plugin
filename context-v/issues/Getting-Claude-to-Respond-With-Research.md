@@ -12,6 +12,7 @@ tags:
   - Issue
 lede: "Claude returns 60 URLs but zero per-claim citations — web_search_20260209's dynamic filter loses the attachment, so no inline markers."
 summary: "Diagnostic issue tracing why perplexed's Ask Claude command produced no citations. Distinguishes the two failure modes (Claude never called the search tool, versus it called it but attached nothing per claim), maps the four response block types and what each could yield if parsed, and proposes instrumenting addCitations before expanding the extractor. Unresolved; the suggested fix for inline markers is switching to the older web_search_20250305 tool version, which reliably attaches per-claim citations."
+publish: true
 ---
 
 

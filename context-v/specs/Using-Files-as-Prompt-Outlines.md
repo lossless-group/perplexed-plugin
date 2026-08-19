@@ -12,6 +12,7 @@ tags:
   - Spec
 lede: "Prompt outlines become ordinary vault markdown, so adding one is dropping a file — and ArticleGeneratorModal stops being special-cased."
 summary: "Early spec sketching outline-as-file for perplexed: two new commands, three new settings paths under a Content-Dev folder, an outline frontmatter shape declaring provider/model pairs, and a suggested body structure. Level-1 headings are prohibited in outline bodies because they break the model's nesting of the response. Read it against the later and more developed template system in content-farm's Per-Directory-Profile-Templates spec and perplexed's partials-and-preambles issue, which cover much of the same ground."
+publish: true
 ---
 
 

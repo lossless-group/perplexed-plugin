@@ -27,6 +27,7 @@ site_uuid: 63d2b036-8262-469c-a52a-be7f466d049f
 hex_code: 9cm09u
 date_authored_initial_draft: 2026-05-26
 date_authored_current_draft: 2026-05-26
+publish: true
 ---
 
 # Wall-clock timeout cuts off long deep-research streams
