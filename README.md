@@ -1,7 +1,7 @@
 ![Perplexed: An Obsidian Plugin for Perplexity and Perplexica / Vane](https://i.imgur.com/MVOK3rk.png)
 # Perplexed: AI Content Generation for Obsidian
 
-**Perplexed** is an Obsidian plugin that enables AI-powered content generation with source citations using [Perplexity](https://www.perplexity.ai/), [Anthropic Claude](https://www.anthropic.com/), [Google Gemini](https://ai.google.dev/) (with Google Search grounding), and [Perplexica / Vane](https://github.com/ItzCrazyKns/Vane) (self-hosted). This plugin brings research-grade AI capabilities directly into your Obsidian workspace, allowing you to generate well-cited content for your notes.
+**Perplexed** is an Obsidian plugin that enables AI-powered content generation with source citations using [Perplexity](https://www.perplexity.ai/), [Anthropic Claude](https://www.anthropic.com/), [Google Gemini](https://ai.google.dev/) (with Google Search grounding), and [Perplexica / Vane](https://github.com/ItzCrazyKns/Vane) (self-hosted). It also integrates [Exa](https://exa.ai/) as a **retrieval** layer — Exa finds and verifies the source material, and the writing model writes from it. This plugin brings research-grade AI capabilities directly into your Obsidian workspace, allowing you to generate well-cited content for your notes.
 
 ## 💼 For Venture Capital, Private Equity, and Equities-Trading Workflows
 
@@ -30,6 +30,7 @@ Every analyst-grade template runs on `sonar-deep-research`, ships with idle-only
    > ```
 
 - **Multiple AI Providers**: Support for Perplexity, Anthropic Claude, Google Gemini (with Google Search grounding), Perplexica / Vane (self-hosted), and LM Studio (local)
+- **Retrieval Before Generation**: Exa finds the right company and returns structured facts — founding year, funding with round detail, headcount, named customers — which get spliced into the prompt as separately-numbered `[^E1]` sources before the writing model starts
 - **Streaming Responses**: Real-time streaming of AI responses for better UX
 - **Flexible Configuration**: Customizable endpoints, models, and parameters
 - **Deep Research Mode**: Comprehensive research across hundreds of sources
@@ -45,6 +46,7 @@ explicitly selected when invoking selection-based commands.
 | Provider | Endpoint | Account | API key |
 |---|---|---|---|
 | Perplexity | `https://api.perplexity.ai/chat/completions` | Required | Required (paid) |
+| Exa (retrieval only) | `https://api.exa.ai/search` | Required ([dashboard](https://dashboard.exa.ai/)) | Required (free tier: $20 signup credit + $10/month, no credit card) |
 | Anthropic Claude | `https://api.anthropic.com/v1/messages` | Required | Required (paid) |
 | Google Gemini | `https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent` | Required ([AI Studio](https://aistudio.google.com/)) | Required (free tier available, no credit card) |
 | Perplexica / Vane ([install required](https://github.com/ItzCrazyKns/Vane)) | `http://localhost:3030/api/search` (default; user-configurable) | Not required | Not required (self-hosted, runs locally) |
@@ -74,6 +76,7 @@ plugin directory.
   - [Using LM Studio](#using-lm-studio)
   - [Command Reference](#command-reference)
   - [Directory Templates](#directory-templates)
+    - [Retrieval before generation — Exa](#retrieval-before-generation--exa)
 - [Developer Onboarding](#developer-onboarding)
   - [Project Structure](#project-structure)
   - [Development Setup](#development-setup)
@@ -396,6 +399,18 @@ System Prompt: "You are a technical expert who explains complex concepts clearly
 | `Update Perplexity URL` | Change Perplexity API endpoint | Settings command |
 | `Show Perplexity Settings` | Display current Perplexity configuration | Debug command |
 
+### Directory Template & Vault Commands
+
+| Command | Description | Usage |
+|---------|-------------|-------|
+| `Apply directory template to current file` | Fill, append to, or **remake** the active note. Offers model, retrieval, and output-mode choices | Palette command with run dialog |
+| `Apply directory template to all files in folder` | Batch-run a template across a folder | Palette command with folder picker |
+| `Stop directory template batch` | Halt a running batch after the current file | Palette command |
+| `Check Exa service status` | Probe the Exa API with a real one-result query | Palette command |
+| `Link back to vault notes` | Find unlinked mentions of other vault notes in the active file and convert them, behind a review table | Palette command with review modal |
+
+**Output modes.** When the active note already has content, the run dialog offers three choices: *Append* below it (the default), *Remake* — rewrite it, passing the old draft to the model as explicitly-stale background after snapshotting to `Content-Dev/history/` — or *Replace*, discarding the old draft outright. Remake exists because a research note written in May is wrong by September; it instructs the model that current sources win on conflict and asks it to name the pivot explicitly.
+
 ### Google Gemini Commands
 
 | Command | Description | Usage |
@@ -442,7 +457,7 @@ A working Obsidian vault collects categories of files that share a shape — con
 
 1. **Template** — a markdown file in `Content-Dev/Templates/` with frontmatter (`applies-to-paths` glob), a fenced `cft` config block (provider, model, return flags, system prompt with interpolation tokens like `{{basename}}` and `{{frontmatter.tags}}`), and a heading skeleton that becomes the user prompt. Everything below the first `***` divider is excluded from the request — it's your scratch space.
 2. **Commands** — `Apply directory template to current file` auto-matches via the glob; `Apply directory template to folder` runs a batch with a confirmation modal; `Stop directory template batch` halts a running batch.
-3. **Cleanup pipeline** — after the SSE stream completes, the runtime wraps `<think>` blocks, swaps `[IMAGE N: <description>]` markers for real embeds (with a fallback `# Images` section when the model didn't emit markers but Perplexity returned images), strips unreplaced placeholders, appends a `# Sources` footer in the format [cite-wide](https://github.com/lossless-group/cite-wide) can convert to hex citations, and stamps `cf_last_run` + `cf_last_run_model` into the target's frontmatter.
+3. **Cleanup pipeline** — after the SSE stream completes, the runtime wraps `<think>` blocks, swaps `[IMAGE N: <description>]` markers for real embeds (with a fallback `# Images` section when the model didn't emit markers but Perplexity returned images), strips unreplaced placeholders, appends a `# Sources` footer in the format [cite-wide](https://github.com/lossless-group/cite-wide) can convert to hex citations, appends a separate `## Sources (retrieved)` footer when a retrieval stage ran, and stamps `cf_last_run` + `cf_last_run_model` into the target's frontmatter.
 
 ### Partials and preambles — shared guidance across templates
 
@@ -457,7 +472,9 @@ Content-Dev/
 └── preambles/         (auto-attached to every request as system / user messages)
     ├── inline-citation.md
     ├── image-placement.md
-    └── research-framing.md
+    ├── research-framing.md
+    ├── spliced-source-citation.md  (attached only when retrieval returned sources)
+    └── remake-framing.md           (attached only on a Remake run)
 ```
 
 - **`{{include: name}}`** in a template body splices in `partials/name.md` recursively (depth-limited, cycle-detected). Missing files show as inline `[[include: name — file not found]]` markers so typos stay visible.
@@ -481,6 +498,80 @@ Seven templates ship inlined into the plugin and seed into your vault on first p
 | `market-category-profile.md` | `concepts/Market-Categories/**`, `Market-Categories/**` | Concept-folder reference card for a named market category. Three-tier company landscape with explicit FINANCIAL-STAGE definitions: Incumbents (public / late-stage private / PE-owned) → Challengers (Series C+ scale-ups, recently public) → Innovators (Pre-Seed through Series B). Separate Why Now / What's Happening sections covering CAGR + category-creation momentum. Industry Coverage sub-grouped into Market Reports / Industry Articles / Financial News. |
 
 The first four templates use Perplexity's `sonar-pro`. The three deep-research templates (`market-map-profile`, `standards-and-specs-profile`, `market-category-profile`) use `sonar-deep-research` and declare per-template cft-block overrides for the wall-clock ceiling (`request-timeout-ms`), the per-chunk idle timer (`stream-idle-timeout-ms`), and the Perplexity output-token budget (`max-tokens: 24000`). See [`docs/directory-templates.md`](docs/directory-templates.md) for the full cft-block grammar and the diagnostic table for distinguishing wall-clock-timeout truncation from max_tokens truncation.
+
+### Retrieval before generation — Exa
+
+**Perplexity writes well and retrieves badly on companies. So it no longer does both jobs.**
+
+Ask a grounded search model about NATS — the messaging system — and it will cite the UK's National Air Traffic Services. Ask about Kestra and you get a medical device maker and a financial advisory firm. The prose is excellent; the company is wrong.
+
+[Exa](https://exa.ai/) is built for the other half of the job. Declare an `include-sources:` block in a template's `cft` fence and Exa runs **before** the writing model, finds the actual entity, and hands over structured facts it can trust.
+
+```yaml
+include-sources:
+  - provider: exa
+    query: "{{basename}} {{url}} overview product funding customers"
+    category: company
+    num-results: 6
+    pin: entity
+    contents:
+      summary:
+        query: "What does this do, founded when, funding raised, notable customers?"
+        schema:
+          type: object
+          properties:
+            founded_year: { type: string }
+            funding: { type: string }
+            notable_customers: { type: array, items: { type: string } }
+```
+
+What reaches the prompt:
+
+```markdown
+### [^E1] Synadia — https://nats.io/
+
+founded_year: 2017
+funding: USD 41,200,000 total funding across multiple rounds (Seed, Venture, Series B)
+notable_customers: [NVIDIA, Mastercard, Rivian, Replit]
+workforce: { total: 44 }
+```
+
+#### `pin:` is the precision knob
+
+| Mode | Behaviour | Use for |
+|---|---|---|
+| `pin: entity` | Restricts the search to the target file's own `url:` domain | Profiling **one** company — `Tooling/**` |
+| `pin: none` | Unpinned similarity search across the category | Enumerating **competitors** — market maps |
+
+Unpinned, a NATS query returns Nstream, Element and Mio. That is wrong for a product profile and exactly right for a market map — the same knob, turned opposite ways.
+
+> **Pin narrowly or not at all.** Exa matches `includeDomains` by *substring*, so pinning `cresta.com` also matches `alcresta.com` (a pharma company), `codecresta.com`, and `ridgecresta.com`. Perplexed re-checks every result against the real hostname, so impostors are dropped before they reach the prompt — but do not hand it broad domains like `github.com`, which will always surface something.
+
+#### Retrieved sources get their own citation namespace
+
+The writing model numbers its own web-search citations `[1]`, `[2]`. Retrieved sources are **not** in that array, so they are cited `[^E1]`, `[^E2]` and listed in a separate footer:
+
+```markdown
+## Sources (retrieved)
+
+[^E1]: [Exa.ai](https://exa.ai) API response for data on [Datagrid AI](https://datagrid.com/)
+```
+
+If the two namespaces were merged, a fact retrieved from Exa would be footnoted to whatever the search model's third result happened to be — a note that looks perfectly well-cited and attributes claims to the wrong documents. The `[^E…]` form is a real Obsidian footnote, so hover-preview and click-to-jump work, and [cite-wide](https://github.com/lossless-group/cite-wide)'s spacing pass handles it unchanged.
+
+#### Turning it on and off
+
+- **Settings → Exa retrieval** — API key, endpoint, and a master switch. With it off, templates that declare `include-sources:` run as if Exa did not exist.
+- **The run dialog** — a *Retrieve sources first (Exa)* toggle appears when the active template declares the key, so you can skip retrieval for a single run.
+- **Failure is never fatal.** No key, rate limited, Exa unreachable — the run proceeds without the extra sources and posts a notice. A forty-minute deep-research run is never aborted because a retrieval provider had a bad minute.
+
+#### What it costs
+
+$7 per 1,000 searches and $1 per 1,000 pages per content type, so a typical profile is about **$0.023**. The free tier is $20 in signup credits plus $10 monthly, no credit card.
+
+The real ceiling is **context**, not money: past roughly 12,000 characters of pasted source text the writing model's attention drifts off your section outline and onto the sources. Perplexed enforces a character budget (*Settings → Spliced context budget*), drops the lowest-ranked sources when it is exceeded, and leaves a visible marker saying how many — never a silent truncation.
+
+`toolkit-profile.md` ships with retrieval enabled as the reference implementation.
 
 ### Auto-seed behavior
 
