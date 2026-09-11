@@ -250,7 +250,7 @@ export class PerplexicaService {
                             };
                         }
                         editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
-                        await new Promise(resolve => activeWindow.setTimeout(resolve, 10));
+                        await new Promise(resolve => window.setTimeout(resolve, 10));
                     }
                 } catch {
                     // Ignore JSON parse errors

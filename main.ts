@@ -23,6 +23,7 @@ import { DirectoryTemplatePickerModal } from './src/modals/DirectoryTemplatePick
 import { DirectoryTemplateRunModal } from './src/modals/DirectoryTemplateRunModal';
 import type { TemplateRunChoice } from './src/modals/DirectoryTemplateRunModal';
 import { FolderPickerModal } from './src/modals/FolderPickerModal';
+import { LinkBackModal } from './src/modals/LinkBackModal';
 import { BatchConfirmModal } from './src/modals/BatchConfirmModal';
 
 import {
@@ -35,9 +36,11 @@ import {
 } from './src/services/directoryTemplateService';
 import type { DirectoryTemplateSettings, ParsedTemplate } from './src/services/directoryTemplateService';
 import type { TFile } from 'obsidian';
+import { applyLinkCandidates, findLinkCandidates } from './src/services/linkBackService';
 import { findImagesForSelection } from './src/services/findImagesService';
 import type { FindImagesSettings } from './src/services/findImagesService';
 import { reSeedMissingFiles, seedTemplatesIfMissing } from './src/services/templateSeederService';
+import { EXA_SEARCH_ENDPOINT, ExaError, probeExa } from './src/services/exaService';
 
 
 interface PerplexedPluginSettings {
@@ -103,6 +106,13 @@ interface PerplexedPluginSettings {
     directoryTemplatesUserPreambles: { name: string; when: 'always' | 'return-images' }[];
     directoryTemplatesFrontmatterWhitelist: string[];
     directoryTemplatesRequestTimeoutMs: number;
+
+    // Exa retrieval stage — see context-v/plans/2026-09-10_Exa-Retrieval-Stage-and-Include-Sources.md
+    directoryTemplatesHistoryRoot: string;
+    exaEnabled: boolean;
+    exaApiKey: string;
+    exaEndpoint: string;
+    exaSplicedContextMaxChars: number;
 
     // Find images for selection
     findImagesMaxImages: number;
@@ -331,6 +341,13 @@ Structure the article as follows:
     ],
     directoryTemplatesFrontmatterWhitelist: ['title', 'og_description', 'tags', 'og_image'],
     directoryTemplatesRequestTimeoutMs: 1800000,
+
+    // Exa retrieval stage defaults
+    directoryTemplatesHistoryRoot: 'zz-cf-lib/history',
+    exaEnabled: true,
+    exaApiKey: '',
+    exaEndpoint: EXA_SEARCH_ENDPOINT,
+    exaSplicedContextMaxChars: 12000,
 
     // Find images for selection
     findImagesMaxImages: 3
@@ -576,6 +593,71 @@ export default class PerplexedPlugin extends Plugin {
                 }
             });
 
+            // Exa retrieval connectivity probe. Cheapest possible real call
+            // (one result, no content extraction) so checking status costs
+            // a fraction of a cent rather than nothing-but-a-guess.
+            this.addCommand({
+                id: 'exa-service-status',
+                name: 'Check Exa service status',
+                callback: () => {
+                    void (async () => {
+                        if (!this.settings.exaApiKey) {
+                            new Notice('Exa API key is not set. Add it in perplexed settings.');
+                            return;
+                        }
+                        const probing = new Notice('Probing Exa…', 0);
+                        try {
+                            const n = await probeExa({
+                                exaApiKey: this.settings.exaApiKey,
+                                exaEndpoint: this.settings.exaEndpoint,
+                            });
+                            new Notice(`Exa reachable — probe returned ${n.toString()} result(s).`);
+                        } catch (error) {
+                            if (error instanceof ExaError && error.isAuthFailure) {
+                                new Notice('Exa rejected the API key (HTTP 401/403). Check the key in settings.');
+                            } else {
+                                const msg = error instanceof Error ? error.message : String(error);
+                                new Notice(`Exa unreachable: ${msg}`);
+                            }
+                        } finally {
+                            probing.hide();
+                        }
+                    })();
+                }
+            });
+
+            // Bulk-convert unlinked mentions of other vault notes into
+            // absolute-path wikilinks. Obsidian surfaces these in its
+            // "Unlinked mentions" pane but never offers to apply them.
+            this.addCommand({
+                id: 'link-back-to-vault-notes',
+                name: 'Link back to vault notes',
+                callback: () => {
+                    void (async () => {
+                        const file = this.app.workspace.getActiveFile();
+                        if (!file) { new Notice('No active file.'); return; }
+                        const raw = await this.app.vault.read(file);
+                        const fmMatch = /^---\n[\s\S]*?\n---\n/.exec(raw);
+                        const offset = fmMatch ? fmMatch[0].length : 0;
+                        const body = raw.slice(offset);
+
+                        const candidates = findLinkCandidates(this.app, file, body);
+                        if (candidates.length === 0) {
+                            new Notice('No unlinked mentions of other vault notes found.');
+                            return;
+                        }
+                        new LinkBackModal(this.app, candidates, (accepted) => {
+                            void (async () => {
+                                if (accepted.length === 0) { new Notice('No links applied.'); return; }
+                                const updated = applyLinkCandidates(body, accepted);
+                                await this.app.vault.modify(file, raw.slice(0, offset) + updated);
+                                new Notice(`Applied ${accepted.length.toString()} wikilink(s).`);
+                            })();
+                        }).open();
+                    })();
+                }
+            });
+
             // Cancel an in-flight batch run.
             this.addCommand({
                 id: 'stop-directory-template-batch',
@@ -695,7 +777,7 @@ export default class PerplexedPlugin extends Plugin {
         // Command to update Perplexica URL
         this.addCommand({
             id: 'update-perplexica-url',
-            name: 'Update perplexica / vane URL',
+            name: 'Update Perplexica / Vane URL',
             callback: () => {
                 const modal = new URLUpdateModal(this.app, {
                     title: 'Update Perplexica / Vane API URL',
@@ -714,7 +796,7 @@ export default class PerplexedPlugin extends Plugin {
         // Command to show current settings
         this.addCommand({
             id: 'show-perplexica-settings',
-            name: 'Show perplexica / vane settings',
+            name: 'Show Perplexica / Vane settings',
             callback: () => {
                 new Notice(`Current Perplexica / Vane URL: ${this.settings.perplexicaEndpoint}`);
                 console.debug('Perplexica Settings:', this.settings);
@@ -724,11 +806,11 @@ export default class PerplexedPlugin extends Plugin {
         // Command to ask Perplexica
         this.addCommand({
             id: 'ask-perplexica',
-            name: 'Ask perplexica / vane',
+            name: 'Ask Perplexica / Vane',
             editorCallback: (editor: Editor) => {
                 try {
                     if (!this.perplexicaService) {
-                        new Notice('Perplexica / vane service not initialized. Please check console for errors and try the debug command.');
+                        new Notice('Perplexica / Vane service not initialized. Please check console for errors and try the debug command.');
                         console.error('Perplexica service is not initialized');
                         return;
                     }
@@ -741,7 +823,7 @@ export default class PerplexedPlugin extends Plugin {
                     modal.open();
                 } catch (error) {
                     console.error('Error opening Perplexica modal:', error);
-                    new Notice('Failed to open perplexica / vane modal. Check console for details.');
+                    new Notice('Failed to open Perplexica / Vane modal. Check console for details.');
                 }
             }
         });
@@ -752,7 +834,7 @@ export default class PerplexedPlugin extends Plugin {
             // Command to update Perplexity URL
             this.addCommand({
                 id: 'update-perplexity-url',
-                name: 'Update perplexity URL',
+                name: 'Update Perplexity URL',
                 callback: () => {
                     const modal = new URLUpdateModal(this.app, {
                         title: 'Update Perplexity API URL',
@@ -771,7 +853,7 @@ export default class PerplexedPlugin extends Plugin {
             // Command to show current Perplexity settings
             this.addCommand({
                 id: 'show-perplexity-settings',
-                name: 'Show perplexity settings',
+                name: 'Show Perplexity settings',
                 callback: () => {
                     new Notice(`Current Perplexity URL: ${this.settings.perplexityEndpoint}`);
                     console.debug('Perplexity Settings:', this.settings);
@@ -781,7 +863,7 @@ export default class PerplexedPlugin extends Plugin {
             // Command to ask Perplexity
             this.addCommand({
                 id: 'ask-perplexity',
-                name: 'Ask perplexity',
+                name: 'Ask Perplexity',
                 editorCallback: (editor: Editor) => {
                     try {
                         if (!this.perplexityService) {
@@ -798,7 +880,7 @@ export default class PerplexedPlugin extends Plugin {
                         modal.open();
                     } catch (error) {
                         console.error('Error opening Perplexity modal:', error);
-                        new Notice('Failed to open perplexity modal. Check console for details.');
+                        new Notice('Failed to open Perplexity modal. Check console for details.');
                     }
                 }
             });
@@ -806,7 +888,7 @@ export default class PerplexedPlugin extends Plugin {
             // Add a fallback command that shows service status
             this.addCommand({
                 id: 'perplexity-service-status',
-                name: 'Check perplexity service status',
+                name: 'Check Perplexity service status',
                 callback: () => {
                     if (this.perplexityService) {
                         new Notice('Perplexity service is initialized and ready');
@@ -904,7 +986,7 @@ export default class PerplexedPlugin extends Plugin {
         // Command to update LM Studio URL
         this.addCommand({
             id: 'update-lmstudio-url',
-            name: 'Update lm studio URL',
+            name: 'Update LM Studio URL',
             callback: () => {
                 const modal = new URLUpdateModal(this.app, {
                     title: 'Update LM Studio API URL',
@@ -923,7 +1005,7 @@ export default class PerplexedPlugin extends Plugin {
         // Command to show current LM Studio settings
         this.addCommand({
             id: 'show-lmstudio-settings',
-            name: 'Show lm studio settings',
+            name: 'Show LM Studio settings',
             callback: () => {
                 new Notice(`Current LM Studio URL: ${this.settings.lmStudioEndpoint}`);
                 console.debug('LM Studio Settings:', this.settings);
@@ -933,11 +1015,11 @@ export default class PerplexedPlugin extends Plugin {
         // Command to ask LM Studio
         this.addCommand({
             id: 'ask-lmstudio',
-            name: 'Ask lm studio',
+            name: 'Ask LM Studio',
             editorCallback: (editor: Editor) => {
                 try {
                     if (!this.lmStudioService) {
-                        new Notice('Lm studio service not initialized. Please check console for errors and try the debug command.');
+                        new Notice('LM Studio service not initialized. Please check console for errors and try the debug command.');
                         console.error('LM Studio service is not initialized');
                         return;
                     }
@@ -950,7 +1032,7 @@ export default class PerplexedPlugin extends Plugin {
                     modal.open();
                 } catch (error) {
                     console.error('Error opening LM Studio modal:', error);
-                    new Notice('Failed to open lm studio modal. Check console for details.');
+                    new Notice('Failed to open LM Studio modal. Check console for details.');
                 }
             }
         });
@@ -986,7 +1068,7 @@ export default class PerplexedPlugin extends Plugin {
         // Register Text Enhancement command
         this.addCommand({
             id: 'enhance-text',
-            name: 'Enhance selected text with perplexity',
+            name: 'Enhance selected text with Perplexity',
             editorCallback: (editor: Editor) => {
                 try {
                     const selectedText = editor.getSelection();
@@ -1215,6 +1297,11 @@ export default class PerplexedPlugin extends Plugin {
             userPreambles: this.settings.directoryTemplatesUserPreambles,
             frontmatterWhitelist: this.settings.directoryTemplatesFrontmatterWhitelist,
             requestTimeoutMs: this.settings.directoryTemplatesRequestTimeoutMs,
+            historyRoot: this.settings.directoryTemplatesHistoryRoot,
+            exaEnabled: this.settings.exaEnabled,
+            exaApiKey: this.settings.exaApiKey,
+            exaEndpoint: this.settings.exaEndpoint,
+            exaSplicedContextMaxChars: this.settings.exaSplicedContextMaxChars,
         };
     }
 
@@ -1256,9 +1343,19 @@ export default class PerplexedPlugin extends Plugin {
             return;
         }
 
-        new DirectoryTemplateRunModal(this.app, choices, (template, model) => {
-            void applyDirectoryTemplate(this.app, dirSettings, target, template, { modelOverride: model });
-        }).open();
+        // Does the target already have a body? Decides whether the run dialog
+        // offers the append/remake/replace choice at all.
+        const targetRaw = await this.app.vault.read(target);
+        const targetBody = targetRaw.replace(/^---\n[\s\S]*?\n---\n/, '');
+        const bodyIsPopulated = targetBody.trim().length > 0;
+
+        new DirectoryTemplateRunModal(this.app, choices, (template, model, useRetrieval, mode) => {
+            void applyDirectoryTemplate(this.app, dirSettings, target, template, {
+                modelOverride: model,
+                useRetrieval,
+                modeOverride: mode,
+            });
+        }, this.settings.exaEnabled, bodyIsPopulated).open();
     }
 
     private runApplyDirectoryTemplateBatch(): void {
@@ -1389,15 +1486,15 @@ class PerplexedSettingTab extends PluginSettingTab {
         // Perplexity Section
         new Setting(containerEl).setName("Perplexity (remote service)").setHeading();
         containerEl.createEl('p', {
-            text: 'Configure settings for the hosted perplexity AI service',
+            text: 'Configure settings for the hosted Perplexity AI service',
             cls: 'setting-item-description'
         });
 
         new Setting(containerEl)
             .setName('Endpoint')
-            .setDesc('API endpoint for perplexity service')
+            .setDesc('API endpoint for Perplexity service')
             .addText(text => text
-                .setPlaceholder('HTTPS://api.perplexity.ai/chat/completions')
+                .setPlaceholder('https://api.perplexity.ai/chat/completions')
                 .setValue(this.plugin.settings.perplexityEndpoint)
                 .onChange(async (value: string) => {
                     this.plugin.settings.perplexityEndpoint = value;
@@ -1407,7 +1504,7 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('API key')
-            .setDesc('Your perplexity API key (required for remote service)')
+            .setDesc('Your Perplexity API key (required for remote service)')
             .addText(text => text
                 .setPlaceholder('Pplx-xxxxxxxxxxxxxxxxxxxxx')
                 .setValue(this.plugin.settings.perplexityApiKey)
@@ -1433,14 +1530,14 @@ class PerplexedSettingTab extends PluginSettingTab {
         // Perplexity Request Template
         const perplexityJsonSetting = new Setting(containerEl)
             .setName('Request body template')
-            .setDesc('JSON template for perplexity API requests');
+            .setDesc('JSON template for Perplexity API requests');
             
         // Create a textarea element for Perplexity
         const perplexityTextArea = containerEl.createEl('textarea');
         perplexityTextArea.rows = 10;
         perplexityTextArea.cols = 50;
         perplexityTextArea.addClass('perplexed-json-textarea');
-        perplexityTextArea.placeholder = 'Enter perplexity JSON request template...';
+        perplexityTextArea.placeholder = 'Enter Perplexity JSON request template...';
         
         // Set initial value if it exists
         if (this.plugin.settings.perplexityRequestTemplate) {
@@ -1557,15 +1654,15 @@ class PerplexedSettingTab extends PluginSettingTab {
                 }));
 
         // Perplexica / Vane Section
-        new Setting(containerEl).setName("Perplexica / vane (self-hosted)").setHeading();
+        new Setting(containerEl).setName("Perplexica / Vane (self-hosted)").setHeading();
         containerEl.createEl('p', {
-            text: 'Configure settings for your local perplexica / vane installation',
+            text: 'Configure settings for your local Perplexica / Vane installation',
             cls: 'setting-item-description'
         });
 
         new Setting(containerEl)
             .setName('Endpoint')
-            .setDesc('API endpoint for your local perplexica / vane instance')
+            .setDesc('API endpoint for your local Perplexica / Vane instance')
             .addText(text => text
                 .setPlaceholder('HTTP://localhost:3030/API/search')
                 .setValue(this.plugin.settings.perplexicaEndpoint)
@@ -1589,7 +1686,7 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Default model')
-            .setDesc('Default AI model for perplexica / vane to use')
+            .setDesc('Default AI model for Perplexica / Vane to use')
             .addText(text => text
                 .setPlaceholder('Llama3.2:latest')
                 .setValue(this.plugin.settings.defaultModel)
@@ -1602,14 +1699,14 @@ class PerplexedSettingTab extends PluginSettingTab {
         // Perplexica Request Template
         const perplexicaJsonSetting = new Setting(containerEl)
             .setName('Request body template')
-            .setDesc('JSON template for perplexica / vane API requests');
+            .setDesc('JSON template for Perplexica / Vane API requests');
             
         // Create a textarea element for Perplexica
         const perplexicaTextArea = containerEl.createEl('textarea');
         perplexicaTextArea.rows = 10;
         perplexicaTextArea.cols = 50;
         perplexicaTextArea.addClass('perplexed-json-textarea');
-        perplexicaTextArea.placeholder = 'Enter perplexica JSON request template...';
+        perplexicaTextArea.placeholder = 'Enter Perplexica JSON request template...';
         
         // Set initial value if it exists
         if (this.plugin.settings.requestBodyTemplate) {
@@ -1632,15 +1729,15 @@ class PerplexedSettingTab extends PluginSettingTab {
         perplexicaJsonSetting.settingEl.appendChild(perplexicaTextArea);
 
         // LM Studio Section
-        new Setting(containerEl).setName("Lm studio (local models)").setHeading();
+        new Setting(containerEl).setName("LM Studio (local models)").setHeading();
         containerEl.createEl('p', {
-            text: 'Configure settings for your local lm studio installation with loaded models',
+            text: 'Configure settings for your local LM Studio installation with loaded models',
             cls: 'setting-item-description'
         });
 
         new Setting(containerEl)
             .setName('Endpoint')
-            .setDesc('API endpoint for your local lm studio instance')
+            .setDesc('API endpoint for your local LM Studio instance')
             .addText(text => text
                 .setPlaceholder('HTTP://localhost:1234/v1/chat/completions')
                 .setValue(this.plugin.settings.lmStudioEndpoint)
@@ -1652,7 +1749,7 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Default model')
-            .setDesc('Default model name for lm studio to use')
+            .setDesc('Default model name for LM Studio to use')
             .addText(text => text
                 .setPlaceholder('Ibm/granite-3.2-8b')
                 .setValue(this.plugin.settings.defaultLMStudioModel)
@@ -1665,14 +1762,14 @@ class PerplexedSettingTab extends PluginSettingTab {
         // LM Studio Request Template
         const lmStudioJsonSetting = new Setting(containerEl)
             .setName('Request body template')
-            .setDesc('JSON template for lm studio API requests');
+            .setDesc('JSON template for LM Studio API requests');
             
         // Create a textarea element for LM Studio
         const lmStudioTextArea = containerEl.createEl('textarea');
         lmStudioTextArea.rows = 10;
         lmStudioTextArea.cols = 50;
         lmStudioTextArea.addClass('perplexed-json-textarea');
-        lmStudioTextArea.placeholder = 'Enter lm studio JSON request template...';
+        lmStudioTextArea.placeholder = 'Enter LM Studio JSON request template...';
         
         // Set initial value if it exists
         if (this.plugin.settings.lmStudioRequestTemplate) {
@@ -1693,6 +1790,63 @@ class PerplexedSettingTab extends PluginSettingTab {
         
         // Add the textarea to the setting
         lmStudioJsonSetting.settingEl.appendChild(lmStudioTextArea);
+
+        // Exa retrieval stage
+        new Setting(containerEl).setName('Exa retrieval').setHeading();
+        containerEl.createEl('p', {
+            text: 'Exa finds and extracts source material — it is markedly better than grounded web search at identifying the right company and returning structured facts about it. When a template declares include-sources, Exa runs first and its results are spliced into the prompt as named, citeable sources; the writing model still writes. A retrieval failure never aborts a run — the run proceeds without the extra sources.',
+            cls: 'setting-item-description'
+        });
+
+        new Setting(containerEl)
+            .setName('Use Exa retrieval')
+            .setDesc('Master switch. When off, templates that declare include-sources: run Perplexity-only, exactly as they did before Exa existed. Individual runs can also opt out from the run dialog.')
+            .addToggle(t => t
+                .setValue(this.plugin.settings.exaEnabled)
+                .onChange(async (v: boolean) => {
+                    this.plugin.settings.exaEnabled = v;
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName('Exa API key')
+            .setDesc('From dashboard.Exa.ai. New accounts get $20 in credits plus $10/month free — a typical retrieval costs about $0.02.')
+            .addText(text => text
+                .setPlaceholder('Enter your Exa API key')
+                .setValue(this.plugin.settings.exaApiKey)
+                .onChange(async (value: string) => {
+                    this.plugin.settings.exaApiKey = value.trim();
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName('Exa endpoint')
+            .setDesc('Search endpoint. Only change this if you are proxying Exa.')
+            .addText(text => text
+                .setPlaceholder(EXA_SEARCH_ENDPOINT)
+                .setValue(this.plugin.settings.exaEndpoint)
+                .onChange(async (value: string) => {
+                    this.plugin.settings.exaEndpoint = value.trim();
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName('Spliced context budget (characters)')
+            .setDesc('Ceiling on how much retrieved source text is inserted into a prompt. This is an attention budget, not a cost one: past roughly this much pasted text the writing model starts following the sources instead of the section outline, which looks like a healthy run that quietly ignored its instructions. Excess sources are dropped with a visible marker rather than silently. Default 12000.')
+            .addText(text => text
+                .setPlaceholder('12000')
+                .setValue(String(this.plugin.settings.exaSplicedContextMaxChars))
+                .onChange(async (value: string) => {
+                    const n = parseInt(value, 10);
+                    if (!isNaN(n) && n > 0) {
+                        this.plugin.settings.exaSplicedContextMaxChars = n;
+                        await this.plugin.saveSettings();
+                    }
+                })
+            );
 
         // Prompts Section
         new Setting(containerEl).setName("Prompts & text configuration").setHeading();
@@ -1760,7 +1914,7 @@ class PerplexedSettingTab extends PluginSettingTab {
         
         new Setting(containerEl)
             .setName('Perplexity query placeholder')
-            .setDesc('Placeholder text for perplexity query input')
+            .setDesc('Placeholder text for Perplexity query input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
                 .setValue(this.plugin.settings.prompts.perplexityQueryPlaceholder)
@@ -1775,8 +1929,8 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('Perplexica / vane query placeholder')
-            .setDesc('Placeholder text for perplexica / vane query input')
+            .setName('Perplexica / Vane query placeholder')
+            .setDesc('Placeholder text for Perplexica / Vane query input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
                 .setValue(this.plugin.settings.prompts.perplexicaQueryPlaceholder)
@@ -1791,8 +1945,8 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('Lm studio query placeholder')
-            .setDesc('Placeholder text for lm studio query input')
+            .setName('LM Studio query placeholder')
+            .setDesc('Placeholder text for LM Studio query input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
                 .setValue(this.plugin.settings.prompts.lmStudioQueryPlaceholder)
@@ -1807,8 +1961,8 @@ class PerplexedSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName('Lm studio system prompt placeholder')
-            .setDesc('Placeholder text for lm studio system prompt input')
+            .setName('LM Studio system prompt placeholder')
+            .setDesc('Placeholder text for LM Studio system prompt input')
             .addText(text => text
                 .setPlaceholder('Enter placeholder text...')
                 .setValue(this.plugin.settings.prompts.lmStudioSystemPromptPlaceholder)
@@ -1944,7 +2098,7 @@ class PerplexedSettingTab extends PluginSettingTab {
         // Directory Templates Section (v0.1 spike)
         new Setting(containerEl).setName('Directory templates').setHeading();
         containerEl.createEl('p', {
-            text: 'Apply a template (heading skeleton + per-section bullets) to fill a file via perplexity deep research. Templates live in a vault folder and are matched to files by glob.',
+            text: 'Apply a template (heading skeleton + per-section bullets) to fill a file via Perplexity deep research. Templates live in a vault folder and are matched to files by glob.',
             cls: 'setting-item-description'
         });
 
@@ -1974,7 +2128,7 @@ class PerplexedSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Preambles root')
-            .setDesc('Vault-relative folder where plugin-wide preambles live. Files here are auto-attached to every perplexity request per the lists below.')
+            .setDesc('Vault-relative folder where plugin-wide preambles live. Files here are auto-attached to every Perplexity request per the lists below.')
             .addText(text => text
                 .setPlaceholder('Zz-cf-lib/preambles')
                 .setValue(this.plugin.settings.directoryTemplatesPreamblesRoot)
@@ -2076,7 +2230,7 @@ class PerplexedSettingTab extends PluginSettingTab {
         // Find images for selection
         new Setting(containerEl).setName('Find images for selection').setHeading();
         containerEl.createEl('p', {
-            text: 'Highlight a passage, run "find images for selection". The plugin asks perplexity for screenshots that visually illustrate the passage, prefers images on the entity\'s domain (frontmatter URL), and embeds them between paragraphs.',
+            text: 'Highlight a passage, run "find images for selection". The plugin asks Perplexity for screenshots that visually illustrate the passage, prefers images on the entity\'s domain (frontmatter URL), and embeds them between paragraphs.',
             cls: 'setting-item-description'
         });
 

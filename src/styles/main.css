@@ -32,3 +32,12 @@
 .callout[data-callout="brain"] .callout-icon {
     color: #9333ea;
 } 
+/* Link-back review table */
+.perplexed-linkback-modal { width: min(90vw, 900px); }
+.perplexed-linkback-scroll { max-height: 50vh; overflow-y: auto; overflow-x: auto; margin: 0.75em 0; }
+.perplexed-linkback-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+.perplexed-linkback-table th,
+.perplexed-linkback-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--background-modifier-border); vertical-align: top; }
+.perplexed-linkback-table tr.is-low-confidence { opacity: 0.75; }
+.perplexed-linkback-path { font-size: 0.85em; color: var(--text-muted); word-break: break-all; }
+.perplexed-linkback-context { color: var(--text-muted); max-width: 380px; }

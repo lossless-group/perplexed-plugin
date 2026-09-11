@@ -133,7 +133,7 @@ export class GeminiModal extends Modal {
             }
         });
 
-        activeWindow.setTimeout(() => queryTextarea.focus(), 50);
+        window.setTimeout(() => queryTextarea.focus(), 50);
     }
 
     private modelTagline(value: string): string {

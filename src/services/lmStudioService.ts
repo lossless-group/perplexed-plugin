@@ -238,7 +238,7 @@ export class LMStudioService {
                             // Scroll to follow the new content
                             editor.scrollIntoView({ from: currentPos, to: currentPos }, true);
                             // Small delay to make scrolling smoother
-                            await new Promise(resolve => activeWindow.setTimeout(resolve, 10));
+                            await new Promise(resolve => window.setTimeout(resolve, 10));
                         }
                     } catch {
                         // Ignore JSON parse errors for partial chunks

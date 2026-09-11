@@ -40,7 +40,7 @@ export class TextEnhancementWithImagesModal extends Modal {
         });
         header.createEl('p', {
             cls: 'text-enhancement-with-images-modal__subtitle',
-            text: 'Find images related to selected text via perplexity (sonar-pro). Streams image markers into the active note at the cursor.',
+            text: 'Find images related to selected text via Perplexity (sonar-pro). Streams image markers into the active note at the cursor.',
         });
 
         // ----- Selected Text (read-only) -----
@@ -102,7 +102,7 @@ export class TextEnhancementWithImagesModal extends Modal {
         });
         this.fetchBtn.addEventListener('click', () => void this.onSubmit());
 
-        activeWindow.setTimeout(() => promptTextarea.focus(), 50);
+        window.setTimeout(() => promptTextarea.focus(), 50);
     }
 
     private async onSubmit(): Promise<void> {

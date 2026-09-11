@@ -17,6 +17,8 @@ import latexDisciplinePartial from '../docs/partials/latex-discipline.md';
 import preamblesReadme from '../docs/preambles/README.md';
 import inlineCitationPreamble from '../docs/preambles/inline-citation.md';
 import imagePlacementPreamble from '../docs/preambles/image-placement.md';
+import remakeFramingPreamble from '../docs/preambles/remake-framing.md';
+import splicedSourceCitationPreamble from '../docs/preambles/spliced-source-citation.md';
 import researchFramingPreamble from '../docs/preambles/research-framing.md';
 
 interface SeedFile {
@@ -50,6 +52,8 @@ const PREAMBLE_FILES: SeedFile[] = [
     { name: 'inline-citation.md', content: inlineCitationPreamble },
     { name: 'image-placement.md', content: imagePlacementPreamble },
     { name: 'research-framing.md', content: researchFramingPreamble },
+    { name: 'spliced-source-citation.md', content: splicedSourceCitationPreamble },
+    { name: 'remake-framing.md', content: remakeFramingPreamble },
 ];
 
 // Bundled preambles are also exposed by name so applyTemplate can fall back
@@ -58,6 +62,8 @@ export const BUNDLED_PREAMBLES: Record<string, string> = {
     'inline-citation': inlineCitationPreamble,
     'image-placement': imagePlacementPreamble,
     'research-framing': researchFramingPreamble,
+    'spliced-source-citation': splicedSourceCitationPreamble,
+    'remake-framing': remakeFramingPreamble,
 };
 
 /**

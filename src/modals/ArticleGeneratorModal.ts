@@ -162,7 +162,7 @@ export class ArticleGeneratorModal extends Modal {
 
         new Setting(returnsSection)
             .setName('Related questions')
-            .setDesc('Surface follow-up questions perplexity suggests at the end of the response.')
+            .setDesc('Surface follow-up questions Perplexity suggests at the end of the response.')
             .addToggle(t => t
                 .setValue(this.relatedQuestions)
                 .onChange(v => { this.relatedQuestions = v; }));
@@ -192,7 +192,7 @@ export class ArticleGeneratorModal extends Modal {
         });
         generateBtn.addEventListener('click', () => void this.onSubmit());
 
-        activeWindow.setTimeout(() => termInput.focus(), 50);
+        window.setTimeout(() => termInput.focus(), 50);
     }
 
     private modelTagline(value: string): string {
@@ -261,7 +261,7 @@ export class ArticleGeneratorModal extends Modal {
         // Resolve quickly so the API request can start; PerplexityService clears
         // the text + interval when the first content chunk arrives.
         return new Promise((resolve) => {
-            activeWindow.setTimeout(() => resolve(), 100);
+            window.setTimeout(() => resolve(), 100);
         });
     }
 

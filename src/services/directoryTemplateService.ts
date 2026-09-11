@@ -4,6 +4,13 @@ import type { App } from 'obsidian';
 import { normalizePath, Notice, parseYaml, stringifyYaml, TFile } from 'obsidian';
 
 import { BUNDLED_PREAMBLES } from './templateSeederService';
+import {
+    parseIncludeSources,
+    renderSourcesBlock,
+    resolveIncludeSources,
+} from './includeSourcesService';
+import type { ResolvedSource } from './includeSourcesService';
+import { findBacklinks, renderBacklinksBlock } from './linkBackService';
 
 export interface UserPreambleSpec {
     name: string;
@@ -20,6 +27,11 @@ export interface DirectoryTemplateSettings {
     userPreambles: UserPreambleSpec[];
     frontmatterWhitelist: string[];
     requestTimeoutMs: number;
+    historyRoot: string;
+    exaEnabled: boolean;
+    exaApiKey: string;
+    exaEndpoint: string;
+    exaSplicedContextMaxChars: number;
 }
 
 export interface TemplateFile {
@@ -250,6 +262,37 @@ function buildSourcesFooter(sources: PerplexitySource[]): string {
     });
     const body = sourceLines.length > 0 ? sourceLines.join('\n') : '_No sources returned._';
     return '\n\n***\n\n# Sources\n\n' + body + '\n';
+}
+
+/**
+ * Second footer section for sources spliced in by the retrieval stage. Kept
+ * separate from buildSourcesFooter because the two use different marker
+ * namespaces — merging them is the citation-collision bug.
+ */
+function buildRetrievedFooter(sources: ResolvedSource[]): string {
+    if (sources.length === 0) return '';
+    // Footnote-definition shape (`[^id]: ...`) per the Lossless citation spec,
+    // in a separate section with a separate marker namespace — merging the two
+    // is the citation-collision bug.
+    //
+    // The caret is load-bearing, not decoration. A bare `[E1]` is a markdown
+    // reference link, not a footnote, so Obsidian gives it no hover preview and
+    // no click-to-jump — and cite-wide's spacing pass (which matches
+    // `\[\^[a-z0-9]+\]`, case-insensitively) skips it entirely. `[^E1]`
+    // satisfies both.
+    //
+    // The definition names the retrieval provider as well as the page, because
+    // the citation is really "what provider X reported about page Y", not the
+    // page itself.
+    const attributions: Record<string, string> = {
+        exa: '[Exa.ai](https://exa.ai) API response',
+    };
+    const lines = sources.map((s) => {
+        const via = attributions[s.providerId] ?? `${s.providerId} response`;
+        const subject = s.url !== undefined ? `[${s.title}](${s.url})` : s.title;
+        return `[^${s.marker}]: ${via} for data on ${subject}`;
+    });
+    return '\n## Sources (retrieved)\n\n' + lines.join('\n') + '\n';
 }
 
 const FRONTMATTER_FENCE = '---';
@@ -534,7 +577,7 @@ async function streamPerplexityToFile(
     // a hard cap is desired (e.g. settings/cft override > 0). Set ceilingMs
     // to Infinity to disable the ceiling entirely.
     const ceilingTimer = Number.isFinite(timeouts.ceilingMs) && timeouts.ceilingMs > 0
-        ? activeWindow.setTimeout(() => controller.abort(), timeouts.ceilingMs)
+        ? window.setTimeout(() => controller.abort(), timeouts.ceilingMs)
         : null;
 
     // Use Node.js https to bypass CORS from the Obsidian renderer origin
@@ -581,18 +624,18 @@ async function streamPerplexityToFile(
         });
         response = { ok: true, body: webStream } as unknown as Response;
     } catch (err) {
-        if (ceilingTimer !== null) activeWindow.clearTimeout(ceilingTimer);
+        if (ceilingTimer !== null) window.clearTimeout(ceilingTimer);
         throw err;
     }
 
     if (!response.ok) {
-        if (ceilingTimer !== null) activeWindow.clearTimeout(ceilingTimer);
+        if (ceilingTimer !== null) window.clearTimeout(ceilingTimer);
         throw new Error(`Perplexity HTTP ${response.status.toString()}`);
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-        if (ceilingTimer !== null) activeWindow.clearTimeout(ceilingTimer);
+        if (ceilingTimer !== null) window.clearTimeout(ceilingTimer);
         throw new Error('Perplexity returned no response body');
     }
 
@@ -608,12 +651,12 @@ async function streamPerplexityToFile(
     const readWithIdleTimeout = (): Promise<ReadableStreamReadResult<Uint8Array>> => {
         let timer: number | undefined;
         const timeout = new Promise<never>((_, reject) => {
-            timer = activeWindow.setTimeout(() => {
+            timer = window.setTimeout(() => {
                 reject(new Error(`stream went idle for ${(idleMs / 1000).toString()}s (likely API stall, rate limit, or socket close)`));
             }, idleMs);
         });
         return Promise.race([reader.read(), timeout]).finally(() => {
-            if (timer !== undefined) activeWindow.clearTimeout(timer);
+            if (timer !== undefined) window.clearTimeout(timer);
         });
     };
 
@@ -705,7 +748,7 @@ async function streamPerplexityToFile(
             }
         }
     } finally {
-        if (ceilingTimer !== null) activeWindow.clearTimeout(ceilingTimer);
+        if (ceilingTimer !== null) window.clearTimeout(ceilingTimer);
         try {
             reader.releaseLock();
         } catch {
@@ -720,7 +763,7 @@ async function streamPerplexityToFile(
 }
 
 export type ApplyOutcome =
-    | { status: 'applied'; mode: 'fill' | 'append'; sourceCount: number }
+    | { status: 'applied'; mode: 'fill' | 'append' | 'remake'; sourceCount: number }
     | { status: 'skipped'; reason: string }
     | { status: 'error'; error: string };
 
@@ -729,6 +772,64 @@ export interface ApplyOptions {
     isCancelled?: () => boolean;
     /** Per-run Perplexity model; overrides the template's cft `model:`. */
     modelOverride?: string;
+    /** Per-run opt-out of the Exa retrieval stage. Defaults to the plugin setting. */
+    useRetrieval?: boolean;
+    /**
+     * Output mode. 'auto' keeps the historical behaviour (fill when the body is
+     * empty, append otherwise). 'remake' REPLACES the body, feeding the prior
+     * draft back as stale background — see remake-framing.md.
+     */
+    modeOverride?: 'auto' | 'fill' | 'append' | 'remake';
+}
+
+/**
+ * Strip generated trailing sections from a prior draft before feeding it back.
+ *
+ * Without this the model sees the old Sources footer and parrots those
+ * citations as though it had consulted them this run — stale attributions that
+ * look perfectly legitimate. Cuts at the first generated footer marker.
+ */
+export function stripGeneratedFooters(body: string): string {
+    const markers = [
+        /\n\*\*\*\s*\n+#\s+Sources\b/,
+        /\n#\s+Sources\b/,
+        /\n##\s+Sources \(retrieved\)/,
+    ];
+    let cut = body.length;
+    for (const re of markers) {
+        const m = re.exec(body);
+        if (m !== null && m.index < cut) cut = m.index;
+    }
+    return body.slice(0, cut).replace(/\s+$/, '');
+}
+
+/**
+ * Write the pre-run body to the history root before a destructive write.
+ *
+ * Remake replaces the body outright, so this is the only copy of what was
+ * there. Failure to snapshot aborts the run — a rewrite that cannot be undone
+ * should not start.
+ */
+async function writeSnapshot(
+    app: App,
+    historyRoot: string,
+    target: TFile,
+    content: string,
+    reason: string,
+): Promise<string> {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const dir = normalizePath(`${historyRoot.replace(/\/$/, '')}/${target.parent?.path ?? ''}`.replace(/\/+/g, '/'));
+    const segments = dir.split('/').filter(x => x.length > 0);
+    let built = '';
+    for (const seg of segments) {
+        built = built.length > 0 ? `${built}/${seg}` : seg;
+        if (app.vault.getAbstractFileByPath(built) === null) {
+            try { await app.vault.createFolder(built); } catch { /* race or exists */ }
+        }
+    }
+    const path = normalizePath(`${dir}/${target.basename}__${stamp}__${reason}.md`);
+    await app.vault.create(path, content);
+    return path;
 }
 
 export async function applyTemplate(
@@ -753,7 +854,9 @@ export async function applyTemplate(
     const targetContent = await app.vault.read(target);
     const { frontmatter: fmRaw, body } = splitFrontmatter(targetContent);
     const existingBody = body.replace(/\s+$/, '');
-    const mode: 'fill' | 'append' = existingBody.trim().length === 0 ? 'fill' : 'append';
+    const autoMode: 'fill' | 'append' = existingBody.trim().length === 0 ? 'fill' : 'append';
+    const requested = options.modeOverride ?? 'auto';
+    const mode: 'fill' | 'append' | 'remake' = requested === 'auto' ? autoMode : requested;
 
     const fm = safeParseYaml(fmRaw);
     const title = typeof fm.title === 'string' ? fm.title : target.basename;
@@ -773,6 +876,54 @@ export async function applyTemplate(
     const expandedSkeleton = await expandIncludes(app, template.userSkeleton, settings.partialsRoot);
     const templateSystem = interpolate(expandedSystem, ctx);
     const interpolatedSkeleton = interpolate(expandedSkeleton, ctx);
+
+    // Snapshot before anything mutates the target. Remake replaces the body
+    // outright, so this is the only copy of what was there. A rewrite that
+    // cannot be undone should not start.
+    if (mode === 'remake' && existingBody.trim().length > 0) {
+        try {
+            const snapPath = await writeSnapshot(
+                app, settings.historyRoot, target, targetContent, 'pre-remake',
+            );
+            console.debug(`[directoryTemplateService] snapshot written: ${snapPath}`);
+            if (!quiet) new Notice(`Snapshot saved: ${snapPath}`);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (!quiet) new Notice(`Aborted — could not write snapshot: ${msg}`);
+            return { status: 'error', error: `snapshot failed: ${msg}` };
+        }
+    }
+
+    // Retrieval stage. Runs BEFORE the destructive vault.modify below so a
+    // retrieval failure can never leave a half-wiped target file. resolve*
+    // never throws — a failure degrades to zero spliced sources plus a Notice.
+    const retrievalEnabled = options.useRetrieval ?? settings.exaEnabled;
+    const { specs: sourceSpecs, warnings: specWarnings } = retrievalEnabled
+        ? parseIncludeSources(
+            template.cftConfig['include-sources'],
+            (text) => interpolate(text, ctx),
+        )
+        : { specs: [], warnings: [] };
+    for (const w of specWarnings) {
+        console.warn(`[directoryTemplateService] ${w}`);
+        if (!quiet) new Notice(`perplexed: ${w}`);
+    }
+    const targetUrl = typeof fm['url'] === 'string' ? fm['url'] : undefined;
+    const retrieval = await resolveIncludeSources(
+        {
+            exaApiKey: settings.exaApiKey,
+            exaEndpoint: settings.exaEndpoint,
+            exaSplicedContextMaxChars: settings.exaSplicedContextMaxChars,
+        },
+        sourceSpecs,
+        targetUrl,
+        { quiet },
+    );
+    const retrievedSources = retrieval.sources;
+    const sourcesBlock = renderSourcesBlock(retrieval);
+    if (retrievedSources.length > 0 && !quiet) {
+        new Notice(`Retrieved ${retrievedSources.length.toString()} source(s) via Exa.`);
+    }
 
     // Assemble preambles. Per-template `preambles:` config in the cft fence
     // may override the global lists or skip them entirely.
@@ -795,6 +946,10 @@ export async function applyTemplate(
         const systemChunks: string[] = [];
         for (const name of systemNames) {
             const text = await resolvePreamble(name);
+            if (text) systemChunks.push(text.trim());
+        }
+        if (retrievedSources.length > 0 && !systemNames.includes('spliced-source-citation')) {
+            const text = await resolvePreamble('spliced-source-citation');
             if (text) systemChunks.push(text.trim());
         }
         systemPreambleText = systemChunks.join('\n\n');
@@ -820,13 +975,50 @@ export async function applyTemplate(
         ? `${systemPreambleText}\n\n${templateSystem}`
         : systemPreambleText || templateSystem;
 
+    // Backlinks: notes already referencing this subject, handed over with their
+    // real vault paths so the model can link back instead of guessing. Opt-in
+    // per template via `include-backlinks: true` in the cft fence.
+    let backlinksBlock = '';
+    if (template.cftConfig['include-backlinks'] === true) {
+        try {
+            const limitRaw = template.cftConfig['backlinks-limit'];
+            const limit = typeof limitRaw === 'number' && limitRaw > 0 ? limitRaw : 12;
+            const backlinks = await findBacklinks(app, target, limit);
+            backlinksBlock = renderBacklinksBlock(backlinks, title);
+            if (backlinks.length > 0 && !quiet) {
+                new Notice(`Including ${backlinks.length.toString()} vault backlink(s) as context.`);
+            }
+        } catch (err) {
+            console.warn('[directoryTemplateService] backlink lookup failed', err);
+        }
+    }
+
+    // Remake: the prior draft rides along as background, explicitly framed as
+    // stale. remake-framing.md carries the "current sources win" contract.
+    let priorDraftBlock = '';
+    if (mode === 'remake' && existingBody.trim().length > 0) {
+        const priorText = stripGeneratedFooters(existingBody);
+        if (priorText.length > 0) {
+            const framing = await resolvePreamble('remake-framing');
+            priorDraftBlock =
+                (framing ? `${framing.trim()}\n\n` : '')
+                + '## Prior draft (background only)\n\n'
+                + priorText
+                + '\n\n---\n\n';
+        }
+    }
+
+    const contextBlocks = `${sourcesBlock}${backlinksBlock ? `\n${backlinksBlock}` : ''}`;
+    const skeletonWithSources = contextBlocks
+        ? `${contextBlocks}\n${interpolatedSkeleton}`
+        : interpolatedSkeleton;
     const userPrompt = userFramingText
-        ? `${userFramingText}${interpolatedSkeleton}${userTrailingText}`
-        : `${interpolatedSkeleton}${userTrailingText}`;
+        ? `${userFramingText}${priorDraftBlock}${skeletonWithSources}${userTrailingText}`
+        : `${priorDraftBlock}${skeletonWithSources}${userTrailingText}`;
 
     // Initial file content the stream will append to.
     const fmBlock = fmRaw.length > 0 ? `---\n${fmRaw}\n---\n` : '';
-    const initialContent = mode === 'fill'
+    const initialContent = (mode === 'fill' || mode === 'remake')
         ? `${fmBlock}\n`
         : `${fmBlock}\n${existingBody}\n\n`;
 
@@ -937,7 +1129,8 @@ export async function applyTemplate(
                 );
             }
         }
-        const sourcesFooter = buildSourcesFooter(sources);
+        const sourcesFooter = buildSourcesFooter(sources)
+            + buildRetrievedFooter(retrievedSources);
         const finalContent = `${initialContent}${cleanedStreamed}\n${fallbackImagesSection}${sourcesFooter}`;
         await app.vault.modify(target, finalContent);
 
@@ -957,6 +1150,10 @@ export async function applyTemplate(
         await app.fileManager.processFrontMatter(target, (fm: Record<string, unknown>) => {
             fm['cf_last_run'] = runTimestamp;
             fm['cf_last_run_model'] = runModelLabel;
+            if (retrievedSources.length > 0) {
+                fm['cf_retrieved_source_count'] = retrievedSources.length;
+                fm['cf_last_run_retrieval'] = runTimestamp;
+            }
             if (harvestedGoogleBooksUrl && !fm['google_books_url']) {
                 fm['google_books_url'] = harvestedGoogleBooksUrl;
             }
@@ -968,7 +1165,7 @@ export async function applyTemplate(
                     `"${target.basename}": stream cut off (timeout or lost connection) — saved partial content with ${sources.length.toString()} sources. Re-run to complete.`,
                 );
             }
-            const verb = mode === 'fill' ? 'Filled' : 'Appended to';
+            const verb = mode === 'fill' ? 'Filled' : mode === 'remake' ? 'Remade' : 'Appended to';
             new Notice(`${verb} "${target.basename}" using ${template.file.basename} (${sources.length.toString()} sources)`);
         }
         return { status: 'applied', mode, sourceCount: sources.length };

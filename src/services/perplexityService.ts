@@ -275,7 +275,7 @@ export class PerplexityService {
     private clearLoadingAnimation(): void {
         if (this.loadingInterval) {
             console.debug('🛑 Clearing loading animation interval');
-            activeWindow.clearInterval(this.loadingInterval);
+            window.clearInterval(this.loadingInterval);
             this.loadingInterval = null;
         }
     }
@@ -773,7 +773,7 @@ export class PerplexityService {
                 }
                 
                 // Small delay to prevent UI blocking
-                await new Promise(resolve => activeWindow.setTimeout(resolve, 10));
+                await new Promise(resolve => window.setTimeout(resolve, 10));
             }
             
             // Process final metadata (citations, images) after streaming is complete

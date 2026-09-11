@@ -15,6 +15,11 @@ const MODEL_CHOICES: { id: string; label: string }[] = [
     { id: 'sonar-deep-research', label: 'Sonar Deep Research — exhaustive, minutes-long' },
 ];
 
+/** True when the template declares an include-sources: block worth offering to skip. */
+function declaresRetrieval(choice: TemplateRunChoice): boolean {
+    return Array.isArray(choice.template.cftConfig['include-sources']);
+}
+
 function cftModel(choice: TemplateRunChoice): string {
     const m = choice.template.cftConfig['model'];
     return typeof m === 'string' && m.length > 0 ? m : 'sonar-pro';
@@ -26,18 +31,29 @@ function cftModel(choice: TemplateRunChoice): string {
  * to run it with. The model defaults to the template's cft `model:` but the
  * selection here overrides it for this run only.
  */
+export type RunMode = 'auto' | 'fill' | 'append' | 'remake';
+
 export class DirectoryTemplateRunModal extends Modal {
     private readonly choices: TemplateRunChoice[];
-    private readonly onRun: (template: ParsedTemplate, model: string) => void;
+    private readonly onRun: (template: ParsedTemplate, model: string, useRetrieval: boolean, mode: RunMode) => void;
+    private readonly retrievalDefault: boolean;
     private selectedIndex = 0;
     private selectedModel: string;
+    private useRetrieval: boolean;
+    private readonly bodyIsPopulated: boolean;
+    private mode: RunMode = 'auto';
 
     constructor(
         app: App,
         choices: TemplateRunChoice[],
-        onRun: (template: ParsedTemplate, model: string) => void,
+        onRun: (template: ParsedTemplate, model: string, useRetrieval: boolean, mode: RunMode) => void,
+        retrievalDefault = true,
+        bodyIsPopulated = false,
     ) {
         super(app);
+        this.retrievalDefault = retrievalDefault;
+        this.useRetrieval = retrievalDefault;
+        this.bodyIsPopulated = bodyIsPopulated;
         if (choices.length === 0) {
             throw new Error('DirectoryTemplateRunModal requires at least one template choice');
         }
@@ -90,6 +106,36 @@ export class DirectoryTemplateRunModal extends Modal {
                 .setDesc(this.selected().title);
         }
 
+        // Output mode is only meaningful when there is existing content that
+        // could be appended to or rewritten.
+        if (this.bodyIsPopulated) {
+            new Setting(contentEl)
+                .setName('Output')
+                .setDesc('This file already has content. Append adds a new draft below it; Remake replaces it, passing the old draft to the model as stale background (a snapshot is saved first).')
+                .addDropdown((dd) => {
+                    dd.addOption('auto', 'Append below existing content (default)');
+                    dd.addOption('remake', 'Remake — rewrite, using the old draft as background');
+                    dd.addOption('fill', 'Replace — discard the old draft entirely');
+                    dd.setValue(this.mode);
+                    dd.onChange((v) => { this.mode = v as RunMode; });
+                });
+        }
+
+        // Only offered when the template actually declares include-sources: —
+        // a toggle for a stage that wouldn't run is noise.
+        if (declaresRetrieval(this.selected())) {
+            new Setting(contentEl)
+                .setName('Retrieve sources first (Exa)')
+                .setDesc(this.retrievalDefault
+                    ? 'Run Exa retrieval before the model writes, splicing verified source data into the prompt. Turn off for a Perplexity-only run.'
+                    : 'Disabled in settings — turn on the master switch in perplexed settings to use this.')
+                .addToggle((t) => {
+                    t.setValue(this.useRetrieval);
+                    t.setDisabled(!this.retrievalDefault);
+                    t.onChange((v) => { this.useRetrieval = v; });
+                });
+        }
+
         const cftDefault = cftModel(this.selected());
         new Setting(contentEl)
             .setName('Model')
@@ -113,8 +159,10 @@ export class DirectoryTemplateRunModal extends Modal {
                 .onClick(() => {
                     const chosen = this.selected();
                     const model = this.selectedModel;
+                    const useRetrieval = this.useRetrieval;
+                    const mode = this.mode;
                     this.close();
-                    this.onRun(chosen.template, model);
+                    this.onRun(chosen.template, model, useRetrieval, mode);
                 }))
             .addButton((b) => b
                 .setButtonText('Cancel')

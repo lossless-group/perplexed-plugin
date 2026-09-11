@@ -39,6 +39,33 @@ model: sonar-pro
 search-recency: month
 return-citations: true
 return-images: false
+# Hand the model the vault notes that already link to this entity, with their
+# real paths, so it can link back instead of guessing. Set false to disable.
+include-backlinks: true
+backlinks-limit: 12
+
+# Exa retrieval stage — runs BEFORE Perplexity and splices verified company
+# data into the prompt as [E1], [E2] sources. pin: entity restricts the search
+# to the target's own url: frontmatter domain, which is what keeps a
+# collision-prone name on the right entity. Delete this block to go back to
+# Perplexity-only.
+include-sources:
+  - provider: exa
+    query: "{{basename}} {{url}} overview product funding customers"
+    category: company
+    num-results: 6
+    pin: entity
+    contents:
+      summary:
+        query: "What does this product do, who makes it, founded when, funding raised, notable customers, pricing model?"
+        schema:
+          type: object
+          properties:
+            what_it_does: { type: string }
+            founded_year: { type: string }
+            funding: { type: string }
+            notable_customers: { type: array, items: { type: string } }
+            pricing_model: { type: string }
 system: |
   You are a research analyst writing a factual profile of ONE specific
   entity and no other: the product, service, or company known as

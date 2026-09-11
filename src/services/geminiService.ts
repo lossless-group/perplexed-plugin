@@ -450,7 +450,7 @@ export class GeminiService {
                 const result = await Promise.race([
                     request({ url, method: 'GET' }),
                     new Promise<never>((_, reject) =>
-                        activeWindow.setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS)
+                        window.setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS)
                     ),
                 ]);
                 return result;

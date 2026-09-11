@@ -158,7 +158,7 @@ export class ClaudeModal extends Modal {
         });
 
         // Focus the question after the DOM has settled
-        activeWindow.setTimeout(() => queryTextarea.focus(), 50);
+        window.setTimeout(() => queryTextarea.focus(), 50);
     }
 
     private modelTagline(value: string): string {
