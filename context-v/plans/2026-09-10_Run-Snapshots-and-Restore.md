@@ -2,16 +2,17 @@
 title: "Plan — Run Snapshots and Restore"
 lede: "Line 830 wipes the target before the first byte of the stream arrives. Nothing in the plugin can undo that."
 publish: true
-status: Draft
+status: Partially-Shipped
 date_created: 2026-09-10
-date_modified: 2026-09-10
+date_modified: 2026-09-11
+date_first_published: 2026-09-11
 date_authored_initial_draft: 2026-09-10
 date_authored_current_draft: 2026-09-10
 authors:
   - Michael Staton
 augmented_with:
   - Claude Code on Claude Opus 5 (1M context)
-at_semantic_version: 0.0.0.2
+at_semantic_version: 0.0.1.0
 site_uuid: 8f7635e9-27e1-44ba-928f-9097b2e6ed64
 hex_code: g4mier
 applies_to: perplexed Obsidian plugin
@@ -215,3 +216,31 @@ hundred KB — negligible. The reason to prune at all is folder legibility, not 
       whether pointing users at an existing diff plugin is the right scope boundary.
 - [ ] Interaction with vaults already under git — the master toggle covers it, but
       the seeded README should say plainly when each mechanism is the better one.
+
+## Remaining work (as of 2026-09-11)
+
+A snapshot writer landed in `dbe6b25` because remake mode could not ship
+without one — see [[2026-09-11_02]]. It is deliberately the narrow version.
+
+**Done:** pre-run snapshot on the remake path, written to
+`zz-cf-lib/history/<target path>/<basename>__<stamp>__pre-remake.md`, aborting
+the run if the write fails. Folder creation is idempotent.
+
+**Not done — everything that makes it a feature rather than a guardrail:**
+
+- **Snapshots on the fill and append paths.** The destructive write at the top
+  of `applyTemplate` is still unguarded for ordinary runs. This is the original
+  motivation for the plan and it is still open.
+- **`applyTemplateBatch`.** Still the most destructive operation in the plugin
+  and still the least reversible.
+- **The restore command and its picker.** Recovery today means opening the
+  history folder and copying by hand. The body-length column that catches a
+  truncated run does not exist.
+- **Retention pruning**, the master enable/disable toggle, and the seeded
+  README explaining the excluded-files filter.
+- **Snapshot frontmatter.** The current writer stores the raw file with no
+  `cf_snapshot` marker, no `publish: false`, and no provenance stamps — so
+  snapshots will pollute search and graph until that lands.
+
+The storage decision held up in practice: visible files under the library root
+were immediately readable when checking what a remake had replaced.

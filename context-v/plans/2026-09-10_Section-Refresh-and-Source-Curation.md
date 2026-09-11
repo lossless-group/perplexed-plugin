@@ -4,14 +4,14 @@ lede: "Reshape one sub-segment, reject a weak source and make the web find a bet
 publish: true
 status: Draft
 date_created: 2026-09-10
-date_modified: 2026-09-10
+date_modified: 2026-09-11
 date_authored_initial_draft: 2026-09-10
 date_authored_current_draft: 2026-09-10
 authors:
   - Michael Staton
 augmented_with:
   - Claude Code on Claude Opus 5 (1M context)
-at_semantic_version: 0.0.0.2
+at_semantic_version: 0.0.0.3
 site_uuid: 3ced294f-4bec-4116-bd15-c47797df2731
 hex_code: kcszzs
 applies_to: perplexed Obsidian plugin
@@ -230,3 +230,27 @@ heavily.
       one at a time. One at a time is safer and probably sufficient.
 - [ ] Whether the append-only footer numbering degrades legibility badly enough over
       many refreshes to warrant a "renumber all citations" maintenance command.
+
+## Status note — 2026-09-11
+
+Still `Draft`, but the ground under it moved. Remake mode shipped in `dbe6b25`
+([[2026-09-11_02]]) and is the **whole-document** version of what this plan
+scopes per-section. Three pieces this plan needs now already exist:
+
+- `stripGeneratedFooters()` — cuts the Sources block off a prior draft before
+  it is fed back. Section refresh needs exactly this.
+- `remake-framing.md` — the "current sources win, do not inherit gaps"
+  contract, already vault-editable.
+- The snapshot writer, on the remake path.
+
+What remains genuinely unbuilt is the hard half, and it is unchanged: the
+section parser, matching a target heading back to its skeleton instructions,
+byte-range replacement with heading re-location at write time, and the
+merge-aware sources footer. That last one is still the fiddliest work in the
+plan — `buildSourcesFooter` continues to rebuild wholesale from a single run's
+results, with no stable delimiter for the curation modal to parse against.
+
+Source curation is untouched. The 10-domain Perplexity cap that forces
+`cf_rejected_sources:` to exist separately is now better understood, though:
+Exa's 1200-entry `excludeDomains` is confirmed as the escape hatch, since the
+Exa plan shipped.

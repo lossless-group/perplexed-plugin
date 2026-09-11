@@ -2,16 +2,17 @@
 title: "Plan — Exa Retrieval Stage and the `include-sources:` Slot"
 lede: "Perplexity writes well but retrieves badly on companies; Exa retrieves well but doesn't write. Split the job."
 publish: true
-status: Draft
+status: Shipped
 date_created: 2026-09-10
-date_modified: 2026-09-10
+date_modified: 2026-09-11
+date_first_published: 2026-09-11
 date_authored_initial_draft: 2026-09-10
 date_authored_current_draft: 2026-09-10
 authors:
   - Michael Staton
 augmented_with:
   - Claude Code on Claude Opus 5 (1M context)
-at_semantic_version: 0.0.0.6
+at_semantic_version: 0.1.0.0
 site_uuid: ba3d81ed-b244-470a-829f-782b91bdd704
 hex_code: mk63yl
 applies_to: perplexed Obsidian plugin
@@ -525,3 +526,26 @@ a community-plugin review than raw Node networking. The `node:https` precedent i
       them — does it degrade, or should the spec fall back to no category?
 - [ ] Whether `entities` is populated consistently enough to be worth rendering, or
       whether `summary` alone carries the load.
+
+## Post-ship note — 2026-09-11
+
+Shipped in `dbe6b25`, logged in [[2026-09-11_01]]. Steps 1-5 and 7 landed:
+service, provider dispatch, citation namespace, splice, footer, and
+`toolkit-profile` as the reference implementation.
+
+**Deliberately not built:**
+
+- **Step 6, the retrieval cache.** Re-running still re-fetches and re-pays.
+  Cheap enough ($0.02) that it never bit during the session, but it remains the
+  correctness argument rather than the cost one: a section refresh that pulls a
+  different source set than the original run is not a revision.
+- **The aggregator denylist for `pin: none`.** Unpinned retrieval still returns
+  bare `github.com` and `wikipedia.org` homepages alongside real competitors.
+- **Feeding the entity pin into Perplexity's `search_domain_filter`.** This is
+  the highest-value remaining item and came directly out of the Kestra run: Exa
+  found the right company while Perplexity's own search cited Kestra Medical
+  Technologies ten times. Pinning only one of the two providers leaves the
+  pollution in the output.
+- **The standalone Exa `/answer` generation path.** The retrieval registry was
+  kept separate from generation providers specifically so this can be added
+  without a refactor; nothing else about it is started.
