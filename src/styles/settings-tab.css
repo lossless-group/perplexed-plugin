@@ -1,52 +1,23 @@
 /* Perplexed settings-tab styles
  *
- * Replaces inline element.style.* assignments that ObsidianReviewBot rejects.
- * The textareas used for JSON request templates need a fixed minimum height,
- * full container width, and monospace font; that's what these classes do.
+ * Since 0.4.0 the settings tab is declarative (Obsidian 1.13's
+ * getSettingDefinitions()), so Obsidian draws every row and textarea.
+ * The tab tags groups with a class (the group `cls` field) instead of
+ * adding classes to elements it no longer creates:
+ *
+ *   .perplexed-settings-provider  Perplexity, Perplexica / Vane, LM Studio:
+ *                                 the JSON request-body templates.
+ *   .perplexed-settings-prompts   System prompts, article templates, image
+ *                                 and text-enhancement prompts: prose.
  */
 
-.perplexed-json-textarea {
-    width: 100%;
-    min-height: 300px;
+.perplexed-settings-provider textarea {
     font-family: var(--font-monospace);
-}
-
-/* Modifier classes for taller variants — used by the article-generator
- * and deep-research template editors which want more vertical room. */
-.perplexed-json-textarea.is-tall {
-    min-height: 500px;
-}
-
-.perplexed-json-textarea.is-extra-tall {
-    min-height: 600px;
-}
-
-/* Prose textarea — for system prompts and other natural-language inputs.
- * Distinct from json-textarea: body font (not monospace), short default
- * height (~3 lines), user can resize vertically if they paste a longer prompt.
- * Pair with full-width sibling-row pattern, not Setting.addTextArea. */
-.perplexed-prose-textarea {
-    width: 100%;
-    min-height: 80px;
-    padding: 10px 12px;
-    font-family: var(--font-text);
-    font-size: 14px;
-    line-height: 1.5;
-    color: var(--text-normal);
-    background-color: var(--background-primary);
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 8px;
     resize: vertical;
-    box-sizing: border-box;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.perplexed-prose-textarea:focus {
-    outline: none;
-    border-color: var(--interactive-accent);
-    box-shadow: 0 0 0 3px var(--interactive-accent-hover);
-}
-
-.perplexed-prose-textarea::placeholder {
-    color: var(--text-faint);
+.perplexed-settings-prompts textarea {
+    font-family: var(--font-text);
+    line-height: 1.5;
+    resize: vertical;
 }

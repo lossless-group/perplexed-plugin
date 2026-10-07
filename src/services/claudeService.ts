@@ -53,7 +53,7 @@ export class ClaudeService {
         options?: ClaudeOptions
     ): Promise<void> {
         if (!this.client) {
-            new Notice('Claude API key not configured. Set ANTHROPIC_API_KEY in .env or in plugin settings.');
+            new Notice('Claude API key not configured. Add it in the plugin settings.');
             return;
         }
 

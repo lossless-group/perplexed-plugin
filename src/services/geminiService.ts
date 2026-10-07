@@ -79,7 +79,7 @@ export class GeminiService {
         options?: GeminiOptions
     ): Promise<void> {
         if (!this.settings.geminiApiKey) {
-            new Notice('Gemini API key not configured. Set GEMINI_API_KEY in .env or in plugin settings.');
+            new Notice('Gemini API key not configured. Add it in the plugin settings.');
             return;
         }
 

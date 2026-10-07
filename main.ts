@@ -45,7 +45,7 @@ import { DEFAULT_SETTINGS, PerplexedSettingTab } from './src/settings/PerplexedS
 import type { PerplexedPluginSettings } from './src/settings/PerplexedSettings';
 
 export default class PerplexedPlugin extends Plugin {
-    public settings: PerplexedPluginSettings = DEFAULT_SETTINGS;
+    public settings: PerplexedPluginSettings = structuredClone(DEFAULT_SETTINGS);
     private statusBarItemEl: HTMLElement | null = null;
     private ribbonIconEl: HTMLElement | null = null;
     private batchCancelled = false;
@@ -175,7 +175,6 @@ export default class PerplexedPlugin extends Plugin {
             
             // Debug: Log current settings
             console.debug('Perplexed Plugin: Current Perplexica Path:', this.settings.perplexicaEndpoint);
-            console.debug('Perplexed Plugin: Full settings:', JSON.stringify(this.settings, null, 2));
 
             // This adds a settings tab so the user can configure various aspects of the plugin
             this.addSettingTab(new PerplexedSettingTab(this.app, this));
@@ -396,7 +395,15 @@ export default class PerplexedPlugin extends Plugin {
 
     private async loadSettings() {
         const savedData: Partial<PerplexedPluginSettings> = (await this.loadData()) as Partial<PerplexedPluginSettings> ?? {};
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, savedData);
+        // Clone the defaults: the settings tab edits arrays and the prompts
+        // object in place, and must never write through to DEFAULT_SETTINGS
+        // (which "Reset prompts to default" reads back).
+        const defaults = structuredClone(DEFAULT_SETTINGS);
+        this.settings = {
+            ...defaults,
+            ...savedData,
+            prompts: { ...defaults.prompts, ...savedData.prompts },
+        };
         
         // Ensure new fields are always present (migration for existing users)
         if (!this.settings.prompts.deepResearchArticleTemplate) {
@@ -604,7 +611,7 @@ export default class PerplexedPlugin extends Plugin {
             name: 'Ask Gemini',
             editorCallback: (editor: Editor) => {
                 if (!this.geminiService) {
-                    new Notice('Gemini service not initialized. Set GEMINI_API_KEY in .env or settings, then reinitialize services.');
+                    new Notice('Gemini service not initialized. Add a Gemini API key in settings, then reinitialize provider services.');
                     return;
                 }
                 if (!this.promptsService) {
@@ -647,7 +654,7 @@ export default class PerplexedPlugin extends Plugin {
             name: 'Ask Claude',
             editorCallback: (editor: Editor) => {
                 if (!this.claudeService) {
-                    new Notice('Claude service not initialized. Set ANTHROPIC_API_KEY in .env or settings, then reinitialize services.');
+                    new Notice('Claude service not initialized. Add an Anthropic API key in settings, then reinitialize provider services.');
                     return;
                 }
                 if (!this.promptsService) {
@@ -984,9 +991,10 @@ export default class PerplexedPlugin extends Plugin {
             templatesRoot: this.settings.directoryTemplatesRoot,
             partialsRoot: this.settings.directoryTemplatesPartialsRoot,
             preamblesRoot: this.settings.directoryTemplatesPreamblesRoot,
-            systemPreambles: this.settings.directoryTemplatesSystemPreambles,
-            userPreambles: this.settings.directoryTemplatesUserPreambles,
-            frontmatterWhitelist: this.settings.directoryTemplatesFrontmatterWhitelist,
+            // The settings lists can hold a just-added, still-empty entry.
+            systemPreambles: this.settings.directoryTemplatesSystemPreambles.filter(n => n.trim()),
+            userPreambles: this.settings.directoryTemplatesUserPreambles.filter(p => p.name.trim()),
+            frontmatterWhitelist: this.settings.directoryTemplatesFrontmatterWhitelist.filter(k => k.trim()),
             requestTimeoutMs: this.settings.directoryTemplatesRequestTimeoutMs,
             historyRoot: this.settings.directoryTemplatesHistoryRoot,
             exaEnabled: this.settings.exaEnabled,
