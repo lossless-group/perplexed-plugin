@@ -114,7 +114,6 @@ export class LMStudioModal extends Modal {
             .addSlider(s => s
                 .setLimits(0, 2, 0.1)
                 .setValue(this.temperature)
-                .setDynamicTooltip()
                 .onChange(v => { this.temperature = v; }));
 
         // ----- System Prompt (multi-line, doesn't fit a Setting row) -----

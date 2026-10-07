@@ -1,5 +1,13 @@
+# This file is perplexed's own pnpm settings file, not a shared workspace:
+# `packages` lists only this plugin, so it installs and builds on its own.
+# pnpm 11+ no longer reads the "pnpm" field in package.json; settings live here.
 packages:
   - .
 
+# pnpm 10 (CI, release.yml)
 onlyBuiltDependencies:
   - esbuild
+
+# pnpm 11+ (local)
+allowBuilds:
+  esbuild: true
