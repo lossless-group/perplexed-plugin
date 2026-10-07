@@ -3,6 +3,8 @@
 
 **Perplexed** is an Obsidian plugin that enables AI-powered content generation with source citations using [Perplexity](https://www.perplexity.ai/), [Anthropic Claude](https://www.anthropic.com/), [Google Gemini](https://ai.google.dev/) (with Google Search grounding), and [Perplexica / Vane](https://github.com/ItzCrazyKns/Vane) (self-hosted). It also integrates [Exa](https://exa.ai/) as a **retrieval** layer — Exa finds and verifies the source material, and the writing model writes from it. This plugin brings research-grade AI capabilities directly into your Obsidian workspace, allowing you to generate well-cited content for your notes.
 
+> **New in 0.4.0:** every one of Perplexed's settings now shows up in Obsidian's settings search, the preamble and frontmatter lists are real editable lists, and number fields tell you when a value won't work. Requires Obsidian 1.13 or later. [Release notes →](changelog/releases/0.4.0.md)
+
 ## 💼 For Venture Capital, Private Equity, and Equities-Trading Workflows
 
 Perplexed ships a set of **analyst-grade directory templates** aimed at the research deliverables a VC analyst, PE associate, equity-research analyst, or trading-desk strategist produces daily. Drop an empty file into the matching folder, run *Apply directory template to current file*, and Perplexity Deep Research returns a 6-9K-word cited analyst draft you can curate into a memo for a partner, an IC, or a portfolio review.
@@ -77,6 +79,7 @@ plugin directory.
   - [Command Reference](#command-reference)
   - [Directory Templates](#directory-templates)
     - [Retrieval before generation — Exa](#retrieval-before-generation--exa)
+- [Releases](#releases)
 - [Developer Onboarding](#developer-onboarding)
   - [Project Structure](#project-structure)
   - [Development Setup](#development-setup)
@@ -89,16 +92,18 @@ plugin directory.
 
 ## Installation
 
-1. **Download the Plugin**: 
-   - Download the latest release from the releases page
-   - Extract the ZIP file to your Obsidian plugins folder
+**Requires Obsidian 1.13 or later** (desktop only). Perplexed 0.3.1 remains available for older Obsidian versions on the [releases page](https://github.com/lossless-group/perplexed-plugin/releases).
+
+1. **Download the plugin**:
+   - From the [latest release](https://github.com/lossless-group/perplexed-plugin/releases/latest), download `main.js`, `manifest.json`, and `styles.css`
+   - Put the three files in a folder named `perplexed` inside your vault's plugins folder: `<your vault>/.obsidian/plugins/perplexed/`
 
 2. **Enable in Obsidian**:
-   - Open Obsidian Settings → Community Plugins
-   - Turn off Safe Mode
-   - Click "Install plugin from file"
-   - Select the extracted plugin folder
-   - Enable the "Perplexed" plugin
+   - Open Obsidian Settings → Community plugins
+   - Turn on community plugins if they are off, then reload the list
+   - Enable "Perplexed"
+
+Every setting below is also reachable from Obsidian's settings search: type "Exa", "system prompt", or "LM Studio endpoint" and jump straight to the row.
 
 ## Initial Setup
 
@@ -131,7 +136,7 @@ Google Gemini is Google's commercial AI service. The `google_search` grounding t
    - Paste your API key into "Gemini API key"
    - Default model: `gemini-flash-latest` (always-current Flash, free-tier friendly) — `gemini-pro-latest` and pinned `gemini-2.5-pro` / `gemini-2.5-flash` also available
    - Leave **Enable Google search grounding by default** on for source-cited research
-   - Leave **Resolve citation urls** on — this is what turns the grounding-redirect URLs into the real source URLs in your citations footer
+   - Leave **Resolve citation URLs** on — this is what turns the grounding-redirect URLs into the real source URLs in your citations footer
 
 ### 3. Configure Perplexica / Vane (self-hosted — requires local install)
 
@@ -183,7 +188,7 @@ For local AI processing without internet dependency:
 
 ### Quick Start
 
-1. **Open Command Palette**: `Ctrl/Cmd + Shift + P`
+1. **Open Command Palette**: `Ctrl/Cmd + P`
 2. **Run Command**: Type "Ask Perplexity" and select it
 3. **Enter Your Question**: Type your research question
 4. **Configure Options**:
@@ -236,7 +241,7 @@ Enhance selected text using Perplexity AI to improve clarity, add details, and m
 #### Quick Start
 
 1. **Select Text**: Highlight the text you want to enhance in your note
-2. **Open Command Palette**: `Ctrl/Cmd + Shift + P`
+2. **Open Command Palette**: `Ctrl/Cmd + P`
 3. **Run Command**: Type "Enhance Selected Text with Perplexity" and select it
 4. **Configure Options**:
    - **Model**: Choose from available Perplexity models
@@ -266,7 +271,7 @@ Artificial Intelligence (AI) is fundamentally transforming how we work across va
 
 ### Quick start
 
-1. **Open Command Palette**: `Ctrl/Cmd + Shift + P`
+1. **Open Command Palette**: `Ctrl/Cmd + P`
 2. **Run Command**: Type "Ask Gemini" and select it
 3. **Enter your question** in the textarea
 4. **Configure options** in the modal:
@@ -318,7 +323,7 @@ Lands in the note with prose like:
 
 ### Quick Start
 
-1. **Open Command Palette**: `Ctrl/Cmd + Shift + P`
+1. **Open Command Palette**: `Ctrl/Cmd + P`
 2. **Run Command**: Type "Ask Perplexica / Vane" and select it
 3. **Enter Your Question**: Type your research question
 4. **Configure Options**:
@@ -361,7 +366,7 @@ Optimization: balanced
 
 ### Quick Start
 
-1. **Open Command Palette**: `Ctrl/Cmd + Shift + P`
+1. **Open Command Palette**: `Ctrl/Cmd + P`
 2. **Run Command**: Type "Ask LM Studio" and select it
 3. **Enter Your Question**: Type your question
 4. **Configure Options**:
@@ -590,294 +595,86 @@ For interpolation tokens, the full cft block grammar, the cleanup pipeline mecha
 
 ---
 
+# Releases
+
+**0.4.0** — 2026-10-06 · requires Obsidian 1.13
+
+- Settings rebuilt on Obsidian 1.13's declarative API: every setting is searchable, and one broken row can no longer hide the rest of the tab.
+- System preambles, user preambles, and the frontmatter whitelist are editable lists (add, delete, drag to reorder) instead of comma-separated text.
+- Number fields reject values that would not work, instead of silently dropping the edit; Exa's key and endpoint appear only while Exa retrieval is on.
+- Fixed: in a vault with no saved prompts, "Reset prompts to default" could restore your own edits instead of the defaults until Obsidian restarted.
+- Full notes: [`changelog/releases/0.4.0.md`](changelog/releases/0.4.0.md).
+
+**0.3.1** — 2026-07-06 · Perplexity streaming restored after a CORS change. [Notes](changelog/releases/0.3.1.md).
+
+---
+
 # Developer Onboarding
 
 ## Project Structure
 
 ```
-perplexed-plugin/
-├── main.ts                 # Main plugin file with all functionality
-├── manifest.json           # Plugin metadata and requirements
-├── package.json            # Dependencies and build scripts
-├── esbuild.config.mjs      # Build configuration
-├── tsconfig.json           # TypeScript configuration
-├── styles.css              # Plugin styles (if any)
-└── README.md              # This file
+perplexed-plugin/              # the folder name in your vault must be the plugin id: perplexed
+├── main.ts                    # Plugin class: loads settings, wires services, registers commands
+├── src/
+│   ├── settings/              # Settings shape, defaults, and the declarative settings tab
+│   ├── services/              # One service per provider (Perplexity, Claude, Gemini, ...), plus
+│   │                          #   directory templates, Exa retrieval, vault linking, find images
+│   ├── modals/                # The command dialogs
+│   ├── docs/                  # Templates, partials, and preambles seeded into the vault
+│   └── styles/                # CSS, bundled into styles.css
+├── tests/                     # node:test specs, run against a stub of the obsidian module
+├── scripts/run-tests.mjs      # Bundles and runs the tests (no test framework)
+├── esbuild.config.mjs         # Builds main.js and styles.css
+├── manifest.json              # Plugin id, version, minAppVersion
+└── versions.json              # Plugin version -> minimum Obsidian version
 ```
 
 ## Development Setup
 
-### Prerequisites
+Requires Node.js 22 and pnpm.
 
-- Node.js (v18 or higher)
-- pnpm (recommended) or npm
-- Obsidian desktop application
-- Git
-
-### Installation
-
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/lossless-group/perplexed-plugin.git
-   cd perplexed-plugin
-   ```
-
-2. **Install Dependencies**:
-   ```bash
+```bash
+git clone https://github.com/lossless-group/perplexed-plugin.git
+cd perplexed-plugin
 pnpm install
-   ```
-
-3. **Build the Plugin**:
-   ```bash
-pnpm build
-   ```
-
-4. **Development Mode**:
-   ```bash
-pnpm dev
+pnpm dev      # esbuild watch: rebuilds main.js and styles.css on change
+pnpm test     # Node's built-in test runner; no network calls
+pnpm build    # ESLint (Obsidian's review-bot rules) + tsc + production bundle
 ```
 
-### Testing Your Plugin
+To use your working copy in a vault, symlink it into the vault's plugins folder. The link must be named after the plugin id, `perplexed`:
 
-1. **Create Symbolic Link** (macOS/Linux):
-   ```bash
-   ln -s /path/to/your/plugin /path/to/obsidian/vault/.obsidian/plugins/perplexed
-   ```
+```bash
+ln -s /path/to/perplexed-plugin /path/to/your-vault/.obsidian/plugins/perplexed
+```
 
-2. **Windows (PowerShell)**:
-   ```powershell
-   New-Item -ItemType SymbolicLink -Path "C:\path\to\obsidian\vault\.obsidian\plugins\perplexed" -Target "C:\path\to\your\plugin"
-   ```
+On Windows (PowerShell):
 
-3. **Enable in Obsidian**:
-   - Open Obsidian Settings → Community Plugins
-   - Disable Safe Mode
-   - Enable the "Perplexed" plugin
+```powershell
+New-Item -ItemType SymbolicLink -Path "C:\path\to\your-vault\.obsidian\plugins\perplexed" -Target "C:\path\to\perplexed-plugin"
+```
+
+Then run `pnpm dev`, and reload the plugin to pick up new builds: toggle it off and on in Community plugins, or quit and reopen Obsidian.
 
 ## Architecture Overview
 
-### Core Components
+- **`main.ts`**: the `PerplexedPlugin` class. `onload()` loads settings, seeds the shipped templates into the vault if the templates folder is empty, builds one service per provider, adds the settings tab, and registers the commands.
+- **`src/settings/PerplexedSettings.ts`**: `PerplexedPluginSettings`, `DEFAULT_SETTINGS`, and `PerplexedSettingTab`. The tab implements `getSettingDefinitions()` (Obsidian 1.13+), so Obsidian draws and indexes the rows; there is no `display()`. Controls bind to dot-path keys such as `prompts.enhancePrompt` through `getControlValue` / `setControlValue`.
+- **`src/services/`**: the provider services. Streaming Perplexity requests go through Node's `https` module rather than `fetch`, because Perplexity's API stopped sending the CORS headers Electron's renderer requires (see [0.3.1](changelog/releases/0.3.1.md)). Non-streaming requests use Obsidian's `request()` / `requestUrl()`.
+- **`src/modals/`**: one dialog per command. Each takes the service it needs and the prompts service.
 
-1. **PerplexedPlugin Class** (`main.ts`):
-   - Main plugin class extending Obsidian's Plugin
-   - Manages settings, commands, and UI components
-   - Handles API interactions with all providers
-
-2. **Settings Management**:
-   - `PerplexedPluginSettings` interface defines all configurable options
-   - `PerplexedSettingTab` provides the settings UI
-   - Settings are persisted using Obsidian's data API
-
-3. **Command Registration**:
-   - `registerPerplexityCommands()`: Perplexity-specific commands
-   - `registerPerplexicaCommands()`: Perplexica-specific commands
-   - `registerLMStudioCommands()`: LM Studio-specific commands
-
-4. **API Integration**:
-   - `queryPerplexity()`: Handles Perplexity API calls
-   - `queryPerplexica()`: Handles Perplexica API calls
-   - `queryLMStudio()`: Handles LM Studio API calls
-
-### Key Features Implementation
-
-#### Streaming Responses
-```typescript
-// Example from queryPerplexity method
-if (useStreaming) {
-    const reader = response.body?.getReader();
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        const chunk = new TextDecoder().decode(value);
-        // Process and display chunk in real-time
-    }
-}
-```
-
-#### Modal Interfaces
-Each command uses Obsidian's Modal class to create user-friendly input forms:
-```typescript
-const modal = new (class extends Modal {
-    private queryInput!: HTMLTextAreaElement;
-    
-    onOpen() {
-        // Create form elements
-    }
-    
-    async onSubmit() {
-        // Handle form submission
-    }
-})(this.app, this, editor);
-```
-
-#### Error Handling
-Comprehensive error handling for API failures, network issues, and invalid configurations:
-```typescript
-try {
-    const response = await fetch(endpoint, options);
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-    }
-} catch (error) {
-    new Notice(`Error: ${error.message}`);
-    console.error('API Error:', error);
-}
-```
-
-### Configuration Management
-
-The plugin supports extensive configuration through the settings interface:
-
-```typescript
-interface PerplexedPluginSettings {
-    perplexityApiKey: string;
-    perplexityEndpoint: string;
-    perplexicaEndpoint: string;
-    lmStudioEndpoint: string;
-    defaultModel: string;
-    defaultOptimizationMode: string;
-    defaultFocusMode: string;
-    // ... additional settings
-}
-```
-
-### Build System
-
-The project uses esbuild for fast compilation:
-
-```javascript
-// esbuild.config.mjs
-import esbuild from 'esbuild';
-import process from 'process';
-import builtins from 'builtin-modules';
-
-const banner =
-`/*
-THIS IS A GENERATED/BUNDLED FILE BY ESBUILD
-if you want to view the source, please visit the github repository of this plugin
-*/
-`;
-
-const prod = (process.argv[2] === 'production');
-
-esbuild.build({
-    banner: {
-        js: banner,
-    },
-    entryPoints: ['main.ts'],
-    bundle: true,
-    external: [
-        'obsidian',
-        'electron',
-        '@codemirror/autocomplete',
-        '@codemirror/collab',
-        '@codemirror/commands',
-        '@codemirror/language',
-        '@codemirror/lint',
-        '@codemirror/search',
-        '@codemirror/state',
-        '@codemirror/view',
-        '@lezer/common',
-        '@lezer/highlight',
-        '@lezer/lr',
-        ...builtins],
-    format: 'cjs',
-    watch: !prod,
-    target: 'es2018',
-    logLevel: "info",
-    sourcemap: prod ? false : 'inline',
-    treeShaking: true,
-    outfile: 'main.js',
-}).catch(() => process.exit(1));
-```
+Provider services copy their API key and endpoint when they are built. After changing a key or endpoint in settings, run **Reinitialize provider services** (or reload the plugin).
 
 ## Contributing
 
-### Development Workflow
+1. Branch from `development`.
+2. Keep `pnpm test`, `pnpm build` (ESLint with zero errors and zero warnings, plus `tsc`) green.
+3. Settings: add the key to `PerplexedPluginSettings` and `DEFAULT_SETTINGS`, then a definition in `getSettingDefinitions()`. The settings tests check that every control key exists in `DEFAULT_SETTINGS`.
+4. Commands: command IDs are what users bind hotkeys to. Never rename one; `tests/plugin-onload.test.ts` lists them all.
+5. UI strings are sentence case (the review bot enforces it); product names are taught to the lint rule in `eslint.config.mjs`.
 
-1. **Create Feature Branch**:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. **Make Changes**:
-   - Follow TypeScript best practices
-   - Add proper error handling
-   - Include JSDoc comments for public methods
-
-3. **Test Your Changes**:
-```bash
-   pnpm build
-   # Test in Obsidian
-   ```
-
-4. **Submit Pull Request**:
-   - Include clear description of changes
-   - Add tests if applicable
-   - Update documentation
-
-### Code Style Guidelines
-
-- Use TypeScript strict mode
-- Follow Obsidian plugin conventions
-- Use async/await for API calls
-- Implement proper error handling
-- Add JSDoc comments for public APIs
-
-### Testing
-
-Currently, testing is manual through Obsidian. To test:
-
-1. Build the plugin: `pnpm build`
-2. Enable in Obsidian
-3. Test all commands and settings
-4. Verify error handling with invalid configurations
-
-### Common Development Tasks
-
-#### Adding a New AI Provider
-
-1. **Add Settings**:
-   ```typescript
-   interface PerplexedPluginSettings {
-       newProviderEndpoint: string;
-       newProviderApiKey: string;
-       // ... other settings
-   }
-   ```
-
-2. **Add Query Method**:
-   ```typescript
-   public async queryNewProvider(query: string, options: any): Promise<void> {
-       // Implementation
-   }
-   ```
-
-3. **Register Commands**:
-   ```typescript
-   private registerNewProviderCommands(): void {
-       this.addCommand({
-           id: 'ask-new-provider',
-           name: 'Ask New Provider',
-           editorCallback: (editor: Editor) => {
-               // Modal implementation
-           }
-       });
-   }
-   ```
-
-4. **Update Settings UI**:
-   Add configuration options to `PerplexedSettingTab.display()`
-
-#### Modifying Response Format
-
-The plugin inserts responses directly into the editor. To modify the format:
-
-```typescript
-// In query methods, modify the headerText
-const headerText = `\n\n***\n## Custom Header\n**Question:** ${query}\n\n### **Response**:\n\n`;
-```
+**Releasing.** Bump `manifest.json`, `package.json`, and `versions.json` together (three-part semver), write `changelog/releases/<version>.md`, and push a tag with no `v` prefix (for example `0.4.0`). `.github/workflows/release.yml` then builds, attests, and publishes the release with those notes.
 
 ## Troubleshooting
 
