@@ -77,6 +77,18 @@ export class PerplexityService {
         this.promptsService = settings.promptsService;
     }
 
+    private getRequestHeaders(accept: string): Record<string, string> {
+        const headers: Record<string, string> = {
+            'Authorization': `Bearer ${this.settings.perplexityApiKey}`,
+            'Content-Type': 'application/json',
+            'Accept': accept,
+        };
+        if (new URL(this.settings.perplexityEndpoint).hostname === 'api.perplexity.ai') {
+            headers['X-Pplx-Integration'] = 'perplexed-plugin';
+        }
+        return headers;
+    }
+
     private convertRecencyFilter(filter: string): string | undefined {
         // Handle empty string (no filter)
         if (!filter || filter === '') {
@@ -532,11 +544,7 @@ export class PerplexityService {
                                 hostname: endpointUrl.hostname,
                                 path: endpointUrl.pathname + endpointUrl.search,
                                 method: 'POST',
-                                headers: {
-                                    'Authorization': `Bearer ${this.settings.perplexityApiKey}`,
-                                    'Content-Type': 'application/json',
-                                    'Accept': 'text/event-stream',
-                                },
+                                headers: this.getRequestHeaders('text/event-stream'),
                             },
                             (res) => {
                                 if (res.statusCode !== undefined && res.statusCode >= 400) {
@@ -580,11 +588,7 @@ export class PerplexityService {
                     const response = await request({
                         url: this.settings.perplexityEndpoint,
                         method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${this.settings.perplexityApiKey}`,
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
-                        },
+                        headers: this.getRequestHeaders('application/json'),
                         body: JSON.stringify(payload)
                     });
 
