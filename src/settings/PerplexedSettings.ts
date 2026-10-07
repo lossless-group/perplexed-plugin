@@ -777,7 +777,7 @@ export class PerplexedSettingTab extends PluginSettingTab {
             },
             {
                 name: 'Request timeout (ms)',
-                desc: 'Maximum wall-clock time to wait for a Perplexity response. Default 1800000 (30 min): generous, because deep-research runs on long analyst-grade templates routinely take 15-25 min. Individual templates may override this with request-timeout-ms in their cft block.',
+                desc: 'Maximum wall-clock time to wait for a Perplexity response. Default 1800000 (30 min): generous, because deep-research runs on long analyst-grade templates routinely take 15-25 min, and the $10-$50 of value per good output is worth waiting for. Individual templates may override this with request-timeout-ms in their cft block.',
                 control: {
                     type: 'number',
                     key: 'directoryTemplatesRequestTimeoutMs',
