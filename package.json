@@ -7,6 +7,7 @@
 		"dev": "node esbuild.config.mjs",
 		"build": "eslint . --report-unused-disable-directives && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"lint": "eslint . --report-unused-disable-directives",
+		"test": "node scripts/run-tests.mjs",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [

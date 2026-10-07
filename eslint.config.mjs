@@ -5,7 +5,9 @@ import obsidianmd from "eslint-plugin-obsidianmd";
 
 export default tseslint.config(
 	{
-		ignores: ["node_modules/", "main.js", "**/*.mjs", "test-*.sh"],
+		// tests/ and scripts/ are bundled by esbuild for node:test, not
+		// shipped; the plugin lint rules don't apply to them.
+		ignores: ["node_modules/", "main.js", "**/*.mjs", "test-*.sh", "tests/**", "scripts/**", ".test-build/**"],
 	},
 	js.configs.recommended,
 	...tseslint.configs.recommended,
