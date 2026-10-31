@@ -28,6 +28,7 @@ related:
   - "[[2026-09-10_Exa-Retrieval-Stage-and-Include-Sources]]"
   - "[[Multi-Stage-Cooperative-Claude-and-Perplexity-with-RAG]]"
 summary: "Implementation plan for revising a generated document in place: refresh one heading-delimited section against its template instructions, and curate the sources footer so rejected sources are denylisted and replaced on re-run. Realizes the exploration's deferred Option C without needing cft-section blocks, because the template skeleton already carries per-heading instructions. Depends on the snapshots plan; names the byte-range replacement, source-footer merge, and citation-renumbering hazards that make this the largest chunk of the revision arc."
+type: Plans
 ---
 
 # Plan — Section Refresh and Source Curation

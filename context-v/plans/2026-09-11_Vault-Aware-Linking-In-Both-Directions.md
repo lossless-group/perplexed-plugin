@@ -30,6 +30,7 @@ related:
   - "[[2026-09-10_Section-Refresh-and-Source-Curation]]"
   - "[[2026-09-11_02]]"
 summary: "Retroactive plan for the vault-linking work shipped in dbe6b25 — written after the fact so the feature is tracked like its siblings rather than living only in a changelog entry. Covers both directions: include-backlinks: feeds real vault paths into generation so a draft can link back, and the Link back to vault notes command bulk-converts unlinked mentions in existing notes behind a human review table. Records the API choice (resolvedLinks over the undocumented getBacklinksForFile), the absolute-path link format the published sites depend on, the confidence tiers that keep common words from being linkified, and the inbound/outbound conflation that cost a detour mid-session."
+type: Plans
 ---
 
 # Plan — Vault-Aware Linking in Both Directions

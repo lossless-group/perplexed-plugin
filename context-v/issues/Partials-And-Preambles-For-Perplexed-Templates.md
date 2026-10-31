@@ -1,7 +1,7 @@
 ---
 title: Partials and preambles for perplexed templates
 date_created: 2026-05-19
-type: issue
+type: Issues
 status: open
 target_repo: perplexed
 related:

@@ -29,6 +29,7 @@ related:
   - "[[2026-09-10_Outline-Shaping-and-Adherence-Modes]]"
   - "[[2026-09-10_Run-Snapshots-and-Restore]]"
 summary: "Implementation plan for adding Exa.ai as a retrieval stage that runs before the Perplexity generation call, splicing named company data into the prompt via a generic `include-sources:` cft key. Names the four non-obvious hazards — citation-namespace collision between two providers, prompt-context budget, degrade-don't-block failure semantics, and retrieval caching across re-runs — and specifies the provider-registry shape so a standalone Exa `/answer` generation path can be added later without refactoring. Read this before touching exaService.ts."
+type: Plans
 ---
 
 # Plan — Exa Retrieval Stage and the `include-sources:` Slot

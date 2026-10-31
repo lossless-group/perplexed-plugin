@@ -27,6 +27,7 @@ related:
   - "[[2026-09-10_Exa-Retrieval-Stage-and-Include-Sources]]"
   - "[[Wall-Clock-Timeout-Cuts-Off-Long-Deep-Research-Streams]]"
 summary: "Implementation plan for pre-run snapshots of every directory-template target plus a restore command, stored as visible markdown under the library root. The prerequisite for the whole revision arc — section refresh and source curation are only safe to attempt once a bad run is cheaply reversible. Covers the snapshot-before-any-write ordering rule, why truncated runs make this urgent rather than merely nice, the retention policy, and the graph-pollution mitigations that come with the visible-folder choice."
+type: Plans
 ---
 
 # Plan — Run Snapshots and Restore

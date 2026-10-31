@@ -21,6 +21,7 @@ tags:
   - Obsidian-Plugin
   - Obsidian-1-13
   - Release-0-4-0
+type: Plans
 ---
 
 # Plan — Upgrade Perplexed to Obsidian 1.13 (0.4.0)

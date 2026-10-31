@@ -30,6 +30,7 @@ hex_code: bj863v
 date_authored_initial_draft: 2026-05-26
 date_authored_current_draft: 2026-05-26
 publish: true
+type: Explorations
 ---
 
 # Multi-Stage Cooperative Claude + Perplexity with RAG

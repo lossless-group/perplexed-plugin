@@ -28,6 +28,7 @@ related:
   - "[[2026-09-10_Exa-Retrieval-Stage-and-Include-Sources]]"
   - "[[2026-09-10_Section-Refresh-and-Source-Curation]]"
 summary: "Implementation plan for per-file outlines that shape a single directory-template run, plus a three-way adherence toggle (hard-follow / include-but-don't-limit / loose-suggestion) shipped as vault-editable partials. Documents the fill-vs-append bug that currently strands a hand-authored outline, specifies the three-tier outline resolution order, and explains why adherence rides the existing preamble machinery instead of new prompt-assembly code. Supersedes the ambitions of the early Using-Files-as-Prompt-Outlines spec, most of which the template system already absorbed."
+type: Plans
 ---
 
 # Plan — Outline Shaping and Adherence Modes

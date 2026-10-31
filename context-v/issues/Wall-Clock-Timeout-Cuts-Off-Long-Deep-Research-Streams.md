@@ -10,7 +10,7 @@ authors:
 augmented_with:
   - Claude Opus 4.7 (1M context)
 semantic_version: 0.0.0.2
-type: issue
+type: Issues
 status: resolved
 target_repo: perplexed
 tags:
