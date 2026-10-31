@@ -5,11 +5,13 @@ created: 2026-05-02
 applies_to: perplexed Obsidian plugin
 authors:
   - Michael Staton
-augmented_with: Claude Code (Opus 4.7, 1M context)
+augmented_with:
+  - Claude Code (Opus 4.7, 1M context)
 related_reference: ../../cite-wide/context-v/reminders/Obsidian-Type-Safety.md
 site_uuid: 481353f2-347c-4120-b257-0f4604785621
 hex_code: b9tfss
 date_created: 2026-05-02
+date_modified: 2026-08-18
 lede: "25 explicit-any sites plus the four-part 0.0.0.1 version the bot rejects as non-semver, a missing LICENSE, and three unused runtime deps."
 summary: "Publishing-prep plan for perplexed, phased so ESLint is tightened to match the review bot first and the resulting build failures drive the rest. Note the filename typo — 20206 should be 2026 — because other documents link to it by that name. Companion to the Submission-Blockers-Punch-List, which covers the docs-derived blockers this plan does not."
 publish: true

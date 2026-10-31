@@ -3,6 +3,7 @@ site_uuid: b8fac9ff-99f6-40df-807a-106a0dac6e6a
 hex_code: gsmolx
 title: Ideal and Overkill Schema for Max Flexibility
 date_created: 2026-05-02
+date_modified: 2026-08-18
 date_authored_initial_draft: 2026-05-02
 date_authored_current_draft: 2026-05-02
 authors:

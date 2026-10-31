@@ -1,8 +1,11 @@
 ---
 title: Partials and preambles for perplexed templates
 date_created: 2026-05-19
+date_modified: 2026-08-18
+authors:
+  - Michael Staton
 type: Issues
-status: open
+status: Open
 target_repo: perplexed
 related:
   - "[[Nudgeing-AI-Search-to-Return-Contextually-Appriate-Images]]"
