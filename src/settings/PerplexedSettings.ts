@@ -1,6 +1,6 @@
 // Perplexed settings: the stored shape, its defaults, and the settings tab.
 import type { App, SettingDefinitionItem, SettingGroupItem } from 'obsidian';
-import { Notice, PluginSettingTab } from 'obsidian';
+import { Notice, PluginSettingTab, SecretComponent } from 'obsidian';
 import type PerplexedPlugin from '../../main';
 import { EXA_SEARCH_ENDPOINT } from '../services/exaService';
 import { reSeedMissingFiles } from '../services/templateSeederService';
@@ -75,6 +75,9 @@ export interface PerplexedPluginSettings {
     exaApiKey: string;
     exaEndpoint: string;
     exaSplicedContextMaxChars: number;
+
+    /** The name of the Firecrawl secret in Obsidian's keychain (not the key itself). */
+    firecrawlSecret: string;
 
     // Find images for selection
     findImagesMaxImages: number;
@@ -311,6 +314,8 @@ Structure the article as follows:
     exaEndpoint: EXA_SEARCH_ENDPOINT,
     exaSplicedContextMaxChars: 12000,
 
+    firecrawlSecret: '',
+
     // Find images for selection
     findImagesMaxImages: 3
 };
@@ -433,6 +438,7 @@ export class PerplexedSettingTab extends PluginSettingTab {
             { type: 'group', heading: 'Perplexica / Vane (self-hosted)', cls: 'perplexed-settings-provider', items: this.perplexicaItems() },
             { type: 'group', heading: 'LM Studio (local models)', cls: 'perplexed-settings-provider', items: this.lmStudioItems() },
             { type: 'group', heading: 'Exa retrieval', items: this.exaItems() },
+            { type: 'group', heading: 'Firecrawl', items: this.firecrawlItems() },
             ...this.promptGroups(),
             { type: 'group', heading: 'Directory templates', items: this.directoryTemplateItems() },
             this.stringList({
@@ -644,6 +650,27 @@ export class PerplexedSettingTab extends PluginSettingTab {
                     step: 1,
                     defaultValue: DEFAULT_SETTINGS.exaSplicedContextMaxChars,
                     validate: positiveWholeNumber,
+                },
+            },
+        ];
+    }
+
+    private firecrawlItems(): SettingGroupItem[] {
+        return [
+            {
+                name: 'About Firecrawl',
+                desc: 'Runs Fireround, a verified feed of startup funding rounds. A template adds it with "- provider: fireround" under include-sources: a note whose url is a company homepage then gets that company\'s rounds as citeable sources, and with write-json-under, the raw data under that heading.',
+            },
+            {
+                name: 'Firecrawl API key',
+                desc: 'Stored in Obsidian\'s keychain, never in plugin files. Pick an existing secret or create one; other plugins can share it. Keys are at firecrawl.dev.',
+                render: (setting) => {
+                    setting.addComponent(el => new SecretComponent(this.app, el)
+                        .setValue(this.plugin.settings.firecrawlSecret)
+                        .onChange((name) => {
+                            this.plugin.settings.firecrawlSecret = name;
+                            void this.plugin.saveSettings();
+                        }));
                 },
             },
         ];

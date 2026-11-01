@@ -29,6 +29,7 @@ export interface DirectoryTemplateSettings {
     requestTimeoutMs: number;
     historyRoot: string;
     exaEnabled: boolean;
+    firecrawlApiKey: string;
     exaApiKey: string;
     exaEndpoint: string;
     exaSplicedContextMaxChars: number;
@@ -286,6 +287,7 @@ function buildRetrievedFooter(sources: ResolvedSource[]): string {
     // page itself.
     const attributions: Record<string, string> = {
         exa: '[Exa.ai](https://exa.ai) API response',
+        fireround: '[Fireround](https://fireround.dev) API response',
     };
     const lines = sources.map((s) => {
         const via = attributions[s.providerId] ?? `${s.providerId} response`;
@@ -293,6 +295,45 @@ function buildRetrievedFooter(sources: ResolvedSource[]): string {
         return `[^${s.marker}]: ${via} for data on ${subject}`;
     });
     return '\n## Sources (retrieved)\n\n' + lines.join('\n') + '\n';
+}
+
+/**
+ * Writes `value` as a JSON code fence directly under a heading, verbatim. A fence
+ * already there (a prior run's, or one the model repeated from a prior draft) is
+ * replaced rather than stacked. With no such heading, adds one at the end, so the
+ * data is never lost to a model that renamed a section.
+ */
+export function insertJsonUnderHeading(body: string, heading: string, value: unknown): string {
+    const json = JSON.stringify(value, null, 2);
+    // Fetched strings could hold a fence of their own; the outer one must outrank it.
+    const longest = Math.max(2, ...(json.match(/`{3,}/g) ?? []).map((m) => m.length));
+    const fence = '`'.repeat(longest + 1);
+    const block = `${fence}json\n${json}\n${fence}`;
+
+    const lines = body.split('\n');
+    const wanted = heading.trim().toLowerCase();
+    let inFence = false;
+    let at = -1;
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i] ?? '';
+        if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+        const m = inFence ? null : /^#{1,6}\s+(.*?)\s*#*\s*$/.exec(line);
+        if (m && (m[1] ?? '').trim().toLowerCase() === wanted) {
+            at = i;
+            break;
+        }
+    }
+    if (at < 0) return `${body.replace(/\s+$/, '')}\n\n## ${heading}\n\n${block}\n`;
+
+    let next = at + 1;
+    while (next < lines.length && (lines[next] ?? '').trim() === '') next++;
+    const open = /^(`{3,})json\s*$/.exec(lines[next] ?? '');
+    let resume = at + 1;
+    if (open) {
+        const close = lines.findIndex((l, i) => i > next && l.trim() === open[1]);
+        if (close > next) resume = close + 1;
+    }
+    return [...lines.slice(0, at + 1), '', block, ...lines.slice(resume)].join('\n');
 }
 
 const FRONTMATTER_FENCE = '---';
@@ -772,7 +813,7 @@ export interface ApplyOptions {
     isCancelled?: () => boolean;
     /** Per-run Perplexity model; overrides the template's cft `model:`. */
     modelOverride?: string;
-    /** Per-run opt-out of the Exa retrieval stage. Defaults to the plugin setting. */
+    /** Per-run opt-out of the retrieval stage. Defaults to on; Exa also honours its own setting. */
     useRetrieval?: boolean;
     /**
      * Output mode. 'auto' keeps the historical behaviour (fill when the body is
@@ -897,7 +938,7 @@ export async function applyTemplate(
     // Retrieval stage. Runs BEFORE the destructive vault.modify below so a
     // retrieval failure can never leave a half-wiped target file. resolve*
     // never throws — a failure degrades to zero spliced sources plus a Notice.
-    const retrievalEnabled = options.useRetrieval ?? settings.exaEnabled;
+    const retrievalEnabled = options.useRetrieval ?? true;
     const { specs: sourceSpecs, warnings: specWarnings } = retrievalEnabled
         ? parseIncludeSources(
             template.cftConfig['include-sources'],
@@ -914,15 +955,17 @@ export async function applyTemplate(
             exaApiKey: settings.exaApiKey,
             exaEndpoint: settings.exaEndpoint,
             exaSplicedContextMaxChars: settings.exaSplicedContextMaxChars,
+            firecrawlApiKey: settings.firecrawlApiKey,
         },
-        sourceSpecs,
+        // Exa's master switch governs Exa only.
+        sourceSpecs.filter((s) => s.provider !== 'exa' || settings.exaEnabled),
         targetUrl,
         { quiet },
     );
     const retrievedSources = retrieval.sources;
     const sourcesBlock = renderSourcesBlock(retrieval);
     if (retrievedSources.length > 0 && !quiet) {
-        new Notice(`Retrieved ${retrievedSources.length.toString()} source(s) via Exa.`);
+        new Notice(`Retrieved ${retrievedSources.length.toString()} source(s).`);
     }
 
     // Assemble preambles. Per-template `preambles:` config in the cft fence
@@ -1131,7 +1174,12 @@ export async function applyTemplate(
         }
         const sourcesFooter = buildSourcesFooter(sources)
             + buildRetrievedFooter(retrievedSources);
-        const finalContent = `${initialContent}${cleanedStreamed}\n${fallbackImagesSection}${sourcesFooter}`;
+        // Written by the plugin, not the model, so the data arrives verbatim.
+        const bodyWithData = retrieval.jsonBlocks.reduce(
+            (body, b) => insertJsonUnderHeading(body, b.heading, b.value),
+            cleanedStreamed,
+        );
+        const finalContent = `${initialContent}${bodyWithData}\n${fallbackImagesSection}${sourcesFooter}`;
         await app.vault.modify(target, finalContent);
 
         // Harvest a Google Books URL from generated body if the model surfaced

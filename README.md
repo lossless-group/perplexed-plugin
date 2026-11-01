@@ -33,6 +33,7 @@ Every analyst-grade template runs on `sonar-deep-research`, ships with idle-only
 
 - **Multiple AI Providers**: Support for Perplexity, Anthropic Claude, Google Gemini (with Google Search grounding), Perplexica / Vane (self-hosted), and LM Studio (local)
 - **Retrieval Before Generation**: Exa finds the right company and returns structured facts — founding year, funding with round detail, headcount, named customers — which get spliced into the prompt as separately-numbered `[^E1]` sources before the writing model starts
+- **Funding Rounds From a Verified Feed**: Fireround adds a company's rounds to the note, with the raw data under your funding heading and each round citeable as `[^F1]`, alongside whatever Exa finds
 - **Streaming Responses**: Real-time streaming of AI responses for better UX
 - **Flexible Configuration**: Customizable endpoints, models, and parameters
 - **Deep Research Mode**: Comprehensive research across hundreds of sources
@@ -49,6 +50,7 @@ explicitly selected when invoking selection-based commands.
 |---|---|---|---|
 | Perplexity | `https://api.perplexity.ai/chat/completions` | Required | Required (paid) |
 | Exa (retrieval only) | `https://api.exa.ai/search` | Required ([dashboard](https://dashboard.exa.ai/)) | Required (free tier: $20 signup credit + $10/month, no credit card) |
+| Fireround, through Firecrawl (retrieval only) | `https://api.firecrawl.dev/v2/scrape` | Required ([firecrawl.dev](https://www.firecrawl.dev/)) | Required (Firecrawl account) |
 | Anthropic Claude | `https://api.anthropic.com/v1/messages` | Required | Required (paid) |
 | Google Gemini | `https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent` | Required ([AI Studio](https://aistudio.google.com/)) | Required (free tier available, no credit card) |
 | Perplexica / Vane ([install required](https://github.com/ItzCrazyKns/Vane)) | `http://localhost:3030/api/search` (default; user-configurable) | Not required | Not required (self-hosted, runs locally) |
@@ -79,6 +81,7 @@ plugin directory.
   - [Command Reference](#command-reference)
   - [Directory Templates](#directory-templates)
     - [Retrieval before generation — Exa](#retrieval-before-generation--exa)
+    - [Funding rounds — Fireround](#funding-rounds--fireround)
 - [Releases](#releases)
 - [Developer Onboarding](#developer-onboarding)
   - [Project Structure](#project-structure)
@@ -533,6 +536,33 @@ include-sources:
 What reaches the prompt:
 
 ```markdown
+### Funding rounds — Fireround
+
+**A funding table a search model pieced together can be wrong in ways that look right. Fireround's rounds are checked against their sources first.**
+
+[Fireround](https://fireround.dev) is a verified feed of startup funding rounds, served through Firecrawl. It runs beside Exa, not instead of it. Add it to `include-sources:` and choose the Firecrawl key under **Settings → Perplexed → Firecrawl**:
+
+```yaml
+include-sources:
+  - provider: fireround
+    write-json-under: "Fundraising History"
+  - provider: exa
+    query: "{{basename}} {{url}} overview product funding customers"
+```
+
+Two things happen for a note whose `url` is a company homepage:
+
+- **The model can cite every round.** Each one reaches the prompt as its own `[^F1]`, `[^F2]` source, with its amount, date, investors, and announcement link, so each row of a funding table can carry a citation.
+- **The raw data lands in the note.** With `write-json-under`, the plugin itself writes Fireround's records as a `json` code fence directly under that heading. The model never retypes them, so the numbers arrive verbatim. A later run replaces the fence rather than adding another.
+
+It stays out of the way when it should:
+
+- **Only exact matches count.** Rounds are kept only when the company's domain equals the note's, so a similarly named company never gets in.
+- **Only homepages are looked up.** A note on `openai.com/sora` or `huggingface.co/some-org/some-model` is about something hosted on that domain, and the host's rounds aren't its rounds. Fireround is skipped, and a notice says why.
+- **No rounds, no key, or a failed call** never stops a run. Exa and the model carry on, and a notice says what happened.
+
+The shipped Toolkit template has the Fireround entry commented out, because it needs a Firecrawl key. Uncomment it to use it.
+
 ### [^E1] Synadia — https://nats.io/
 
 founded_year: 2017

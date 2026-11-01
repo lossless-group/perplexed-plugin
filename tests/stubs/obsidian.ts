@@ -85,6 +85,12 @@ export class ButtonComponent {
     }
 }
 
+export class SecretComponent {
+    constructor(_app: unknown, _containerEl: unknown) {
+        return chain() as SecretComponent;
+    }
+}
+
 export class Setting {
     constructor(_containerEl: unknown) {
         const names = (globalThis as { __settingNames?: string[] }).__settingNames;

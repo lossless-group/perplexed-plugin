@@ -50,6 +50,11 @@ backlinks-limit: 12
 # collision-prone name on the right entity. Delete this block to go back to
 # Perplexity-only.
 include-sources:
+  # Funding rounds from Fireround. Needs a Firecrawl key in settings; uncomment to
+  # use it. Runs first so the context budget can't drop it. Each round becomes a
+  # citeable [^F1] source, and write-json-under puts the raw data in the note.
+  # - provider: fireround
+  #   write-json-under: "Fundraising History"
   - provider: exa
     query: "{{basename}} {{url}} overview product funding customers"
     category: company
@@ -160,6 +165,8 @@ system: |
 
 ## Fundraising History
 - Search for Pre-Seed, Seed, Series A, etc. announcements.
+- Where retrieved sources cover a round, use their figures and cite them: they are verified, so prefer them over search results that disagree.
+- Do not write any JSON here. If raw round data belongs in this section, it is added for you.
 - Produce a markdown table with columns: Round | Date | Amount | Lead investor.
 - Add a Total row at the bottom with estimated or reported total funding.
 - Below the table, list each investor in alphabetical order, one per line.

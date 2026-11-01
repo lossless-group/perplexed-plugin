@@ -1001,6 +1001,9 @@ export default class PerplexedPlugin extends Plugin {
             exaApiKey: this.settings.exaApiKey,
             exaEndpoint: this.settings.exaEndpoint,
             exaSplicedContextMaxChars: this.settings.exaSplicedContextMaxChars,
+            firecrawlApiKey: this.settings.firecrawlSecret
+                ? this.app.secretStorage.getSecret(this.settings.firecrawlSecret) ?? ''
+                : '',
         };
     }
 
@@ -1054,7 +1057,7 @@ export default class PerplexedPlugin extends Plugin {
                 useRetrieval,
                 modeOverride: mode,
             });
-        }, this.settings.exaEnabled, bodyIsPopulated).open();
+        }, true, bodyIsPopulated).open();
     }
 
     private runApplyDirectoryTemplateBatch(): void {

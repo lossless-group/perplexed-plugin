@@ -99,6 +99,8 @@ const REQUIRED_NAMES = [
     'Fallback container path', 'Default model',
     // Exa
     'Use Exa retrieval', 'Exa API key', 'Exa endpoint', 'Spliced context budget (characters)',
+    // Firecrawl
+    'Firecrawl API key',
     // System prompts
     'Perplexity system prompt', 'Perplexica / Vane system prompt', 'LM Studio default system prompt',
     // Placeholder text
@@ -118,7 +120,7 @@ const REQUIRED_NAMES = [
 // over the five prompt sections below it; 0.4.0 keeps the five sections.
 const REQUIRED_HEADINGS = [
     'Perplexity (remote service)', 'Claude (Anthropic)', 'Gemini (Google)',
-    'Perplexica / Vane (self-hosted)', 'LM Studio (local models)', 'Exa retrieval',
+    'Perplexica / Vane (self-hosted)', 'LM Studio (local models)', 'Exa retrieval', 'Firecrawl',
     'System prompts', 'Placeholder text', 'Article generator template', 'Image prompts',
     'Text enhancement', 'Directory templates', 'Find images for selection',
 ];

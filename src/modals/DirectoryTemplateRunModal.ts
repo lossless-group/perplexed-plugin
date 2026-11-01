@@ -125,9 +125,9 @@ export class DirectoryTemplateRunModal extends Modal {
         // a toggle for a stage that wouldn't run is noise.
         if (declaresRetrieval(this.selected())) {
             new Setting(contentEl)
-                .setName('Retrieve sources first (Exa)')
+                .setName('Retrieve sources first')
                 .setDesc(this.retrievalDefault
-                    ? 'Run Exa retrieval before the model writes, splicing verified source data into the prompt. Turn off for a Perplexity-only run.'
+                    ? 'Run the template\'s include-sources (Exa, Fireround) before the model writes, splicing verified source data into the prompt. Turn off for a Perplexity-only run.'
                     : 'Disabled in settings — turn on the master switch in perplexed settings to use this.')
                 .addToggle((t) => {
                     t.setValue(this.useRetrieval);

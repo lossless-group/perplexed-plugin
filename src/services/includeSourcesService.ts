@@ -2,6 +2,8 @@ import { Notice, stringifyYaml } from 'obsidian';
 
 import { entityProperties, parseSummary, searchExa } from './exaService';
 import type { ExaCategory, ExaResult, ExaSearchRequest } from './exaService';
+import { homepageDomain, searchRounds } from './fireroundService';
+import type { FireroundRecord } from './fireroundService';
 
 /**
  * Resolution of the `include-sources:` cft key — the retrieval stage that runs
@@ -9,14 +11,16 @@ import type { ExaCategory, ExaResult, ExaSearchRequest } from './exaService';
  * the prompt.
  *
  * See context-v/plans/2026-09-10_Exa-Retrieval-Stage-and-Include-Sources.md.
- * Exa is the only provider implemented; vault globs and Chroma are planned for
- * the same slot, which is why ResolvedSource is deliberately provider-neutral.
+ * Exa and Fireround are implemented; vault globs and Chroma are planned for the
+ * same slot, which is why ResolvedSource is deliberately provider-neutral.
  */
 
 export interface IncludeSourcesSettings {
     exaApiKey: string;
     exaEndpoint: string;
     exaSplicedContextMaxChars: number;
+    /** The Firecrawl key, read from Obsidian's keychain; empty when none is chosen. */
+    firecrawlApiKey: string;
 }
 
 /**
@@ -51,7 +55,15 @@ export interface ExaSourceSpec {
     textMaxCharacters?: number;
 }
 
-export type SourceSpec = ExaSourceSpec;
+/** A company's funding rounds, looked up by the domain of the note's homepage URL. */
+export interface FireroundSourceSpec {
+    provider: 'fireround';
+    numResults: number;
+    /** A heading to write the raw rounds under as a JSON code fence, verbatim. */
+    writeJsonUnder?: string;
+}
+
+export type SourceSpec = ExaSourceSpec | FireroundSourceSpec;
 
 /**
  * Provider-neutral normalized source. Consumed by the prompt renderer, the
@@ -75,6 +87,8 @@ export interface ResolveOutcome {
     sources: ResolvedSource[];
     /** Number dropped by the context budget, surfaced as a visible marker. */
     truncatedCount: number;
+    /** Raw provider data to write into the note under a heading. Not subject to the context budget. */
+    jsonBlocks: { heading: string; value: unknown }[];
     /** Non-fatal problems worth telling the user about without aborting the run. */
     warnings: string[];
 }
@@ -120,6 +134,17 @@ export function parseIncludeSources(
             continue;
         }
         const provider = asString(entry['provider']) ?? 'exa';
+        if (provider === 'fireround') {
+            const num = entry['num-results'];
+            const spec: FireroundSourceSpec = {
+                provider,
+                numResults: typeof num === 'number' && num > 0 ? Math.min(Math.floor(num), 100) : 20,
+            };
+            const heading = asString(entry['write-json-under']);
+            if (heading !== undefined) spec.writeJsonUnder = interpolate(heading).trim();
+            specs.push(spec);
+            continue;
+        }
         if (provider !== 'exa') {
             warnings.push(`include-sources: unknown provider "${provider}"; skipped.`);
             continue;
@@ -351,6 +376,58 @@ function extractBody(result: ExaResult): string {
     return result.text ?? '';
 }
 
+const asObject = (v: unknown): Record<string, unknown> => (isRecord(v) ? v : {});
+
+/** One round, in the shape of a source. A `previous_rounds` entry is a thinner record of the same kind. */
+function roundToSource(round: FireroundRecord, company: string, marker: string): ResolvedSource {
+    const stage = asString(round['stage_as_written']) ?? asString(round['stage']) ?? 'Funding round';
+    const facts = stripEmpty({
+        stage,
+        amount: asObject(round['amount'])['as_written'],
+        announced_on: round['announced_on'],
+        lead_investors: round['lead_investors'],
+        other_investors: round['other_investors'],
+        total_raised_as_of_this_round: round['total_as_written'],
+        valuation: round['valuation_disclosed'] === true ? round['valuation'] : undefined,
+        certainty: round['certainty'],
+        verified: round['verified'],
+    });
+    const url = asString(asObject(round['primary_source'])['url']) ?? asString(round['url']);
+    const src: ResolvedSource = {
+        marker,
+        title: `${company} ${stage}`,
+        body: asString(round['evidence']) ?? '',
+        providerId: 'fireround',
+    };
+    if (url !== undefined) src.url = url;
+    const date = asString(round['announced_on']);
+    if (date !== undefined) src.publishedDate = date;
+    if (isRecord(facts)) src.facts = facts;
+    return src;
+}
+
+/**
+ * Every round as its own source, newest first as Fireround returns them, so the
+ * model can cite each row of a funding table. A round known only from a later
+ * round's `previous_rounds` still gets one.
+ */
+function roundsToSources(rounds: FireroundRecord[], firstMarker: number): ResolvedSource[] {
+    const all = [...rounds];
+    const seen = new Set(rounds.map((r) => r['id']));
+    for (const r of rounds) {
+        const earlier = r['previous_rounds'];
+        if (!Array.isArray(earlier)) continue;
+        for (const p of earlier) {
+            if (isRecord(p) && !seen.has(p['id'])) {
+                seen.add(p['id']);
+                all.push(p);
+            }
+        }
+    }
+    const company = asString(asObject(rounds[0]?.['company'])['name']) ?? 'Company';
+    return all.map((r, i) => roundToSource(r, company, `F${(firstMarker + i).toString()}`));
+}
+
 /** Rough character cost of one rendered source, for budget accounting. */
 function sourceCost(s: ResolvedSource): number {
     const factsLen = s.facts ? stringifyYaml(s.facts).length : 0;
@@ -372,13 +449,41 @@ export async function resolveIncludeSources(
 ): Promise<ResolveOutcome> {
     const sources: ResolvedSource[] = [];
     const warnings: string[] = [];
-    if (specs.length === 0) return { sources, truncatedCount: 0, warnings };
+    const jsonBlocks: ResolveOutcome['jsonBlocks'] = [];
+    if (specs.length === 0) return { sources, truncatedCount: 0, jsonBlocks, warnings };
 
     let counter = 0;
+    let fireroundCounter = 0;
     for (const spec of specs) {
-        // Only one provider today. A second case lands here when vault globs or
-        // Chroma are built; ResolvedSource is already shaped to absorb them.
+        // Another case lands here when vault globs or Chroma are built;
+        // ResolvedSource is already shaped to absorb them.
         switch (spec.provider) {
+            case 'fireround': {
+                if (settings.firecrawlApiKey.trim().length === 0) {
+                    warnings.push('Fireround needs a Firecrawl API key — continuing without funding rounds. Choose one in perplexed settings.');
+                    break;
+                }
+                const domain = homepageDomain(targetUrl);
+                if (domain === null) {
+                    warnings.push(`Fireround skipped: ${targetUrl ?? 'this note has no url, so it'} is not a company homepage, and rounds found through it could belong to the host.`);
+                    break;
+                }
+                try {
+                    const rounds = await searchRounds(settings.firecrawlApiKey, domain, spec.numResults);
+                    if (rounds.length === 0) {
+                        warnings.push(`Fireround has no funding rounds for ${domain}.`);
+                        break;
+                    }
+                    const found = roundsToSources(rounds, fireroundCounter + 1);
+                    fireroundCounter += found.length;
+                    sources.push(...found);
+                    if (spec.writeJsonUnder) jsonBlocks.push({ heading: spec.writeJsonUnder, value: { rounds } });
+                } catch (error) {
+                    const msg = error instanceof Error ? error.message : String(error);
+                    warnings.push(`Fireround retrieval failed (${msg}) — continuing without funding rounds.`);
+                }
+                break;
+            }
             case 'exa': {
                 if (settings.exaApiKey.trim().length === 0) {
                     warnings.push('Exa API key is not set — continuing without retrieved sources.');
@@ -490,12 +595,12 @@ export async function resolveIncludeSources(
     }
     for (const w of warnings) console.warn(`[includeSources] ${w}`);
 
-    return { sources, truncatedCount, warnings };
+    return { sources, truncatedCount, jsonBlocks, warnings };
 }
 
 /**
  * Render resolved sources as the prompt block spliced above the section
- * skeleton. The `[E1]` marker namespace is load-bearing: the writing model
+ * skeleton. The `[E1]` / `[F1]` marker namespaces are load-bearing: the writing model
  * numbers its OWN web-search citations as bare [1], [2], so spliced sources
  * must live in a separate namespace or a claim gets footnoted to the wrong
  * document. See the citation-contract hazard in the plan.
@@ -510,7 +615,7 @@ export function renderSourcesBlock(outcome: ResolveOutcome): string {
     lines.push(
         'The sources below were retrieved for you and are already verified as on-topic. '
         + 'Treat them as primary material. When you use one, cite it with its footnote '
-        + 'marker EXACTLY as written, caret included — `[^E1]`, `[^E2]` — and never '
+        + 'marker EXACTLY as written, caret included — such as `[^E1]` or `[^F1]` — and never '
         + 'renumber them into the plain `[1]`, `[2]` sequence you use for your own '
         + 'web-search results. The two numbering systems are separate and must not be '
         + 'merged. Always put a space between the preceding text and the marker.',
