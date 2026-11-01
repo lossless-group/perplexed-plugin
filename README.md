@@ -3,7 +3,7 @@
 
 **Perplexed** is an Obsidian plugin that enables AI-powered content generation with source citations using [Perplexity](https://www.perplexity.ai/), [Anthropic Claude](https://www.anthropic.com/), [Google Gemini](https://ai.google.dev/) (with Google Search grounding), and [Perplexica / Vane](https://github.com/ItzCrazyKns/Vane) (self-hosted). It also integrates [Exa](https://exa.ai/) as a **retrieval** layer — Exa finds and verifies the source material, and the writing model writes from it. This plugin brings research-grade AI capabilities directly into your Obsidian workspace, allowing you to generate well-cited content for your notes.
 
-> **New in 0.4.0:** every one of Perplexed's settings now shows up in Obsidian's settings search, the preamble and frontmatter lists are real editable lists, and number fields tell you when a value won't work. Requires Obsidian 1.13 or later. [Release notes →](changelog/releases/0.4.0.md)
+> **New in 0.5.0:** company profiles can carry verified funding rounds from Fireround, written into the note exactly as they arrived and citeable round by round, alongside what Exa finds. See [Funding rounds](#funding-rounds--fireround). Full notes: [`changelog/releases/0.5.0.md`](changelog/releases/0.5.0.md).
 
 ## 💼 For Venture Capital, Private Equity, and Equities-Trading Workflows
 
@@ -626,6 +626,14 @@ For interpolation tokens, the full cft block grammar, the cleanup pipeline mecha
 ---
 
 # Releases
+
+**0.5.0** — 2026-11-01 · requires Obsidian 1.13
+
+- Fireround joins Exa under `include-sources:`: each funding round becomes a citeable `[^F1]` source, and `write-json-under` writes the raw data under a heading you name.
+- Lookups run only for homepage URLs and keep only exact domain matches, so a host's or a namesake's rounds are never attributed to a note.
+- The Firecrawl key lives in Obsidian's keychain.
+- "Use Exa retrieval" now governs Exa only; the run dialog's toggle covers every provider.
+- Full notes: [`changelog/releases/0.5.0.md`](changelog/releases/0.5.0.md).
 
 **0.4.0** — 2026-10-06 · requires Obsidian 1.13
 
