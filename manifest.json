@@ -1,7 +1,7 @@
 {
 	"id": "perplexed",
 	"name": "Perplexed",
-	"version": "0.5.0",
+	"version": "0.5.1",
 	"minAppVersion": "1.13.0",
 	"description": "Generate source-cited research content from Perplexity, Anthropic Claude, Google Gemini, Perplexica (now Vane), or local LM Studio — directly into your notes.",
 	"author": "The Lossless Group",

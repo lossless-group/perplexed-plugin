@@ -589,8 +589,11 @@ The writing model numbers its own web-search citations `[1]`, `[2]`. Retrieved s
 ```markdown
 ## Sources (retrieved)
 
-[^E1]: [Exa.ai](https://exa.ai) API response for data on [Datagrid AI](https://datagrid.com/)
+[^F1]: 2019, Sep 10. [PR Newswire](https://www.prnewswire.com/). [Samsara raises $300 million in new growth capital](https://www.prnewswire.com/news-releases/samsara-raises-300-million-300915131.html). Generated: 2026, Nov 01. [Fireround](https://fireround.dev) API response.
+[^E1]: [samsara.com](https://www.samsara.com/). [Samsara](https://www.samsara.com/). Generated: 2026, Nov 01. [Exa.ai](https://exa.ai) API response.
 ```
+
+Each citation is built from what the provider returned, with no cleanup needed: the published date, the publisher, the page's own headline, the date it was updated if that differs, the date the citation was generated, and the provider that reported it. The model's own Perplexity sources in `# Sources` use the same format under their `[1]` numbers. Tracking parameters like `utm_*` are removed from links. Anything a provider didn't supply is left out. Publishers without a known name appear as their domain, and a company's own site appears as the company. The list in the prompt is context only: if a model repeats it, Perplexed removes the repeat and keeps any prose the model wrote.
 
 If the two namespaces were merged, a fact retrieved from Exa would be footnoted to whatever the search model's third result happened to be — a note that looks perfectly well-cited and attributes claims to the wrong documents. The `[^E…]` form is a real Obsidian footnote, so hover-preview and click-to-jump work, and [cite-wide](https://github.com/lossless-group/cite-wide)'s spacing pass handles it unchanged.
 
@@ -626,6 +629,13 @@ For interpolation tokens, the full cft block grammar, the cleanup pipeline mecha
 ---
 
 # Releases
+
+**0.5.1** — 2026-11-01 · requires Obsidian 1.13
+
+- Fireround, Exa and Perplexity citations share one publish-ready format: date, publisher, title, `Updated:`, `Generated:`, then the provider.
+- The prompt's `Retrieved sources` list stays out of the note, and tracking parameters come off links.
+- Dates no longer land a day early west of Greenwich.
+- Full notes: [`changelog/releases/0.5.1.md`](changelog/releases/0.5.1.md).
 
 **0.5.0** — 2026-11-01 · requires Obsidian 1.13
 

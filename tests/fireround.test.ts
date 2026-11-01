@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import { homepageDomain, roundsForDomain, searchRounds } from '../src/services/fireroundService';
 import { parseIncludeSources, renderSourcesBlock, resolveIncludeSources } from '../src/services/includeSourcesService';
 import type { SourceSpec } from '../src/services/includeSourcesService';
-import { insertJsonUnderHeading } from '../src/services/directoryTemplateService';
+import { buildRetrievedFooter, buildSourcesFooter, insertJsonUnderHeading, stripEchoedSources, stripGeneratedFooters } from '../src/services/directoryTemplateService';
+import { formatCitationDate } from '../src/utils/formatDate';
 
 interface Sent { url: string; headers?: Record<string, string>; body?: string }
 
@@ -209,5 +210,154 @@ describe('alongside Exa', () => {
         assert.equal(sent.length, 2);
         assert.deepEqual(out.sources.map(s => s.marker), ['F1', 'F2', 'F3', 'E1']);
         assert.deepEqual(out.warnings, []);
+    });
+});
+
+describe('citations in the Sources (retrieved) footer', () => {
+    const HEADLINE = 'Samsara raises $300 million in new growth capital to increase the efficiency, safety, and sustainability of the operations that power our economy';
+    const WIRE_URL = 'https://www.prnewswire.com/news-releases/samsara-raises-300-million-300915131.html';
+    const BLOG_URL = 'https://www.samsara.com/blog/entering-2019';
+    const round = (id: string, on: string, url: string, title: string, publisher: string) => ({
+        id,
+        company: { name: 'Samsara', domain: 'samsara.com' },
+        stage_as_written: 'growth capital',
+        announced_on: on,
+        primary_source: { url, kind: 'wire' },
+        sources: [{ url, title, publisher, published: on }],
+    });
+    const SAMSARA = [
+        round('a', '2019-09-10', WIRE_URL, HEADLINE, 'prnewswire.com'),
+        round('b', '2018-12-28', BLOG_URL, "A new investment for 2019: Samsara's Future", 'samsara.com'),
+    ];
+    const samsara = async () => {
+        serve(200, reply(SAMSARA));
+        return (await resolve('https://www.samsara.com/')).sources;
+    };
+
+    test('a round cites its date, publisher, real headline and provider', async () => {
+        const [first] = await samsara();
+        assert.equal(
+            buildRetrievedFooter([first!]),
+            `\n## Sources (retrieved)\n\n[^F1]: 2019, Sep 10. [PR Newswire](https://www.prnewswire.com/). [${HEADLINE}](${WIRE_URL}). [Fireround](https://fireround.dev) API response.\n`,
+        );
+    });
+
+    test("a company's own site is published by the company", async () => {
+        const [, second] = await samsara();
+        assert.match(buildRetrievedFooter([second!]), /\[\^F2\]: 2018, Dec 28\. \[Samsara\]\(https:\/\/www\.samsara\.com\/\)\. \[A new investment/);
+    });
+
+    test('an unlisted publisher stays as its domain', () => {
+        const footer = buildRetrievedFooter([{ marker: 'E1', title: 'Post', url: 'https://www.example.org/a', body: '', providerId: 'exa' }]);
+        assert.match(footer, /\[\^E1\]: \[example\.org\]\(https:\/\/www\.example\.org\/\)\. \[Post\]\(https:\/\/www\.example\.org\/a\)\. \[Exa\.ai\]\(https:\/\/exa\.ai\) API response\.\n$/);
+    });
+
+    test('a round with no matching page falls back to its label and leaves nothing invented', async () => {
+        serve(200, reply([SERIES_B]));
+        const seed = (await resolve('https://www.firecrawl.dev/')).sources[2]!;
+        const footer = buildRetrievedFooter([seed]);
+        assert.match(footer, /\[Firecrawl Seed\]\(https:\/\/www\.firecrawl\.dev\/blog\/seed\)/);
+        assert.equal(seed.pageTitle, undefined);
+    });
+
+    test('brackets in a headline cannot break the link', () => {
+        const footer = buildRetrievedFooter([{ marker: 'E1', title: 'A [new] day', url: 'https://a.dev/x', body: '', providerId: 'exa' }]);
+        assert.match(footer, /\[A \\\[new\\\] day\]\(https:\/\/a\.dev\/x\)/);
+    });
+
+    test('a stated date stays that date in every time zone', () => {
+        const zone = process.env['TZ'];
+        process.env['TZ'] = 'America/Chicago';
+        try {
+            assert.equal(formatCitationDate('2019-09-10'), '2019, Sep 10');
+            assert.equal(formatCitationDate('2019-09-05T00:00:00.000Z'), '2019, Sep 05');
+            assert.equal(formatCitationDate('2019-13-45'), '');
+        } finally {
+            if (zone === undefined) delete process.env['TZ'];
+            else process.env['TZ'] = zone;
+        }
+    });
+});
+
+describe('the prompt list stays out of the note', () => {
+    const ECHO = [
+        '# Samsara', '', '## Retrieved sources', '',
+        '### [^F1] Samsara growth — https://a.dev  (published 2019-09-10)', '', 'Samsara announced $300 million.', '',
+        '### [^E1] Samsara — https://samsara.com', '', '```yaml', 'founded_year: 2015', '```', '', 'A summary.', '',
+        '## Overview', '', 'Real text [^F1].',
+    ].join('\n');
+
+    test('the prompt tells the model not to repeat it', async () => {
+        serve(200, reply([SERIES_B]));
+        assert.match(renderSourcesBlock(await resolve('https://www.firecrawl.dev/')), /never reproduce this heading/);
+    });
+
+    test('an echoed list goes, and what follows stays', () => {
+        assert.equal(stripEchoedSources(ECHO), '# Samsara\n\n## Overview\n\nReal text [^F1].');
+    });
+
+    test('our own block round-trips to nothing', async () => {
+        serve(200, reply([SERIES_B]));
+        const block = renderSourcesBlock(await resolve('https://www.firecrawl.dev/'));
+        assert.equal(stripEchoedSources(`${block}\n## Overview\n\nText.`), '## Overview\n\nText.');
+    });
+
+    test('prose a model wrote under the heading is kept', () => {
+        const body = '# Asetek\n\n## Retrieved sources\n\nAsetek makes liquid coolers [^E1].\n\n## Features\n\nMore.';
+        assert.equal(stripEchoedSources(body), '# Asetek\n\nAsetek makes liquid coolers [^E1].\n\n## Features\n\nMore.');
+    });
+
+    test('a note with no echo is untouched, spacing included', () => {
+        const body = '# A\n\n\n\nText [^F1].\n\n## Retrieval\n';
+        assert.equal(stripEchoedSources(body), body);
+    });
+
+    test('the same words in a code block stay', () => {
+        const body = '```\n## Retrieved sources\n### [^F1] x\n```\n\nText.';
+        assert.equal(stripEchoedSources(body), body);
+    });
+
+    test('a remake does not feed an old echo back to the model', () => {
+        assert.equal(stripGeneratedFooters(`${ECHO}\n\n## Sources (retrieved)\n\n[^F1]: x`), '# Samsara\n\n## Overview\n\nReal text [^F1].');
+    });
+});
+
+describe('citations in the Sources footer', () => {
+    const URL_4 = 'https://www.thetrucker.com/trucking-news/samsara';
+    const TITLE_4 = 'Samsara expands AI fleet management tools';
+
+    test('date, publisher, title, updated, generated, then the provider last', () => {
+        assert.equal(
+            buildSourcesFooter([{ title: TITLE_4, url: URL_4, date: '2026-10-28', last_updated: '2026-10-30' }], '2026-11-01'),
+            `\n\n***\n\n# Sources\n\n[1]: 2026, Oct 28. [thetrucker.com](https://www.thetrucker.com/). [${TITLE_4}](${URL_4}). Updated: 2026, Oct 30. Generated: 2026, Nov 01. [Perplexity](https://www.perplexity.ai/) API response.\n`,
+        );
+    });
+
+    test('an update on the published date is not repeated', () => {
+        const footer = buildSourcesFooter([{ title: 'T', url: URL_4, date: '2026-10-28', last_updated: '2026-10-28' }]);
+        assert.doesNotMatch(footer, /Updated/);
+    });
+
+    test('a source with no dates leaves them out, and numbers follow the list', () => {
+        const footer = buildSourcesFooter([{ title: 'A', url: 'https://a.dev/1' }, { title: 'B', url: 'https://b.dev/2' }]);
+        assert.match(footer, /\n\[1\]: \[a\.dev\]\(https:\/\/a\.dev\/\)\. \[A\]\(https:\/\/a\.dev\/1\)\. \[Perplexity\]/);
+        assert.match(footer, /\n\[2\]: \[b\.dev\]/);
+    });
+
+    test('a source with only a URL, and none at all, still gets a line', () => {
+        assert.match(buildSourcesFooter([{ url: 'https://a.dev/1' }]), /\[https:\/\/a\.dev\/1\]\(https:\/\/a\.dev\/1\)/);
+        assert.match(buildSourcesFooter([{ title: 'Only' }]), /\[1\]: Only\. \[Perplexity\]/);
+        assert.match(buildSourcesFooter([]), /_No sources returned\._/);
+    });
+
+    test('tracking parameters are removed, and real ones stay', () => {
+        const footer = buildSourcesFooter([{ title: 'S', url: 'https://www.samsara.com/?utm_ext_ad_id=kwd-1&gclid=x&page=2' }]);
+        assert.match(footer, /\[S\]\(https:\/\/www\.samsara\.com\/\?page=2\)/);
+        assert.doesNotMatch(footer, /utm_|gclid/);
+    });
+
+    test('a retrieved source takes the generated date too', () => {
+        const footer = buildRetrievedFooter([{ marker: 'E1', title: 'P', url: 'https://a.dev/x', body: '', providerId: 'exa' }], '2026-11-01');
+        assert.match(footer, /\[\^E1\]: .*\[P\]\(https:\/\/a\.dev\/x\)\. Generated: 2026, Nov 01\. \[Exa\.ai\]/);
     });
 });

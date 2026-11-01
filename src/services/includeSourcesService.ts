@@ -4,6 +4,7 @@ import { entityProperties, parseSummary, searchExa } from './exaService';
 import type { ExaCategory, ExaResult, ExaSearchRequest } from './exaService';
 import { homepageDomain, searchRounds } from './fireroundService';
 import type { FireroundRecord } from './fireroundService';
+import { formatCitationDate } from '../utils/formatDate';
 
 /**
  * Resolution of the `include-sources:` cft key — the retrieval stage that runs
@@ -76,6 +77,12 @@ export interface ResolvedSource {
     title: string;
     url?: string;
     publishedDate?: string;
+    /** When the page last changed, when the provider reports it. */
+    updatedDate?: string;
+    /** The cited page's real headline, when the provider knows it and `title` is only a label. */
+    pageTitle?: string;
+    /** Who published the cited page. Falls back to the URL's host in the citation. */
+    publisher?: string;
     /** Prose body — parsed summary, file content, or chunk text. */
     body: string;
     /** Structured facts kept structured; models read key-value pairs more reliably than prose. */
@@ -378,8 +385,19 @@ function extractBody(result: ExaResult): string {
 
 const asObject = (v: unknown): Record<string, unknown> => (isRecord(v) ? v : {});
 
+/** The `sources` entry for the page a round cites, which carries its headline and publisher. */
+function citedPage(round: FireroundRecord, url: string | undefined): Record<string, unknown> {
+    const pages = round['sources'];
+    if (url === undefined || !Array.isArray(pages)) return {};
+    return asObject(pages.find((p) => isRecord(p) && p['url'] === url));
+}
+
 /** One round, in the shape of a source. A `previous_rounds` entry is a thinner record of the same kind. */
-function roundToSource(round: FireroundRecord, company: string, marker: string): ResolvedSource {
+function roundToSource(
+    round: FireroundRecord,
+    company: { name: string; domain: string | undefined },
+    marker: string,
+): ResolvedSource {
     const stage = asString(round['stage_as_written']) ?? asString(round['stage']) ?? 'Funding round';
     const facts = stripEmpty({
         stage,
@@ -395,13 +413,18 @@ function roundToSource(round: FireroundRecord, company: string, marker: string):
     const url = asString(asObject(round['primary_source'])['url']) ?? asString(round['url']);
     const src: ResolvedSource = {
         marker,
-        title: `${company} ${stage}`,
+        title: `${company.name} ${stage}`,
         body: asString(round['evidence']) ?? '',
         providerId: 'fireround',
     };
     if (url !== undefined) src.url = url;
-    const date = asString(round['announced_on']);
+    const page = citedPage(round, url);
+    const date = asString(round['announced_on']) ?? asString(page['published']);
     if (date !== undefined) src.publishedDate = date;
+    const pageTitle = asString(page['title']);
+    if (pageTitle !== undefined) src.pageTitle = pageTitle;
+    const publisher = asString(page['publisher']);
+    if (publisher !== undefined) src.publisher = publisher === company.domain ? company.name : publisher;
     if (isRecord(facts)) src.facts = facts;
     return src;
 }
@@ -424,7 +447,8 @@ function roundsToSources(rounds: FireroundRecord[], firstMarker: number): Resolv
             }
         }
     }
-    const company = asString(asObject(rounds[0]?.['company'])['name']) ?? 'Company';
+    const record = asObject(rounds[0]?.['company']);
+    const company = { name: asString(record['name']) ?? 'Company', domain: asString(record['domain']) };
     return all.map((r, i) => roundToSource(r, company, `F${(firstMarker + i).toString()}`));
 }
 
@@ -598,6 +622,88 @@ export async function resolveIncludeSources(
     return { sources, truncatedCount, jsonBlocks, warnings };
 }
 
+/** How each retrieval provider is credited at the end of a citation. */
+const PROVIDER_ATTRIBUTIONS: Record<string, string> = {
+    exa: '[Exa.ai](https://exa.ai) API response',
+    fireround: '[Fireround](https://fireround.dev) API response',
+    perplexity: '[Perplexity](https://www.perplexity.ai/) API response',
+};
+
+/** Providers report publishers as bare domains. Unlisted ones stay as the domain. */
+const PUBLISHER_NAMES: Record<string, string> = {
+    'prnewswire.com': 'PR Newswire',
+    'businesswire.com': 'Business Wire',
+    'globenewswire.com': 'GlobeNewswire',
+    'techcrunch.com': 'TechCrunch',
+    'venturebeat.com': 'VentureBeat',
+    'reuters.com': 'Reuters',
+    'bloomberg.com': 'Bloomberg',
+    'forbes.com': 'Forbes',
+    'cnbc.com': 'CNBC',
+    'wsj.com': 'The Wall Street Journal',
+    'ft.com': 'Financial Times',
+    'sec.gov': 'SEC',
+};
+
+const linkText = (text: string): string => text.replace(/([[\]])/g, '\\$1');
+
+/** Query parameters that only track a click. They don't belong in a published citation. */
+const TRACKING_PARAM = /^(utm_.*|gclid|gbraid|wbraid|fbclid|msclkid|mc_cid|mc_eid)$/i;
+
+/** The URL without tracking parameters. Anything unparseable is returned as written. */
+export function cleanCitationUrl(url: string): string {
+    try {
+        const parsed = new URL(url);
+        const tracking = [...parsed.searchParams.keys()].filter((k) => TRACKING_PARAM.test(k));
+        if (tracking.length === 0) return url;
+        for (const key of tracking) parsed.searchParams.delete(key);
+        return parsed.toString();
+    } catch {
+        return url;
+    }
+}
+
+/** `[Publisher](homepage).` for a page, or null when its URL can't be parsed. */
+function publisherLink(source: ResolvedSource): string | null {
+    if (source.url === undefined) return null;
+    try {
+        const { origin, hostname } = new URL(source.url);
+        const named = source.publisher ?? hostname.replace(/^www\./, '').toLowerCase();
+        return `[${linkText(PUBLISHER_NAMES[named] ?? named)}](${origin}/).`;
+    } catch {
+        return null;
+    }
+}
+
+/** A date in the citation format, with a label and a period, or nothing when it won't parse. */
+function datePart(date: string | undefined, label = ''): string {
+    const formatted = date !== undefined ? formatCitationDate(date) : '';
+    return formatted ? `${label}${formatted}.` : '';
+}
+
+/**
+ * One source as a Lossless citation, ready to publish:
+ *
+ *   [^F1]: 2019, Sep 10. [PR Newswire](https://www.prnewswire.com/). [Headline](url). Generated: 2026, Nov 01. [Fireround](https://fireround.dev) API response.
+ *
+ * The provider is named as well as the page, because the citation is really
+ * "what provider X reported about page Y". Anything the provider didn't supply
+ * is left out rather than guessed. `id` is the identifier as written, `^F1` or `1`.
+ */
+export function formatSourceCitation(id: string, source: ResolvedSource, generatedDate?: string): string {
+    const title = linkText(source.pageTitle ?? source.title);
+    const cited = source.url !== undefined ? { ...source, url: cleanCitationUrl(source.url) } : source;
+    const parts = [
+        datePart(source.publishedDate),
+        publisherLink(cited) ?? '',
+        cited.url !== undefined ? `[${title}](${cited.url}).` : `${title}.`,
+        source.updatedDate !== source.publishedDate ? datePart(source.updatedDate, 'Updated: ') : '',
+        datePart(generatedDate, 'Generated: '),
+        `${PROVIDER_ATTRIBUTIONS[source.providerId] ?? `${source.providerId} response`}.`,
+    ];
+    return `[${id}]: ${parts.filter(Boolean).join(' ')}`;
+}
+
 /**
  * Render resolved sources as the prompt block spliced above the section
  * skeleton. The `[E1]` / `[F1]` marker namespaces are load-bearing: the writing model
@@ -618,7 +724,9 @@ export function renderSourcesBlock(outcome: ResolveOutcome): string {
         + 'marker EXACTLY as written, caret included — such as `[^E1]` or `[^F1]` — and never '
         + 'renumber them into the plain `[1]`, `[2]` sequence you use for your own '
         + 'web-search results. The two numbering systems are separate and must not be '
-        + 'merged. Always put a space between the preceding text and the marker.',
+        + 'merged. Always put a space between the preceding text and the marker. '
+        + 'This list is context for you: never reproduce this heading or these entries in '
+        + 'your answer. Their full citations are added to the end of the note for you.',
     );
     lines.push('');
 

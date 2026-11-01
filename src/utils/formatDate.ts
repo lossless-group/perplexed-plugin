@@ -8,6 +8,18 @@ export interface DateBearingSource {
 export function formatCitationDate(dateString: string): string {
     if (!dateString) return '';
 
+    // A leading YYYY-MM-DD is the publication date as stated. `new Date()` reads
+    // it as midnight UTC, which local getters render as the day before anywhere
+    // west of Greenwich.
+    const stated = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(dateString.trim());
+    if (stated) {
+        const [year, month, day] = [Number(stated[1]), Number(stated[2]), Number(stated[3])];
+        const utc = new Date(Date.UTC(year, month - 1, day));
+        if (utc.getUTCMonth() !== month - 1) return '';
+        const name = utc.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+        return `${year.toString()}, ${name} ${stated[3] ?? ''}`;
+    }
+
     try {
         const date = new Date(dateString);
 

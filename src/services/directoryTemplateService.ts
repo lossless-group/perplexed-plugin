@@ -5,6 +5,7 @@ import { normalizePath, Notice, parseYaml, stringifyYaml, TFile } from 'obsidian
 
 import { BUNDLED_PREAMBLES } from './templateSeederService';
 import {
+    formatSourceCitation,
     parseIncludeSources,
     renderSourcesBlock,
     resolveIncludeSources,
@@ -247,7 +248,7 @@ function stripUnreplacedImagePlaceholders(content: string): string {
     return content.replace(/^.*Image embed placeholder.*$\n?/gim, '');
 }
 
-function buildSourcesFooter(sources: PerplexitySource[]): string {
+export function buildSourcesFooter(sources: PerplexitySource[], generatedDate?: string): string {
     // Canonical Lossless reference-section format per
     // cite-wide/context-v/reminders/Lossless-Citation-Spec.md: "always use a
     // `: ` after the citation identifier". cite-wide's REFDEF_NUM_RE accepts
@@ -256,10 +257,16 @@ function buildSourcesFooter(sources: PerplexitySource[]): string {
     // Run provenance lives in frontmatter (cf_last_run, cf_last_run_model);
     // not duplicated in body.
     const sourceLines = sources.map((s, i) => {
-        const n = i + 1;
-        const title = (typeof s.title === 'string' && s.title) ? s.title : (s.url ?? 'Source');
-        const url = s.url ?? '';
-        return url ? `[${n.toString()}]: [${title}](${url})` : `[${n.toString()}]: ${title}`;
+        const source: ResolvedSource = {
+            marker: (i + 1).toString(),
+            title: (typeof s.title === 'string' && s.title) ? s.title : (s.url ?? 'Source'),
+            body: '',
+            providerId: 'perplexity',
+        };
+        if (s.url) source.url = s.url;
+        if (s.date) source.publishedDate = s.date;
+        if (s.last_updated) source.updatedDate = s.last_updated;
+        return formatSourceCitation(source.marker, source, generatedDate);
     });
     const body = sourceLines.length > 0 ? sourceLines.join('\n') : '_No sources returned._';
     return '\n\n***\n\n# Sources\n\n' + body + '\n';
@@ -270,7 +277,7 @@ function buildSourcesFooter(sources: PerplexitySource[]): string {
  * separate from buildSourcesFooter because the two use different marker
  * namespaces — merging them is the citation-collision bug.
  */
-function buildRetrievedFooter(sources: ResolvedSource[]): string {
+export function buildRetrievedFooter(sources: ResolvedSource[], generatedDate?: string): string {
     if (sources.length === 0) return '';
     // Footnote-definition shape (`[^id]: ...`) per the Lossless citation spec,
     // in a separate section with a separate marker namespace — merging the two
@@ -281,20 +288,31 @@ function buildRetrievedFooter(sources: ResolvedSource[]): string {
     // no click-to-jump — and cite-wide's spacing pass (which matches
     // `\[\^[a-z0-9]+\]`, case-insensitively) skips it entirely. `[^E1]`
     // satisfies both.
-    //
-    // The definition names the retrieval provider as well as the page, because
-    // the citation is really "what provider X reported about page Y", not the
-    // page itself.
-    const attributions: Record<string, string> = {
-        exa: '[Exa.ai](https://exa.ai) API response',
-        fireround: '[Fireround](https://fireround.dev) API response',
-    };
-    const lines = sources.map((s) => {
-        const via = attributions[s.providerId] ?? `${s.providerId} response`;
-        const subject = s.url !== undefined ? `[${s.title}](${s.url})` : s.title;
-        return `[^${s.marker}]: ${via} for data on ${subject}`;
+    return '\n## Sources (retrieved)\n\n' + sources.map((s) => formatSourceCitation(`^${s.marker}`, s, generatedDate)).join('\n') + '\n';
+}
+
+/**
+ * Removes the prompt's "Retrieved sources" list from a model's answer.
+ *
+ * The list is context, but it arrives as Markdown headings, so models repeat it in
+ * the note even when told not to. Only the echo goes: the heading, each
+ * `### [^F1] …` entry with its body, and our instructions. A model that wrote its
+ * own prose under the heading keeps the prose, since that is real content.
+ */
+export function stripEchoedSources(body: string): string {
+    let inFence = false;
+    let dropping = false;
+    const kept = body.split('\n').filter((line) => {
+        if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+        else if (!inFence && /^#{1,6}\s/.test(line)) {
+            dropping = /^#{1,6}\s+\[\^[A-Za-z]+\d+\]/.test(line);
+            if (dropping || /^#{1,6}\s+Retrieved sources\s*#*\s*$/i.test(line)) return false;
+        }
+        if (dropping) return false;
+        return inFence || !/^(The sources below were retrieved for you|<!-- perplexed: \d+ further retrieved)/.test(line);
     });
-    return '\n## Sources (retrieved)\n\n' + lines.join('\n') + '\n';
+    if (kept.length === body.split('\n').length) return body;
+    return kept.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\s+/, '');
 }
 
 /**
@@ -841,7 +859,7 @@ export function stripGeneratedFooters(body: string): string {
         const m = re.exec(body);
         if (m !== null && m.index < cut) cut = m.index;
     }
-    return body.slice(0, cut).replace(/\s+$/, '');
+    return stripEchoedSources(body.slice(0, cut)).replace(/\s+$/, '');
 }
 
 /**
@@ -1146,7 +1164,7 @@ export async function applyTemplate(
         // but images came back), strip any unreplaced placeholder bullets,
         // append sources footer.
         const trimmedStreamed = streamed.replace(/^\s+/, '').replace(/\s+$/, '');
-        let cleanedStreamed = wrapThinkBlocks(trimmedStreamed);
+        let cleanedStreamed = stripEchoedSources(wrapThinkBlocks(trimmedStreamed));
         let fallbackImagesSection = '';
         if (wantsImages) {
             const result = processContentWithImages(cleanedStreamed, images);
@@ -1172,8 +1190,15 @@ export async function applyTemplate(
                 );
             }
         }
-        const sourcesFooter = buildSourcesFooter(sources)
-            + buildRetrievedFooter(retrievedSources);
+        // The date of the run, not a claim that anyone read these pages. Local date, as the author reads it.
+        const now = new Date();
+        const generatedDate = [
+            now.getFullYear().toString(),
+            (now.getMonth() + 1).toString().padStart(2, '0'),
+            now.getDate().toString().padStart(2, '0'),
+        ].join('-');
+        const sourcesFooter = buildSourcesFooter(sources, generatedDate)
+            + buildRetrievedFooter(retrievedSources, generatedDate);
         // Written by the plugin, not the model, so the data arrives verbatim.
         const bodyWithData = retrieval.jsonBlocks.reduce(
             (body, b) => insertJsonUnderHeading(body, b.heading, b.value),

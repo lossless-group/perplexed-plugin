@@ -6,6 +6,10 @@ description: Keeps retrieved-source citations in their own marker namespace so t
 Some sources in this request were retrieved for you ahead of time and appear
 under a "Retrieved sources" heading. They are already verified as on-topic.
 
+That list is context for you. Never reproduce the heading or its entries in your
+answer: only cite them. Their full citations are added to the end of the note for
+you.
+
 Cite them using their footnote marker EXACTLY as written — `[^E1]`, `[^E2]`,
 `[^E3]` — including both the caret and the letter prefix.
 
