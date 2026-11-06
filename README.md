@@ -34,6 +34,7 @@ Every analyst-grade template runs on `sonar-deep-research`, ships with idle-only
 - **Multiple AI Providers**: Support for Perplexity, Anthropic Claude, Google Gemini (with Google Search grounding), Perplexica / Vane (self-hosted), and LM Studio (local)
 - **Retrieval Before Generation**: Exa finds the right company and returns structured facts — founding year, funding with round detail, headcount, named customers — which get spliced into the prompt as separately-numbered `[^E1]` sources before the writing model starts
 - **Funding Rounds From a Verified Feed**: Fireround adds a company's rounds to the note, with the raw data under your funding heading and each round citeable as `[^F1]`, alongside whatever Exa finds
+- **Images and Screenshots**: Images come from Perplexity's image search, and **Fetch screenshots from website** puts a product's own screenshots under `## Screenshots`, searching only the note's own site
 - **Streaming Responses**: Real-time streaming of AI responses for better UX
 - **Flexible Configuration**: Customizable endpoints, models, and parameters
 - **Deep Research Mode**: Comprehensive research across hundreds of sources
@@ -48,7 +49,7 @@ explicitly selected when invoking selection-based commands.
 
 | Provider | Endpoint | Account | API key |
 |---|---|---|---|
-| Perplexity | `https://api.perplexity.ai/chat/completions` | Required | Required (paid) |
+| Perplexity | `https://api.perplexity.ai/chat/completions`, plus `https://api.perplexity.ai/v1/agent` for image search | Required | Required (paid) |
 | Exa (retrieval only) | `https://api.exa.ai/search` | Required ([dashboard](https://dashboard.exa.ai/)) | Required (free tier: $20 signup credit + $10/month, no credit card) |
 | Fireround, through Firecrawl (retrieval only) | `https://api.firecrawl.dev/v2/scrape` | Required ([firecrawl.dev](https://www.firecrawl.dev/)) | Required (Firecrawl account) |
 | Anthropic Claude | `https://api.anthropic.com/v1/messages` | Required | Required (paid) |
@@ -415,6 +416,7 @@ System Prompt: "You are a technical expert who explains complex concepts clearly
 | `Apply directory template to all files in folder` | Batch-run a template across a folder | Palette command with folder picker |
 | `Stop directory template batch` | Halt a running batch after the current file | Palette command |
 | `Check Exa service status` | Probe the Exa API with a real one-result query | Palette command |
+| `Fetch screenshots from website` | Search the site in the note's `url` for product screenshots and add them under `## Screenshots`, keeping any already there. Falls back to the note's `og_image` | Palette command |
 | `Link back to vault notes` | Find unlinked mentions of other vault notes in the active file and convert them, behind a review table | Palette command with review modal |
 
 **Output modes.** When the active note already has content, the run dialog offers three choices: *Append* below it (the default), *Remake* — rewrite it, passing the old draft to the model as explicitly-stale background after snapshotting to `Content-Dev/history/` — or *Replace*, discarding the old draft outright. Remake exists because a research note written in May is wrong by September; it instructs the model that current sources win on conflict and asks it to name the pivot explicitly.

@@ -53,6 +53,7 @@ const COMMAND_IDS = [
     'stop-directory-template-batch',
     'exa-service-status',
     'link-back-to-vault-notes',
+    'fetch-screenshots-from-website',
     'find-images-for-selection',
 ];
 

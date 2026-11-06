@@ -3,6 +3,7 @@ import type { IncomingMessage } from 'node:http';
 import type { Editor} from 'obsidian';
 import { Notice, request } from 'obsidian';
 import type { PromptsService } from './promptsService';
+import { searchImages } from './imageSearchService';
 import { formatCitationDate, getMostRecentDate, formatPublicationInfo } from '../utils/formatDate';
 
 export interface PerplexityOptions {
@@ -71,6 +72,8 @@ export class PerplexityService {
     private settings: PerplexitySettings;
     private promptsService: PromptsService | undefined;
     private loadingInterval: number | null = null;
+    /** Agent API image search for the current query; Sonar no longer returns `images`. */
+    private pendingImages: Promise<PerplexityImage[]> | null = null;
 
     constructor(settings: PerplexitySettings) {
         this.settings = settings;
@@ -390,6 +393,9 @@ export class PerplexityService {
         options?: PerplexityOptions
     ): Promise<void> {
         console.debug('🚀 PerplexityService.queryPerplexity called');
+        this.pendingImages = options?.return_images
+            ? searchImages(this.settings.perplexityApiKey, query)
+            : null;
         console.debug('📊 Parameters:', { model, stream, options, queryLength: query.length });
         
         const timestamp = new Date().toISOString();
@@ -597,6 +603,9 @@ export class PerplexityService {
 
                         content = this.processThinkBlocks(content);
 
+                        if (options?.return_images && !data.images?.length) {
+                            data.images = await this.awaitPendingImages();
+                        }
                         if (options?.return_images && data.images && data.images.length > 0) {
                             console.debug('🖼️ Processing images in non-streaming response:', data.images.length, 'images found');
                             content = this.processContentWithImages(content, data.images);
@@ -777,6 +786,10 @@ export class PerplexityService {
             }
             
             // Process final metadata (citations, images) after streaming is complete
+            if (!finalResponseData?.images?.length && this.pendingImages) {
+                const images = await this.awaitPendingImages();
+                if (images.length > 0) finalResponseData = { ...(finalResponseData ?? {}), images };
+            }
             if (finalResponseData) {
                 console.debug(`📝 Processing final response data [${requestId || 'unknown'}]:`, finalResponseData);
                 this.processStreamingMetadata(finalResponseData, editor, headerText);
@@ -839,6 +852,12 @@ export class PerplexityService {
             }
             editor.replaceRange(`\n**Streaming Error:** ${userMsg}\n\n`, currentPos);
         }
+    }
+
+    private async awaitPendingImages(): Promise<PerplexityImage[]> {
+        const pending = this.pendingImages;
+        this.pendingImages = null;
+        return pending ? await pending : [];
     }
 
     private processStreamingMetadata(

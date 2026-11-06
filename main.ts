@@ -38,6 +38,7 @@ import type { DirectoryTemplateSettings, ParsedTemplate } from './src/services/d
 import type { TFile } from 'obsidian';
 import { applyLinkCandidates, findLinkCandidates } from './src/services/linkBackService';
 import { findImagesForSelection } from './src/services/findImagesService';
+import { fetchScreenshotsIntoNote } from './src/services/siteScreenshotsService';
 import type { FindImagesSettings } from './src/services/findImagesService';
 import { seedTemplatesIfMissing } from './src/services/templateSeederService';
 import { ExaError, probeExa } from './src/services/exaService';
@@ -361,6 +362,19 @@ export default class PerplexedPlugin extends Plugin {
             // Find images for the current selection — anchors search on the
             // selection's content + the active file's url/site_name frontmatter
             // and distributes returned images between paragraphs.
+            this.addCommand({
+                id: 'fetch-screenshots-from-website',
+                name: 'Fetch screenshots from website',
+                callback: () => {
+                    const file = this.app.workspace.getActiveFile();
+                    if (!file) {
+                        new Notice('No active file.');
+                        return;
+                    }
+                    void fetchScreenshotsIntoNote(this.app, this.settings.perplexityApiKey, file);
+                }
+            });
+
             this.addCommand({
                 id: 'find-images-for-selection',
                 name: 'Find images for selection',

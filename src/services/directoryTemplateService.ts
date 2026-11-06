@@ -12,6 +12,7 @@ import {
 } from './includeSourcesService';
 import type { ResolvedSource } from './includeSourcesService';
 import { findBacklinks, renderBacklinksBlock } from './linkBackService';
+import { searchImages } from './imageSearchService';
 
 export interface UserPreambleSpec {
     name: string;
@@ -1137,7 +1138,13 @@ export async function applyTemplate(
             ? (cftCeilingMs > 0 ? cftCeilingMs : Infinity)
             : (settingsCeilingMs > 0 ? settingsCeilingMs : Infinity);
 
-        const { streamed, sources, images, truncated } = await streamPerplexityToFile(
+        // Perplexity no longer returns `images` for Sonar requests; fetch them
+        // from the Agent API's image_search alongside the stream instead.
+        const imageSearch = wantsImages
+            ? searchImages(settings.perplexityApiKey, [title, targetUrl].filter(Boolean).join(' '))
+            : Promise.resolve([]);
+
+        const { streamed, sources, images: streamedImages, truncated } = await streamPerplexityToFile(
             app,
             settings.perplexityApiKey,
             settings.perplexityEndpoint,
@@ -1147,6 +1154,7 @@ export async function applyTemplate(
             initialContent,
             isCancelled,
         );
+        const images: PerplexityImage[] = streamedImages.length > 0 ? streamedImages : await imageSearch;
 
         // Compute run metadata for the frontmatter stamp.
         const provider = typeof template.cftConfig['provider'] === 'string'
