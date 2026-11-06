@@ -84,7 +84,7 @@ describe('searchRounds', () => {
         assert.equal(sent[0]?.url, 'https://api.firecrawl.dev/v2/scrape');
         assert.equal(sent[0]?.headers?.['authorization'], 'Bearer fc-test');
         assert.deepEqual(JSON.parse(sent[0]?.body ?? '{}'), {
-            alexandria: { provider: 'fireround', capability: 'rounds/search', options: { q: 'firecrawl.dev', limit: 20 } },
+            alexandria: { provider: 'fireround', capability: 'companies/rounds', options: { company: 'firecrawl.dev', limit: 20 } },
         });
     });
 

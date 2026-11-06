@@ -4,19 +4,20 @@ import type { ClaudeService, ClaudeOptions } from '../services/claudeService';
 import type { PromptsService } from '../services/promptsService';
 
 const CLAUDE_MODELS: Array<{ value: string; label: string; tagline: string }> = [
-    { value: 'claude-opus-4-7', label: 'Opus 4.7', tagline: 'Most capable — research / agentic / vision' },
-    { value: 'claude-opus-4-6', label: 'Opus 4.6', tagline: 'Previous-generation Opus' },
-    { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6', tagline: 'Best speed / intelligence balance' },
-    { value: 'claude-haiku-4-5', label: 'Haiku 4.5', tagline: 'Fastest, lowest cost' },
+    { value: 'claude-opus-5-5', label: 'Opus 5.5', tagline: 'Recommended — research / agentic / vision' },
+    { value: 'claude-fable-5-1', label: 'Fable 5.1', tagline: 'Most capable, highest cost' },
+    { value: 'claude-sonnet-5-5', label: 'Sonnet 5.5', tagline: 'Best speed / intelligence balance' },
+    { value: 'claude-haiku-5-5', label: 'Haiku 5.5', tagline: 'Fastest, lowest cost' },
+    { value: 'claude-opus-4-8', label: 'Opus 4.8', tagline: 'Previous-generation Opus' },
 ];
 
-const DEFAULT_MODEL = 'claude-opus-4-7';
+const DEFAULT_MODEL = 'claude-opus-5-5';
 
 const EFFORT_OPTIONS: Array<{ value: NonNullable<ClaudeOptions['effort']>; label: string }> = [
     { value: 'low', label: 'Low — fastest, least thorough' },
     { value: 'medium', label: 'Medium — balanced' },
     { value: 'high', label: 'High — recommended for research' },
-    { value: 'xhigh', label: 'xHigh — deep agentic (Opus 4.7)' },
+    { value: 'xhigh', label: 'xHigh — deep agentic' },
     { value: 'max', label: 'Max — Opus only, highest cost' },
 ];
 
@@ -123,7 +124,7 @@ export class ClaudeModal extends Modal {
 
         new Setting(togglesSection)
             .setName('Adaptive thinking')
-            .setDesc('Lets Claude reason before answering. Higher quality on complex questions; adds latency and tokens.')
+            .setDesc('Lets Claude reason before answering. Always on for the 5.x models, where effort controls the depth; this toggle only changes Opus 4.8.')
             .addToggle(t => t
                 .setValue(this.thinking)
                 .onChange(v => { this.thinking = v; }));

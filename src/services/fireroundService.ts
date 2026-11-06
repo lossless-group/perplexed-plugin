@@ -47,9 +47,9 @@ export function homepageDomain(url: string | undefined): string | null {
 }
 
 /**
- * Rounds whose company is exactly this domain, as Fireround returned them. `q`
- * is a fuzzy search, so a similarly named company can come back too; its rounds
- * are never kept.
+ * Rounds whose company is exactly this domain, as Fireround returned them.
+ * companies/rounds already matches the domain exactly; this guard stays so a
+ * name fallback on Fireround's side can never attribute another company's rounds.
  */
 export function roundsForDomain(records: unknown, domain: string): FireroundRecord[] {
     if (!Array.isArray(records)) return [];
@@ -60,7 +60,14 @@ export function roundsForDomain(records: unknown, domain: string): FireroundReco
     });
 }
 
-/** Every round Fireround has for this company's domain. Empty when it has none. */
+/**
+ * Every round Fireround has for this company's domain. Empty when it has none.
+ *
+ * Uses companies/rounds, which looks the company up by exact domain. The earlier
+ * rounds/search call sent the domain as `q`, which is free text over names,
+ * descriptions and investors, so companies whose name differs from their domain
+ * came back empty.
+ */
 export async function searchRounds(apiKey: string, domain: string, limit: number): Promise<FireroundRecord[]> {
     let res;
     try {
@@ -69,7 +76,7 @@ export async function searchRounds(apiKey: string, domain: string, limit: number
             method: 'POST',
             headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
             body: JSON.stringify({
-                alexandria: { provider: 'fireround', capability: 'rounds/search', options: { q: domain, limit } },
+                alexandria: { provider: 'fireround', capability: 'companies/rounds', options: { company: domain, limit: Math.min(limit, 50) } },
             }),
             throw: false,
         });

@@ -116,7 +116,7 @@ export const DEFAULT_SETTINGS: PerplexedPluginSettings = {
 }`,
     perplexityApiKey: '',
     anthropicApiKey: '',
-    claudeDefaultModel: 'claude-opus-4-7',
+    claudeDefaultModel: 'claude-opus-5-5',
     geminiApiKey: '',
     geminiDefaultModel: 'gemini-flash-latest',
     geminiEnableGrounding: true,
@@ -346,10 +346,11 @@ const TRIMMED_KEYS = new Set([
 const VISIBILITY_KEYS = new Set(['exaEnabled']);
 
 const CLAUDE_MODELS: Record<string, string> = {
-    'claude-opus-4-7': 'claude-opus-4-7 (recommended)',
-    'claude-opus-4-6': 'claude-opus-4-6',
-    'claude-sonnet-4-6': 'claude-sonnet-4-6',
-    'claude-haiku-4-5': 'claude-haiku-4-5',
+    'claude-opus-5-5': 'claude-opus-5-5 (recommended)',
+    'claude-fable-5-1': 'claude-fable-5-1 (most capable, highest cost)',
+    'claude-sonnet-5-5': 'claude-sonnet-5-5',
+    'claude-haiku-5-5': 'claude-haiku-5-5',
+    'claude-opus-4-8': 'claude-opus-4-8',
 };
 
 const GEMINI_MODELS: Record<string, string> = {
