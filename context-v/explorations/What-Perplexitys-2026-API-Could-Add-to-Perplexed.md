@@ -9,7 +9,7 @@ authors:
   - Michael Staton
 augmented_with:
   - Claude Code on Claude Opus 5.5
-semantic_version: 0.0.0.1
+semantic_version: 0.0.0.2
 site_uuid: 691c6bbb-41ef-413f-bb63-208ea6dbefdb
 hex_code: y034ve
 publish: true
@@ -107,3 +107,58 @@ Up to 50,000 Agent API requests in one JSONL file, completed within 24 hours, wi
 2. Template-level date filters (item 2), alongside the citation-date setting.
 3. Context API grounding for Standards-and-Specs (item 3).
 4. The rest as features earn their place.
+
+## Addendum (2026-11-26): premium data sources
+
+Perplexity's help center lists [premium data sources](https://www.perplexity.ai/help-center/en/articles/12870803-premium-data-sources) (last modified 2026-11-17): licensed content that isn't on the open web, answered with citations. **They belong to the Perplexity app, not the API.** That decides how we can use them.
+
+### What there is
+
+**Included sources** come with every Perplexity plan, with no partner account. Each plan gets a limited number of premium queries a month.
+
+| Source | What it holds | Who in our tree wants it |
+|---|---|---|
+| PitchBook Essentials | Company profiles, funding history, key investors, leadership | Deal Scout (Resolve and Score), memopop, `crawl-fetch-ingest` |
+| CB Insights | Market trends, market maps, company activity | Market-map and market-category templates, Deal Scout |
+| Statista | Statistics, market data, forecasts | Market-sizing sections in memos and profiles |
+| Wiley | Business, STEM, psychology and medical books and journals | Concept and vocabulary profiles |
+| Midpage | 13.8M U.S. court opinions, statutes, regulations, with a citator | Standards-and-Specs, compliance explainers |
+
+**Licensed connectors** link a subscription someone already holds (Pro, Max or Enterprise, plus the partner's license):
+
+- **Private markets:** Crunchbase, Grata, D&B, Chronograph, AngelList, Papermark, Guidepoint expert transcripts, Octus.
+- **Public markets:** FactSet, Morningstar, Daloopa, Quartr, IBISWorld, MT Newswires, SEC filings tools and others.
+- **Crypto:** Coinbase and several onchain data sources.
+
+Several need a separate entitlement on the partner's side. FactSet MCP access isn't included with FactSet Workstation, for example.
+
+### How code can reach them
+
+| Path | Reaches premium sources? | Auth and billing | Fits |
+|---|---|---|---|
+| Perplexity app (`@PitchBook …`) | Yes | A person's plan | Manual research |
+| **Computer MCP server** (`https://www.perplexity.ai/rest/computer/mcp`) | **Yes.** Its connector list includes CB Insights, PitchBook, Statista and SEC EDGAR among 400+ services | OAuth as a Perplexity user, with no API key. Usage draws on that account's credits | Agent sessions in Claude Code or claude.ai; tasks take minutes |
+| Agent API | No. Its managed connectors are GitHub, Slack, Google Drive, Datadog, Linear and Notion | API key | The nearest equivalents are `finance_search` (public markets only, $5 per 1,000 calls) and `people_search` |
+| Agent API **custom connector** to a partner's own MCP server | Only for partners that publish one; the help page names FactSet's and Morningstar's MCP access | The partner's license, and our API key | Unattended pipelines, if a client holds the license |
+
+So for now, premium data comes from a person in the app, or from an agent signed in as a person through Computer MCP. Perplexed, as an API client, can't reach it. The Agent API is the shape to watch: if premium sources ever become connectors there, they slot into everything above.
+
+### How we could use them
+
+1. **Deal Scout: Resolve and Score.** PitchBook Essentials gives funding history, investors and leadership for a company record. That's half the enrichment `crawl-fetch-ingest` does by crawling. CB Insights adds the market map a company sits in. It also answers the spec's open question about paying for Crunchbase or PitchBook: a firm can try both through Perplexity first. PitchBook Essentials is included, and Crunchbase connects a subscription the firm may already have.
+2. **memopop: market and comps sections.** Market sizes come from Statista, with Quartr or Daloopa for public comparables when the firm has them. A firm's Guidepoint transcripts can ground a memo's "what experts say" section.
+3. **Perplexed templates, run by an agent.** A Claude Code session with Computer MCP can run a market-category or market-map profile that cites Statista and CB Insights. Standards-and-Specs and legal explainers can cite statutes and regulations through Midpage. Perplexed's own run can't do this until the API can.
+4. **VC back office.** AngelList, Chronograph and Papermark cover capital accounts, portfolio metrics and data rooms. That's adjacent to Twenty CRM and DidiDecks for a firm that uses them.
+
+### Cautions
+
+- **Licensed data isn't ours to publish.** Licensed connectors run "under your existing agreement with that partner", and included sources carry their publishers' terms. That's fine for a partner's private memo or deal brief. It's a problem for Lasso, whose output is public marketing. Lasso's quality bar also requires "a captured source a human can open", and a PitchBook or Statista citation sits behind a paywall. Treat premium-sourced claims as private by default, and mark them on the saved source (for example, `license: restricted`).
+- **Quotas.** Included sources have a monthly premium query limit per plan, and licensed connectors spend the partner account's quota. A batch run over a folder could use up a month's allowance.
+- **A person's account.** Computer MCP acts as the signed-in user and spends that person's credits. An unattended agent on that path is running on someone's seat, so decide whose before wiring it into the Deal Scout's clock.
+- **"Essentials" is a subset.** PitchBook Essentials is basic firmographics, funding history, key investors and leadership, not the full PitchBook dataset.
+
+### Next steps
+
+1. Connect the Computer MCP server to Claude Code (OAuth, in the next session) and run one Deal Scout Resolve by hand. Pick a company the firm already tracks and compare PitchBook Essentials against what `crawl-fetch-ingest` found.
+2. Run one market-category profile through Computer with Statista and CB Insights, and compare its citations with a plain Perplexed run.
+3. Add `license:` to the saved-source fields in the Lasso and Deal Scout specs.
