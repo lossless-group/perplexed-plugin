@@ -25,6 +25,7 @@ import type { TemplateRunChoice } from './src/modals/DirectoryTemplateRunModal';
 import { FolderPickerModal } from './src/modals/FolderPickerModal';
 import { LinkBackModal } from './src/modals/LinkBackModal';
 import { BatchConfirmModal } from './src/modals/BatchConfirmModal';
+import { templateDefaultModel } from './src/modals/perplexityModelChoices';
 
 import {
     applyTemplate as applyDirectoryTemplate,
@@ -1127,8 +1128,9 @@ export default class PerplexedPlugin extends Plugin {
                             fileCount: filesForThisTemplate.length,
                             fillCount,
                             appendCount,
-                        }, () => {
-                            void this.executeBatch(dirSettings, parsed, filesForThisTemplate);
+                            defaultModel: templateDefaultModel(parsed.cftConfig),
+                        }, (model) => {
+                            void this.executeBatch(dirSettings, parsed, filesForThisTemplate, model);
                         }).open();
                     })();
                 }).open();
@@ -1140,9 +1142,10 @@ export default class PerplexedPlugin extends Plugin {
         dirSettings: DirectoryTemplateSettings,
         parsed: ParsedTemplate,
         files: TFile[],
+        model: string,
     ): Promise<void> {
         this.batchCancelled = false;
-        const progressNotice = new Notice(`Batch starting on ${files.length.toString()} files…`, 0);
+        const progressNotice = new Notice(`Batch starting on ${files.length.toString()} files · ${model}…`, 0);
 
         try {
             const result = await applyDirectoryTemplateBatch(
@@ -1156,6 +1159,7 @@ export default class PerplexedPlugin extends Plugin {
                     );
                 },
                 () => this.batchCancelled,
+                model,
             );
 
             const summary = [

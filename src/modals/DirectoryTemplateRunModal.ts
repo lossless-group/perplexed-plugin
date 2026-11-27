@@ -6,14 +6,7 @@ export interface TemplateRunChoice {
     title: string;
 }
 
-// Perplexity models offered in the run modal, in recommendation order.
-const MODEL_CHOICES: { id: string; label: string }[] = [
-    { id: 'sonar-pro', label: 'Sonar Pro — grounded search + citations, fast' },
-    { id: 'sonar-reasoning-pro', label: 'Sonar Reasoning Pro — adds chain-of-thought' },
-    { id: 'sonar', label: 'Sonar — lightweight, fastest' },
-    { id: 'sonar-reasoning', label: 'Sonar Reasoning — lightweight + reasoning' },
-    { id: 'sonar-deep-research', label: 'Sonar Deep Research — exhaustive, minutes-long' },
-];
+import { PERPLEXITY_MODEL_CHOICES as MODEL_CHOICES, templateDefaultModel } from './perplexityModelChoices';
 
 /** True when the template declares an include-sources: block worth offering to skip. */
 function declaresRetrieval(choice: TemplateRunChoice): boolean {
@@ -21,8 +14,7 @@ function declaresRetrieval(choice: TemplateRunChoice): boolean {
 }
 
 function cftModel(choice: TemplateRunChoice): string {
-    const m = choice.template.cftConfig['model'];
-    return typeof m === 'string' && m.length > 0 ? m : 'sonar-pro';
+    return templateDefaultModel(choice.template.cftConfig);
 }
 
 /**

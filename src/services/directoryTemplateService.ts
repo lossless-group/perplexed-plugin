@@ -1280,6 +1280,7 @@ export async function applyTemplateBatch(
     template: ParsedTemplate,
     onProgress: (p: BatchProgress) => void,
     isCancelled: () => boolean,
+    modelOverride?: string,
 ): Promise<BatchResult> {
     const result: BatchResult = {
         appliedFill: 0,
@@ -1296,7 +1297,7 @@ export async function applyTemplateBatch(
         const file = files[i];
         if (!file) continue;
         onProgress({ current: i + 1, total: files.length, file });
-        const outcome = await applyTemplate(app, settings, file, template, { quiet: true });
+        const outcome = await applyTemplate(app, settings, file, template, modelOverride ? { quiet: true, modelOverride } : { quiet: true });
         if (outcome.status === 'applied') {
             if (outcome.mode === 'fill') result.appliedFill++;
             else result.appliedAppend++;
