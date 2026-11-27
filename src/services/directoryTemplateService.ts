@@ -13,7 +13,7 @@ import {
 import type { ResolvedSource } from './includeSourcesService';
 import { findBacklinks, renderBacklinksBlock } from './linkBackService';
 import { searchImages } from './imageSearchService';
-import { isolateImageEmbeds } from '../utils/imageBlocks';
+import { isolateImageEmbeds, placeCoverImage } from '../utils/imageBlocks';
 
 export interface UserPreambleSpec {
     name: string;
@@ -1200,6 +1200,9 @@ export async function applyTemplate(
                 );
             }
         }
+        // A source's cover comes from its own record (cover_image), never from
+        // image search; a book without one gets no cover.
+        cleanedStreamed = placeCoverImage(cleanedStreamed, fm, title);
         // The date of the run, not a claim that anyone read these pages. Local date, as the author reads it.
         const now = new Date();
         const generatedDate = [
