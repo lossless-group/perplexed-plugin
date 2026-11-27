@@ -56,7 +56,7 @@ system: |
 ```
 
 # Defining and Describing {{basename}}
-- Insert this exact placeholder line on its own bullet so the user can replace it after generation: `[Image embed placeholder — run "Find images for selection" on this section to populate.]`
+- Insert this exact placeholder on a line of its own, not as a bullet, with a blank line above and below it, so the user can replace it after generation: `[Image embed placeholder — run "Find images for selection" on this section to populate.]`
 - If this concept involves a process, hierarchy, taxonomy, or part-relationship that a diagram clarifies, render a `mermaid` codefence here. If a diagram does not add insight, omit it entirely — do not force one.
 
 {{include: mermaid-discipline}}

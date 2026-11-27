@@ -106,7 +106,7 @@ system: |
 ```
 
 # {{basename}}
-- Insert this exact placeholder line on its own bullet so the user can replace it after generation: `[Image embed placeholder — run "Find images for selection" on this section to populate.]`
+- Insert this exact placeholder on a line of its own, not as a bullet, with a blank line above and below it, so the user can replace it after generation: `[Image embed placeholder — run "Find images for selection" on this section to populate.]`
 - Diagrams are usually NOT helpful for source entries — a source is a body of work, not a process. Omit the diagram by default. Only render a `mermaid` codefence when the source genuinely has a structural shape worth showing (e.g., a publication's masthead hierarchy, a recurring podcast's segment structure, a multi-volume work's argument arc). When in doubt, omit.
 
 {{include: mermaid-discipline}}

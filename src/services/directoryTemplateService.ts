@@ -13,6 +13,7 @@ import {
 import type { ResolvedSource } from './includeSourcesService';
 import { findBacklinks, renderBacklinksBlock } from './linkBackService';
 import { searchImages } from './imageSearchService';
+import { isolateImageEmbeds } from '../utils/imageBlocks';
 
 export interface UserPreambleSpec {
     name: string;
@@ -1178,6 +1179,7 @@ export async function applyTemplate(
             const result = processContentWithImages(cleanedStreamed, images);
             cleanedStreamed = result.content;
             cleanedStreamed = stripUnreplacedImagePlaceholders(cleanedStreamed);
+            cleanedStreamed = isolateImageEmbeds(cleanedStreamed);
             console.debug(
                 `[directoryTemplateService] images.length=${images.length.toString()}, markers replaced=${result.replaced.toString()}, model=${modelName}`,
             );

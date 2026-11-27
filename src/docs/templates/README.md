@@ -100,7 +100,7 @@ When a template sets `return-images: true`, the runtime auto-appends an instruct
 
 1. The runtime swaps each `[IMAGE N: …]` for `![desc](image_url)` using Perplexity's returned `images` array.
 2. If the model didn't emit any markers (or if the regex misses) but Perplexity *did* return images, they're appended as a `# Images` section before the sources footer.
-3. If Perplexity returned no images at all, you'll see a console warning explaining that the model/query combination didn't yield images. The image-placeholder bullet in the template body remains a manual fallback (run **Find images for selection** on the section).
+3. If Perplexity returned no images at all, you'll see a console warning explaining that the model/query combination didn't yield images. The image-placeholder line in the template body remains a manual fallback (run **Find images for selection** on the section).
 
 Image quality is best with `sonar-pro`. `sonar-deep-research` does not reliably return images.
 
